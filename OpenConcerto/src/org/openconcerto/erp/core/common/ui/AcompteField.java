@@ -150,7 +150,7 @@ public class AcompteField extends JTextField implements ValueWrapper<Acompte>, D
                             if (textField.getCaretPosition() <= pointPosition) {
                                 return;
                             } else {
-                                if (textField.getText().substring(pointPosition).length() <= 2) {
+                                if (textField.getText().substring(pointPosition).length() <= 6) {
                                     return;
                                 }
                             }

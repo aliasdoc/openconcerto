@@ -14,6 +14,8 @@
  package org.openconcerto.ui.date;
 
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.PositiveIntegerTableCellEditor;
+import org.openconcerto.ui.table.TimestampTableCellEditor;
 import org.openconcerto.utils.StringUtils;
 
 import java.awt.Component;
@@ -38,6 +40,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 
@@ -50,10 +54,20 @@ public class DateRangeTable extends JPanel {
     final DateFormat timeInstance = DateFormat.getTimeInstance(DateFormat.SHORT);
     private boolean nonEmpty;
 
-    public DateRangeTable(final boolean nonEmpty) {
+    public DateRangeTable(final boolean nonEmpty, final boolean withDesc) {
+        this(nonEmpty, withDesc, true);
+    }
+
+    public DateRangeTable(final boolean nonEmpty, final boolean withDesc, final boolean allowNull) {
         this.nonEmpty = nonEmpty;
-        final DateRangeTableModel model = new DateRangeTableModel();
-        this.rangeTable = new JTable(model);
+        final DateRangeTableModel model = new DateRangeTableModel(withDesc);
+        this.rangeTable = new JTable(model) {
+            public void changeSelection(final int row, final int column, boolean toggle, boolean extend) {
+                super.changeSelection(row, column, toggle, extend);
+                editCellAt(row, column);
+                transferFocus();
+            };
+        };
         this.rangeTable.setRowHeight((int) (new JLabel("A").getPreferredSize().height * 1.8));
 
         // Start
@@ -72,7 +86,9 @@ public class DateRangeTable extends JPanel {
                 }
             }
         });
-        columnStart.setCellEditor(new DateTimeCellEditor());
+        final TimestampTableCellEditor cellEditor = new TimestampTableCellEditor();
+        cellEditor.setAllowNull(allowNull);
+        columnStart.setCellEditor(cellEditor);
         // End
         TableColumn columnEnd = this.rangeTable.getColumnModel().getColumn(1);
         columnEnd.setCellRenderer(new DefaultTableCellRenderer() {
@@ -112,7 +128,10 @@ public class DateRangeTable extends JPanel {
             }
 
         });
-        columnEnd.setCellEditor(new DateTimeCellEditor());
+        columnEnd.setCellEditor(cellEditor);
+        final TableColumn columnDuration = this.rangeTable.getColumnModel().getColumn(2);
+        columnDuration.setCellEditor(new PositiveIntegerTableCellEditor(true));
+
         this.setLayout(new GridBagLayout());
         final GridBagConstraints c = new DefaultGridBagConstraints();
         c.fill = GridBagConstraints.NONE;
@@ -157,6 +176,7 @@ public class DateRangeTable extends JPanel {
                 }
             }
         });
+
     }
 
     public void fillFrom(final List<DateRange> list) {
@@ -182,7 +202,7 @@ public class DateRangeTable extends JPanel {
                 }
 
                 final JFrame f = new JFrame();
-                f.setContentPane(new DateRangeTable(true));
+                f.setContentPane(new DateRangeTable(true, false));
                 f.setSize(400, 300);
                 f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 f.setVisible(true);

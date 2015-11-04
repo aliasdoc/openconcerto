@@ -46,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.poi.hssf.usermodel.HSSFCell;
+import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
@@ -245,7 +247,13 @@ public class DataImporter {
                             rowData.add(Boolean.valueOf(cellValue.getBooleanValue()));
                             break;
                         case Cell.CELL_TYPE_NUMERIC:
-                            rowData.add(Double.valueOf(cellValue.getNumberValue()));
+
+                            if (HSSFDateUtil.isCellDateFormatted(cell)) {
+                                System.out.println("Row No.: " + row.getRowNum() + " " + cell.getDateCellValue());
+                                rowData.add(cell.getDateCellValue());
+                            } else {
+                                rowData.add(Double.valueOf(cellValue.getNumberValue()));
+                            }
                             break;
                         case Cell.CELL_TYPE_STRING:
                             rowData.add(cellValue.getStringValue());

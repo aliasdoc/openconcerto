@@ -34,18 +34,20 @@ public class GenerationMvtSaisieKm extends GenerationEcritures {
 
     public int genereMouvement() throws SQLException {
 
-        SQLRow saisieRow = base.getTable("SAISIE_KM").getRow(this.idSaisieKm);
+        final SQLTable table = base.getTable("SAISIE_KM");
+        SQLRow saisieRow = table.getRow(this.idSaisieKm);
 
         // iniatilisation des valeurs de la map
         this.date = (Date) saisieRow.getObject("DATE");
-        this.nom = saisieRow.getObject("NOM").toString();
+        final String labelSaisie = saisieRow.getObject("NOM").toString();
+        this.nom = labelSaisie;
         this.mEcritures.put("DATE", this.date);
         this.mEcritures.put("NOM", this.nom);
         this.mEcritures.put("ID_JOURNAL", saisieRow.getObject("ID_JOURNAL"));
         this.mEcritures.put("ID_MOUVEMENT", new Integer(1));
 
         // on calcule le nouveau numero de mouvement
-        getNewMouvement(GenerationMvtSaisieKm.source, this.idSaisieKm, 1, "Saisie au km " + saisieRow.getObject("NOM").toString());
+        getNewMouvement(GenerationMvtSaisieKm.source, this.idSaisieKm, 1, (labelSaisie.length() == 0 ? "Saisie au km " : labelSaisie));
 
         // gnération des ecritures
         SQLTable tableElt = Configuration.getInstance().getRoot().findTable("SAISIE_KM_ELEMENT");
@@ -62,14 +64,17 @@ public class GenerationMvtSaisieKm extends GenerationEcritures {
             this.mEcritures.put("NOM", rowElement.getString("NOM_ECRITURE"));
             this.mEcritures.put("DEBIT", rowElement.getObject("DEBIT"));
             this.mEcritures.put("CREDIT", rowElement.getObject("CREDIT"));
+            if (tableElt.contains("NOM_PIECE")) {
+                this.mEcritures.put("NOM_PIECE", rowElement.getObject("NOM_PIECE"));
+            }
             SQLRow rowEcr = ajoutEcriture();
 
-            List<SQLRow> assocs = rowElement.getReferentRows(tableAssoc);
-            for (SQLRow sqlRow : assocs) {
-                if (!sqlRow.isUndefined()) {
-                    addAssocAnalytique(rowEcr, sqlRow.getInt("ID_POSTE_ANALYTIQUE"));
-                }
-            }
+            // List<SQLRow> assocs = rowElement.getReferentRows(tableAssoc);
+            // for (SQLRow sqlRow : assocs) {
+            // if (!sqlRow.isUndefined()) {
+            // addAssocAnalytique(rowEcr, sqlRow.getInt("ID_POSTE_ANALYTIQUE"));
+            // }
+            // }
 
             // Mise à jour de la clef étrangère écriture de l'élément saisie au km
             if (rowEcr != null && !rowEcr.isUndefined()) {

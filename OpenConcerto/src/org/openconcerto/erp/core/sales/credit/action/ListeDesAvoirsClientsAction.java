@@ -69,8 +69,6 @@ public class ListeDesAvoirsClientsAction extends CreateFrameAbstractAction {
         datePanel.setFilterOnDefault();
         frame.getPanel().add(datePanel, c);
 
-        frame.getPanel().getListe().addIListeActions(new MouseSheetXmlListeListener(AvoirClientXmlSheet.class).getRowActions());
-
         frame.getPanel().getListe().setSQLEditable(false);
         return frame;
     }

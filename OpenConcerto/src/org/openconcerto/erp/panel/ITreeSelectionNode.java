@@ -41,7 +41,9 @@ public class ITreeSelectionNode extends DefaultMutableTreeNode {
             }
             StringBuffer result = new StringBuffer();
             for (SQLField s : fields) {
-                result.append(this.row.getObject(s.getName()).toString() + " ");
+                if (this.row.getObject(s.getName()) != null) {
+                    result.append(this.row.getObject(s.getName()).toString() + " ");
+                }
             }
             return result.toString().trim();
         }

@@ -17,6 +17,7 @@ import org.openconcerto.ui.component.ComponentWrapper;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Graphics;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -113,6 +114,13 @@ public class AlternateTableCellRenderer extends TableCellRendererDecorator {
 
         private Color getAlternateColor(final Color c) {
             return AlternateTableCellRenderer.getAlternateColor(c, this.oddBGColorMap);
+        }
+
+        // forward to comp so that callers of getTableCellRendererComponent() can find out the
+        // size that the renderer wants for the cell
+        @Override
+        public Dimension getPreferredSize() {
+            return this.getComponent().getPreferredSize();
         }
 
         @Override

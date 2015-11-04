@@ -37,11 +37,9 @@ import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 
@@ -49,7 +47,6 @@ public class ListeDesEcheancesFournPanel extends JPanel implements TableModelLis
 
     private ListPanelEcheancesFourn panelEcheances;
     private JButton regler;
-    private SQLElement eltRegler = Configuration.getInstance().getDirectory().getElement("REGLER_MONTANT");
 
     public ListeDesEcheancesFournPanel() {
         this.setLayout(new GridBagLayout());
@@ -167,24 +164,9 @@ public class ListeDesEcheancesFournPanel extends JPanel implements TableModelLis
                 sqlComponent.resetValue();
                 sqlComponent.select(rowVals);
                 sqlComponent.loadEcheancesFromRows(selectedRows);
+                edit.setTitle("Règlement de factures fournisseurs");
                 edit.pack();
                 edit.setVisible(true);
-            }
-        });
-
-        // Bouton Fermer
-        c.gridx++;
-        c.weightx = 0;
-        JButton fermer = new JButton("fermer");
-        this.add(fermer, c);
-        fermer.addActionListener(new ActionListener() {
-
-            public void actionPerformed(ActionEvent e) {
-
-                JFrame tmpF = (JFrame) SwingUtilities.getRoot(ListeDesEcheancesFournPanel.this);
-                tmpF.setVisible(false);
-                tmpF.dispose();
-
             }
         });
 

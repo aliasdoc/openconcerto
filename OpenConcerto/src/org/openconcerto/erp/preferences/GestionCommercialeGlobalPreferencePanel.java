@@ -30,6 +30,7 @@ public class GestionCommercialeGlobalPreferencePanel extends JavaPrefPreferenceP
     public static String TRANSFERT_REF = "TransfertRef";
     public static String TRANSFERT_MULTI_REF = "TransfertMultiRef";
     public static String TRANSFERT_NO_REF = "TransfertNoRef";
+    public static String ORDER_PACKAGING_MANAGEMENT = "OrderPackagingManagement";
 
     public GestionCommercialeGlobalPreferencePanel() {
         super("Gestion des pièces commerciales", null);
@@ -49,6 +50,10 @@ public class GestionCommercialeGlobalPreferencePanel extends JavaPrefPreferenceP
         PrefView<Boolean> viewNo = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Ne pas transférer les numéros des pièces commerciales", TRANSFERT_NO_REF);
         viewNo.setDefaultValue(Boolean.FALSE);
         this.addView(viewNo);
+
+        PrefView<Boolean> orderPackaging = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer la préparation des commandes clients", ORDER_PACKAGING_MANAGEMENT);
+        orderPackaging.setDefaultValue(Boolean.TRUE);
+        this.addView(orderPackaging);
 
         ButtonGroup group = new ButtonGroup();
         group.add((JCheckBox) viewMultiTransfert.getVW().getComp());

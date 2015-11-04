@@ -20,6 +20,7 @@ public class DateRange implements Comparable<DateRange> {
     private static final int MS_PER_HOUR = 3600 * 1000;
     private long start;
     private long stop;
+    private String infos;
 
     public DateRange() {
         this.start = System.currentTimeMillis();
@@ -33,6 +34,14 @@ public class DateRange implements Comparable<DateRange> {
 
     public long getStart() {
         return this.start;
+    }
+
+    public void setInfos(String infos) {
+        this.infos = infos;
+    }
+
+    public String getInfos() {
+        return infos;
     }
 
     public long getStop() {

@@ -16,17 +16,11 @@
 import static java.util.Arrays.asList;
 import org.openconcerto.sql.TM;
 import org.openconcerto.sql.element.ConfSQLElement;
+import org.openconcerto.sql.element.GlobalMapper;
 import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.element.UISQLComponent;
 import org.openconcerto.sql.model.DBRoot;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.sqlobject.ElementComboBox;
-import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
 import org.openconcerto.sql.utils.SQLCreateTable;
-import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.i18n.I18nUtils;
 
 import java.util.ArrayList;
@@ -65,6 +59,9 @@ public class UserRightSQLElement extends ConfSQLElement {
     public UserRightSQLElement() {
         super(TABLE_NAME);
         this.setL18nPackageName(I18nUtils.getPackageName(TM.class));
+        final UserRightGroup group = new UserRightGroup();
+        GlobalMapper.getInstance().map(UserRightSQLComponent.ID, group);
+        setDefaultGroup(group);
     }
 
     protected List<String> getListFields() {
@@ -88,43 +85,6 @@ public class UserRightSQLElement extends ConfSQLElement {
     }
 
     public SQLComponent createComponent() {
-        return new UserRightComp(this);
-    }
-
-    public static final class UserRightComp extends UISQLComponent {
-
-        private int userID = SQLRow.NONEXISTANT_ID;
-
-        private UserRightComp(SQLElement element) {
-            super(element, 2, 1);
-        }
-
-        @Override
-        protected Set<String> createRequiredNames() {
-            return CollectionUtils.createSet("ID_RIGHT", "HAVE_RIGHT");
-        }
-
-        public void addViews() {
-            final SQLRequestComboBox user = new SQLRequestComboBox();
-            this.addView(user, "ID_USER_COMMON", "0");
-            user.getRequest().setUndefLabel("Par défaut");
-            final ElementComboBox right = new ElementComboBox();
-            right.setListIconVisible(false);
-            this.addView(right, "ID_RIGHT");
-            this.addView("HAVE_RIGHT");
-            this.addView("OBJECT", "0");
-        }
-
-        @Override
-        protected SQLRowValues createDefaults() {
-            if (this.userID >= SQLRow.MIN_VALID_ID)
-                return new SQLRowValues(getTable()).put("ID_USER_COMMON", this.userID);
-            else
-                return null;
-        }
-
-        public final void setUserID(int userID) {
-            this.userID = userID;
-        }
+        return new UserRightSQLComponent(this);
     }
 }

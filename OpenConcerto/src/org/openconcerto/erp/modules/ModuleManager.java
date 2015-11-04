@@ -506,7 +506,7 @@ public class ModuleManager {
                 final XMLDecoder dec = new XMLDecoder(new FileInputStream(toInstallFile));
                 try {
                     final Number version = (Number) dec.readObject();
-                    if (!version.equals(TO_INSTALL_VERSION))
+                    if (version.intValue() != TO_INSTALL_VERSION.intValue())
                         throw new Exception("Version mismatch, expected " + TO_INSTALL_VERSION + " found " + version);
                     final Date fileDate = (Date) dec.readObject();
                     @SuppressWarnings("unchecked")

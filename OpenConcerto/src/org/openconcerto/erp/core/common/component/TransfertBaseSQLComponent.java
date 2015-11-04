@@ -133,7 +133,10 @@ public abstract class TransfertBaseSQLComponent extends BaseSQLComponent {
             table.clear();
             table.insertFrom(r);
         }
+        refreshAfterSelect(r);
     }
+
+    protected abstract void refreshAfterSelect(SQLRowAccessor rSource);
 
     protected RowValuesTable getRowValuesTable() {
         return null;

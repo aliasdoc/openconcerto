@@ -15,6 +15,7 @@
 
 import org.openconcerto.sql.request.SQLRowItemView;
 import org.openconcerto.ui.JImageToggleButton;
+import org.openconcerto.ui.component.InteractionMode;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -117,9 +118,9 @@ public final class ListItemSQLView extends JPanel {
         return this.v;
     }
 
-    public void setEditable(boolean enabled) {
-        this.supprBtn.setEnabled(enabled);
-        this.getRowItemView().setEditable(enabled);
+    public void setEditable(final InteractionMode mode) {
+        this.supprBtn.setEnabled(mode.isEditable());
+        this.getRowItemView().setEditable(mode);
     }
 
 }

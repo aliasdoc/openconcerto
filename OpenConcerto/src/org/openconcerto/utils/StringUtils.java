@@ -46,6 +46,8 @@ public class StringUtils {
     public static final Charset Cp1252 = Charset.forName("Cp1252");
     public static final Charset Cp850 = Charset.forName("Cp850");
 
+    final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
+
     /**
      * Retourne la chaine avec la première lettre en majuscule et le reste en minuscule.
      * 
@@ -708,4 +710,17 @@ public class StringUtils {
         return strings;
     }
 
+    /**
+     * convert a byte array to its hexa representation
+     * */
+    public static String bytesToHexString(byte[] bytes) {
+        final int length = bytes.length;
+        char[] hexChars = new char[length * 2];
+        for (int j = 0; j < length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = hexArray[v >>> 4];
+            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
 }

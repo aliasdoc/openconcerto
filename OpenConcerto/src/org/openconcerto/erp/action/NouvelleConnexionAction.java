@@ -29,6 +29,8 @@ import org.openconcerto.erp.element.objet.ClasseCompte;
 import org.openconcerto.erp.modules.ModuleFrame;
 import org.openconcerto.erp.modules.ModuleManager;
 import org.openconcerto.erp.panel.ComptaTipsFrame;
+import org.openconcerto.erp.rights.GroupUIComboRightEditor;
+import org.openconcerto.erp.rights.MenuComboRightEditor;
 import org.openconcerto.erp.utils.NXDatabaseAccessor;
 import org.openconcerto.map.model.Ville;
 import org.openconcerto.sql.Configuration;
@@ -47,6 +49,7 @@ import org.openconcerto.sql.sqlobject.IComboSelectionItem;
 import org.openconcerto.sql.ui.ConnexionPanel;
 import org.openconcerto.sql.users.User;
 import org.openconcerto.sql.users.UserManager;
+import org.openconcerto.sql.users.rights.SQLTableRightEditor;
 import org.openconcerto.sql.users.rights.TableAllRights;
 import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.users.rights.UserRightsManager.RightTuple;
@@ -135,6 +138,7 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
                         // don't die now, we might not need them
                         ExceptionHandler.handle("Impossible d'accéder aux préférences", e);
                     }
+
                     // needed by openEmergencyModuleManager()
                     UserRightsManager.getInstance().addRightForAdmins(new RightTuple(ModuleManager.MODULE_DB_RIGHT, true));
                     UserRightsManager.getInstance().addRightForAdmins(new RightTuple(BackupPanel.RIGHT_CODE, true));
@@ -155,36 +159,25 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
                     // à toutes les société
                     final int userId = user.getId();
                     if (!user.getRights().isSuperUser() && !user.getRights().haveRight("ACCES_ALL_SOCIETE")) {
-                        final boolean emptyMeansAllow;
-                        {
-                            emptyMeansAllow = true;
-                        }
 
                         final SQLTable tableAcces = comptaPropsConfiguration.getRoot().findTable("ACCES_SOCIETE");
                         SQLSelect sel = new SQLSelect();
                         sel.addSelectStar(tableAcces);
                         sel.setWhere(new Where(tableAcces.getField("ID_USER_COMMON"), "=", userId));
-                        if (!emptyMeansAllow) {
-                            sel.andWhere(new Where(tableAcces.getField("ID_SOCIETE_COMMON"), "=", selectedSociete));
-                        }
 
                         final List<SQLRow> accessRows = SQLRowListRSH.execute(sel);
                         final boolean accessGranted;
-                        if (!emptyMeansAllow) {
-                            accessGranted = accessRows.size() > 0;
+                        if (accessRows.size() == 0) {
+                            accessGranted = true;
                         } else {
-                            if (accessRows.size() == 0) {
-                                accessGranted = true;
-                            } else {
-                                boolean tmp = false;
-                                for (final SQLRow r : accessRows) {
-                                    if (r.getInt("ID_SOCIETE_COMMON") == selectedSociete) {
-                                        tmp = true;
-                                        break;
-                                    }
+                            boolean tmp = false;
+                            for (final SQLRow r : accessRows) {
+                                if (r.getInt("ID_SOCIETE_COMMON") == selectedSociete) {
+                                    tmp = true;
+                                    break;
                                 }
-                                accessGranted = tmp;
                             }
+                            accessGranted = tmp;
                         }
 
                         if (!accessGranted) {
@@ -196,6 +189,9 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
+                            MenuComboRightEditor.register();
+                            GroupUIComboRightEditor.register();
+                            SQLTableRightEditor.register();
                             // even for quick login, check the license before displaying the main
                             // frame
 
@@ -278,8 +274,8 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
         this.connexionPanel = ConnexionPanel.create(r, image, !Gestion.isMinimalMode());
         if (this.connexionPanel == null)
             return null;
-        this.connexionPanel.initLocalization(getClass().getName(),
-                Arrays.asList(Locale.FRANCE, Locale.CANADA_FRENCH, new Locale("fr", "CH"), new Locale("fr", "BE"), Locale.UK, Locale.CANADA, Locale.US, Locale.GERMANY, new Locale("de", "CH")));
+        this.connexionPanel.initLocalization(getClass().getName(), Arrays.asList(Locale.FRANCE, Locale.CANADA_FRENCH, new Locale("fr", "CH"), new Locale("fr", "BE"), Locale.UK, Locale.CANADA,
+                Locale.US, Locale.GERMANY, new Locale("de", "CH"), new Locale("pl", "PL")));
 
         p.add(this.connexionPanel, c);
         final PanelFrame panelFrame = new PanelFrame(p, "Connexion");
@@ -330,6 +326,7 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
                 tablesToCache.add(baseSociete.getTable("COMMANDE_CLIENT_ELEMENT"));
                 tablesToCache.add(baseSociete.getTable("AVOIR_CLIENT_ELEMENT"));
                 tablesToCache.add(baseSociete.getTable("BON_RECEPTION_ELEMENT"));
+                tablesToCache.add(baseSociete.getTable("ASSOCIATION_ANALYTIQUE"));
                 undefCache.preload(tablesToCache);
             }
 

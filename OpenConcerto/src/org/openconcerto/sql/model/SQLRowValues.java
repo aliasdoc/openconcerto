@@ -15,11 +15,13 @@
 
 import org.openconcerto.sql.model.SQLRowValuesCluster.State;
 import org.openconcerto.sql.model.SQLRowValuesCluster.ValueChangeListener;
+import org.openconcerto.sql.model.SQLTable.FieldGroup;
 import org.openconcerto.sql.model.SQLTableEvent.Mode;
 import org.openconcerto.sql.model.graph.DatabaseGraph;
 import org.openconcerto.sql.model.graph.Link;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.model.graph.SQLKey.Type;
 import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.sql.request.Inserter;
 import org.openconcerto.sql.request.Inserter.Insertion;
@@ -28,6 +30,7 @@ import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.utils.ReOrder;
 import org.openconcerto.utils.CollectionMap2Itf.SetMapItf;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.CopyUtils;
 import org.openconcerto.utils.ExceptionUtils;
 import org.openconcerto.utils.ListMap;
@@ -86,6 +89,10 @@ public final class SQLRowValues extends SQLRowAccessor {
          */
         NO_COPY,
         /**
+         * Put <code>null</code> instead of the SQLRowValues. This keeps all fields.
+         */
+        COPY_NULL,
+        /**
          * Copy the id of SQLRowValues if any, otherwise don't copy anything. This keeps the maximum
          * of information without any foreign rowValues.
          */
@@ -107,11 +114,19 @@ public final class SQLRowValues extends SQLRowAccessor {
          */
         CREATE_NONE,
         /**
-         * For multi-link step, create one row with all links.
+         * For non-full step, create one row with all links. For example with a step of 3 links :
+         * <ul>
+         * <li>if they are all filled, do nothing</li>
+         * <li>if they are all empty, create one row</li>
+         * <li>if one link is filled with a row, add all empty links to it</li>
+         * <li>if more than one link is filled (but not all of them), error out as it would leave a
+         * hybrid state : neither 2 rows joined by all the links, nor one row per link</li>
+         * </ul>
+         * Then follow all existing plus created rows.
          */
         CREATE_ONE,
         /**
-         * For multi-link step, create one row for each link.
+         * Create one row for each empty link, then follow all existing plus created rows.
          */
         CREATE_MANY
     }
@@ -162,6 +177,28 @@ public final class SQLRowValues extends SQLRowAccessor {
         return plannedSize < 0 ? defaultCapacity : Math.max((int) (plannedSize / DEFAULT_LOAD_FACTOR) + 1, 4);
     }
 
+    private static final LinkedHashMap<String, Object> createLinkedHashMap(final int plannedSize) {
+        if (plannedSize < 0)
+            throw new IllegalArgumentException("Negative capacity");
+        return createLinkedHashMap(plannedSize, -1);
+    }
+
+    private static final <K, V> LinkedHashMap<K, V> createLinkedHashMap(final int plannedSize, final int defaultCapacity) {
+        return new LinkedHashMap<K, V>(getCapacity(plannedSize, defaultCapacity), DEFAULT_LOAD_FACTOR);
+    }
+
+    private static final <K> SetMap<K, SQLRowValues> createSetMap(final int plannedSize, final int defaultCapacity) {
+        return new SetMap<K, SQLRowValues>(new HashMap<K, Set<SQLRowValues>>(getCapacity(plannedSize, defaultCapacity), DEFAULT_LOAD_FACTOR), org.openconcerto.utils.CollectionMap2.Mode.NULL_FORBIDDEN, false) {
+            @Override
+            public Set<SQLRowValues> createCollection(Collection<? extends SQLRowValues> coll) {
+                // use LinkedHashSet so that the order is preserved, eg we can iterate over LOCALs
+                // pointing to a BATIMENT with consistent and predictable (insertion-based) order.
+                // use IdentitySet to be able to put two equal instances
+                return coll == null ? new LinkedIdentitySet<SQLRowValues>() : new LinkedIdentitySet<SQLRowValues>(coll);
+            }
+        };
+    }
+
     private final Map<String, Object> values;
     private final Map<String, SQLRowValues> foreigns;
     private final SetMap<SQLField, SQLRowValues> referents;
@@ -187,19 +224,10 @@ public final class SQLRowValues extends SQLRowAccessor {
     public SQLRowValues(SQLTable t, final int valuesPlannedSize, final int foreignsPlannedSize, final int referentsPlannedSize) {
         super(t);
         // use LinkedHashSet so that the order is preserved, see #walkFields()
-        this.values = new LinkedHashMap<String, Object>(getCapacity(valuesPlannedSize, DEFAULT_VALUES_CAPACITY), DEFAULT_LOAD_FACTOR);
+        this.values = createLinkedHashMap(valuesPlannedSize, DEFAULT_VALUES_CAPACITY);
         // foreigns order should be coherent with values
-        this.foreigns = new LinkedHashMap<String, SQLRowValues>(getCapacity(foreignsPlannedSize, 4), DEFAULT_LOAD_FACTOR);
-        this.referents = new SetMap<SQLField, SQLRowValues>(new HashMap<SQLField, Set<SQLRowValues>>(getCapacity(referentsPlannedSize, 4), DEFAULT_LOAD_FACTOR),
-                org.openconcerto.utils.CollectionMap2.Mode.NULL_FORBIDDEN, false) {
-            @Override
-            public Set<SQLRowValues> createCollection(Collection<? extends SQLRowValues> coll) {
-                // use LinkedHashSet so that the order is preserved, eg we can iterate over LOCALs
-                // pointing to a BATIMENT with consistent and predictable (insertion-based) order.
-                // use IdentitySet to be able to put two equal instances
-                return coll == null ? new LinkedIdentitySet<SQLRowValues>() : new LinkedIdentitySet<SQLRowValues>(coll);
-            }
-        };
+        this.foreigns = createLinkedHashMap(foreignsPlannedSize, 4);
+        this.referents = createSetMap(referentsPlannedSize, 4);
         // no used much so lazy init
         this.referentsListener = null;
         // Allow to reduce memory for lonely rows, and even for linked rows since before :
@@ -249,6 +277,19 @@ public final class SQLRowValues extends SQLRowAccessor {
         return this.getGraph().deepCopy(this);
     }
 
+    /**
+     * Get a frozen version of this. If not already {@link #isFrozen() frozen}, copy this rowValues
+     * and all others connected to it and {@link SQLRowValuesCluster#freeze()} the copy. I.e. if the
+     * result is to be shared among threads, it still needs to be safely published.
+     * 
+     * @return this if already frozen, otherwise a frozen copy of this.
+     */
+    public final SQLRowValues toImmutable() {
+        if (this.isFrozen())
+            return this;
+        return this.getGraph().deepCopy(this, true);
+    }
+
     // *** graph
 
     private void updateLinks(String fieldName, Object old, Object value) {
@@ -281,6 +322,12 @@ public final class SQLRowValues extends SQLRowAccessor {
         }
     }
 
+    /**
+     * Return the graph for this instance. NOTE: for single row values the graph is only created on
+     * demand.
+     * 
+     * @return the graph.
+     */
     public final SQLRowValuesCluster getGraph() {
         return this.getGraph(true);
     }
@@ -289,6 +336,17 @@ public final class SQLRowValues extends SQLRowAccessor {
         if (create && this.graph == null)
             this.graph = new SQLRowValuesCluster(this);
         return this.graph;
+    }
+
+    /**
+     * The number of items in our graph. NOTE: this method doesn't allocate a graph.
+     * 
+     * @return the number of items in our graph.
+     * @see SQLRowValuesCluster#size()
+     */
+    public final int getGraphSize() {
+        final SQLRowValuesCluster g = this.getGraph(false);
+        return g == null ? 1 : g.size();
     }
 
     public final <T> void walkGraph(T acc, ITransformer<State<T>, T> closure) {
@@ -372,6 +430,10 @@ public final class SQLRowValues extends SQLRowAccessor {
         return Collections.unmodifiableMap(this.foreigns);
     }
 
+    final int getForeignsSize() {
+        return this.foreigns.size();
+    }
+
     final Map<SQLField, SQLRowValues> getForeignsBySQLField() {
         return new TransformedMap<String, SQLField, SQLRowValues>(this.getForeigns(), new ITransformer<String, SQLField>() {
             @Override
@@ -386,6 +448,7 @@ public final class SQLRowValues extends SQLRowAccessor {
         });
     }
 
+    // package private since the result is modifiable, see below for the public version
     final SetMap<SQLField, SQLRowValues> getReferents() {
         return this.referents;
     }
@@ -409,7 +472,7 @@ public final class SQLRowValues extends SQLRowAccessor {
 
     @Override
     public Set<SQLRowValues> getReferentRows(SQLField refField) {
-        return (Set<SQLRowValues>) this.referents.getNonNull(refField);
+        return Collections.unmodifiableSet(this.referents.getNonNull(refField));
     }
 
     @Override
@@ -446,12 +509,16 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     private final SQLRowValues changeReferents(final SQLField f, final boolean retain) {
-        if (f != null || !retain) {
+        return this.changeReferents(f, retain, ForeignCopyMode.NO_COPY);
+    }
+
+    private final SQLRowValues changeReferents(final SQLField f, final boolean retain, final ForeignCopyMode mode) {
+        if ((f != null || !retain) && mode != ForeignCopyMode.COPY_ROW) {
             // copy otherwise ConcurrentModificationException
             for (final Entry<SQLField, Set<SQLRowValues>> e : CopyUtils.copy(this.getReferents()).entrySet()) {
                 if (f == null || e.getKey().equals(f) != retain) {
                     for (final SQLRowValues ref : e.getValue()) {
-                        ref.remove(e.getKey().getName());
+                        ref.flatten(e.getKey().getName(), mode);
                     }
                 }
             }
@@ -532,10 +599,12 @@ public final class SQLRowValues extends SQLRowAccessor {
             toAdd = this.values;
         } else {
             final Set<Entry<String, Object>> entrySet = this.values.entrySet();
-            toAdd = new LinkedHashMap<String, Object>(entrySet.size());
+            toAdd = createLinkedHashMap(entrySet.size());
             for (final Map.Entry<String, Object> e : entrySet) {
                 if (!(e.getValue() instanceof SQLRowValues)) {
                     toAdd.put(e.getKey(), e.getValue());
+                } else if (copyForeigns == ForeignCopyMode.COPY_NULL) {
+                    toAdd.put(e.getKey(), null);
                 } else if (copyForeigns != ForeignCopyMode.NO_COPY) {
                     final SQLRowValues foreign = (SQLRowValues) e.getValue();
                     if (foreign.hasID())
@@ -546,6 +615,29 @@ public final class SQLRowValues extends SQLRowAccessor {
             }
         }
         return Collections.unmodifiableMap(toAdd);
+    }
+
+    /**
+     * All current groups of this row.
+     * 
+     * @return the ordered groups.
+     * @throws IllegalStateException if a group is incomplete (e.g. a primary key has only one of
+     *         its two values).
+     */
+    public final Set<FieldGroup> getFieldGroups() throws IllegalStateException {
+        final Set<String> fields = this.getFields();
+        // keep order
+        final LinkedHashSet<FieldGroup> set = new LinkedHashSet<FieldGroup>();
+        final Map<String, FieldGroup> tableGroups = this.getTable().getFieldGroups();
+        for (final String fieldName : fields) {
+            final FieldGroup group = tableGroups.get(fieldName);
+            // check that groups are complete
+            if (set.add(group)) {
+                if (!fields.containsAll(group.getFields()))
+                    throw new IllegalStateException("Missing fields for " + group + ", current fields : " + fields);
+            }
+        }
+        return set;
     }
 
     /**
@@ -586,15 +678,15 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @throws IllegalArgumentException if <i>fieldName</i> is not a foreign field.
      */
     private final SQLTable getForeignTable(String fieldName) throws IllegalArgumentException {
-        return this.getForeignTable(Collections.singletonList(fieldName));
+        return this.getForeignLink(Collections.singletonList(fieldName)).getTarget();
     }
 
-    private final SQLTable getForeignTable(final List<String> fieldsNames) throws IllegalArgumentException {
+    private final Link getForeignLink(final List<String> fieldsNames) throws IllegalArgumentException {
         final DatabaseGraph graph = this.getTable().getDBSystemRoot().getGraph();
         final Link foreignLink = graph.getForeignLink(this.getTable(), fieldsNames);
         if (foreignLink == null)
             throw new IllegalArgumentException(fieldsNames + " are not a foreign key of " + this.getTable());
-        return foreignLink.getTarget();
+        return foreignLink;
     }
 
     @Override
@@ -646,6 +738,21 @@ public final class SQLRowValues extends SQLRowAccessor {
     // *** set
 
     /**
+     * Whether this can be modified.
+     * 
+     * @return <code>true</code> if this (and its graph) is not modifiable.
+     */
+    public final boolean isFrozen() {
+        final SQLRowValuesCluster g = this.getGraph(false);
+        return g != null && g.isFrozen();
+    }
+
+    private void checkFrozen() {
+        if (this.isFrozen())
+            throw new IllegalStateException("Graph is not modifiable");
+    }
+
+    /**
      * Retains only the fields in this that are contained in the specified collection. In other
      * words, removes all of its elements that are not contained in the specified collection.
      * 
@@ -659,6 +766,9 @@ public final class SQLRowValues extends SQLRowAccessor {
     private final SQLRowValues changeFields(Collection<String> fields, final boolean retain) {
         // retains all == no-op
         if (retain && fields == null)
+            return this;
+        // remove nothing == no-op
+        if (!retain && fields != null && fields.isEmpty())
             return this;
         // clear all on an empty values == no-op
         if (!retain && fields == null && this.size() == 0)
@@ -677,9 +787,9 @@ public final class SQLRowValues extends SQLRowAccessor {
         if (toRm.isEmpty())
             return this;
         // handle links
-        final Set<String> fks = getTable().getForeignKeysNames();
+        final Map<String, FieldGroup> fieldGroups = getTable().getFieldGroups();
         for (final String fieldName : toRm) {
-            if (fks.contains(fieldName))
+            if (fieldGroups.get(fieldName).getKeyType() == Type.FOREIGN_KEY)
                 this._put(fieldName, null);
         }
         if (fields == null) {
@@ -709,6 +819,7 @@ public final class SQLRowValues extends SQLRowAccessor {
         // check arg & handle links
         this.put(field, null);
         // really remove
+        assert !this.isFrozen() : "Should already be checked by put(null)";
         this.values.remove(field);
     }
 
@@ -717,6 +828,7 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     public final void clearPrimaryKeys() {
+        checkFrozen();
         this.clearPrimaryKeys(this.values);
         // by definition primary keys are not foreign keys, so no need to updateLinks()
     }
@@ -763,6 +875,7 @@ public final class SQLRowValues extends SQLRowAccessor {
             value = this.getForeignTable(fieldName).getUndefinedIDNumber();
         // use assertion since check() is not perfect
         assert check(fieldName, value);
+        checkFrozen();
         this.updateLinks(fieldName, this.values.put(fieldName, value), value);
     }
 
@@ -826,6 +939,73 @@ public final class SQLRowValues extends SQLRowAccessor {
         return vals;
     }
 
+    public final SQLRowValues putRowValues(final Path p, final boolean createPath) throws IllegalArgumentException {
+        return this.put(p, createPath, null);
+    }
+
+    /**
+     * Create or follow the passed path and put the passed row at the end.
+     * 
+     * @param p the {@link Path#isSingleLink() single link} path.
+     * @param createPath <code>true</code> if new rows must {@link #createPathToOne(Path) always be
+     *        created}, <code>false</code> if existing rows can be {@link #assurePath(Path) used}.
+     * @param vals the row to {@link #put(Step, SQLRowValues) put}, <code>null</code> to create a
+     *        new one.
+     * @return the row that was added.
+     * @throws IllegalArgumentException if the path is invalid.
+     */
+    public final SQLRowValues put(final Path p, final boolean createPath, final SQLRowValues vals) throws IllegalArgumentException {
+        if (p.length() == 0)
+            throw new IllegalArgumentException("Empty path");
+        if (!p.isSingleLink())
+            throw new IllegalArgumentException("Multi-link path " + p);
+        // checks first table
+        final SQLRowValues beforeLast = createPath ? this.createPathToOne(p.minusLast()) : this.assurePath(p.minusLast());
+        // checks last table
+        return beforeLast.put(p.getStep(-1), vals);
+    }
+
+    public final SQLRowValues putRowValues(final Step step) throws IllegalArgumentException {
+        return this.put(step, null);
+    }
+
+    /**
+     * Add all links of the passed step from this to the passed row.
+     * 
+     * @param step a step.
+     * @param vals a row, <code>null</code> to create a new one.
+     * @return the row that was linked.
+     * @throws IllegalArgumentException if the step is not from <code>this</code> to
+     *         <code>vals</code>.
+     */
+    public final SQLRowValues put(final Step step, SQLRowValues vals) throws IllegalArgumentException {
+        if (!step.getFrom().equals(this.getTable()))
+            throw new IllegalArgumentException(step + " not from " + this);
+        if (vals == null)
+            vals = new SQLRowValues(step.getTo());
+        else if (!step.getTo().equals(vals.getTable()))
+            throw new IllegalArgumentException(step + " not to " + vals);
+        for (final Link l : step.getLinks()) {
+            final Direction dir = step.getDirection(l);
+            if (dir == Direction.REFERENT) {
+                vals.put(l.getSingleField().getName(), this);
+            } else {
+                assert dir == Direction.FOREIGN;
+                this.put(l.getSingleField().getName(), vals);
+            }
+        }
+        return vals;
+    }
+
+    public final void remove(final Step step) {
+        for (final Link l : step.getLinks()) {
+            if (step.getDirection(l) == Direction.FOREIGN)
+                this.removeForeignKey(l);
+            else
+                this.removeReferents(l.getSingleField());
+        }
+    }
+
     /**
      * Safely set the passed field to the value of the primary key of <code>r</code>.
      * 
@@ -841,20 +1021,39 @@ public final class SQLRowValues extends SQLRowAccessor {
 
     public final SQLRowValues putForeignKey(final List<String> cols, final SQLRowAccessor r) throws IllegalArgumentException {
         // first check that cols are indeed a foreign key
-        final SQLTable foreignTable = this.getForeignTable(cols);
+        return this.putForeignKey(this.getForeignLink(cols), r);
+    }
+
+    public final SQLRowValues putForeignKey(final Link foreignLink, final SQLRowAccessor r) throws IllegalArgumentException {
+        checkForeignLink(foreignLink);
+        final List<String> cols = foreignLink.getCols();
         if (r == null) {
             if (cols.size() == 1) {
                 return this.putEmptyLink(cols.get(0));
             } else {
-                return this.loadAll(CollectionUtils.fillMap(new HashMap<String, Object>(cols.size()), cols, SQL_EMPTY_LINK), false);
+                return this.putNulls(cols);
             }
         } else {
-            checkSameTable(r, foreignTable);
-            if (cols.size() == 1)
-                return this.put(cols.get(0), r.getIDNumber());
-            else
-                return this.loadAll(r.getAbsolutelyAll(), cols, true, false);
+            checkSameTable(r, foreignLink.getTarget());
+            final Iterator<String> iter = cols.iterator();
+            final Iterator<String> refIter = foreignLink.getRefCols().iterator();
+            while (iter.hasNext()) {
+                final String col = iter.next();
+                final String refCol = refIter.next();
+                this.put(col, r.getObject(refCol));
+            }
+            return this;
         }
+    }
+
+    private void checkForeignLink(final Link foreignLink) {
+        if (foreignLink.getSource() != this.getTable())
+            throw new IllegalArgumentException("Link not from " + this.getTable() + " : " + foreignLink);
+    }
+
+    public final void removeForeignKey(final Link foreignLink) {
+        checkForeignLink(foreignLink);
+        this.removeAll(foreignLink.getCols());
     }
 
     private void checkSameTable(final SQLRowAccessor r, final SQLTable t) {
@@ -922,35 +1121,46 @@ public final class SQLRowValues extends SQLRowAccessor {
         } else {
             checkSameTable(r, this.getTable());
             // required since we don't want only half of the fields of the primary key
-            return this.loadAll(r.getAbsolutelyAll(), this.getTable().getPKsNames(new HashSet<String>()), true, false);
+            return this.loadAll(r.getAbsolutelyAll(), this.getTable().getPKsNames(new HashSet<String>()), true, FillMode.OVERWRITE);
         }
     }
 
     public final SQLRowValues setAll(Map<String, ?> m) {
-        return this.loadAll(m, true);
+        return this.loadAll(m, FillMode.CLEAR);
     }
 
     public final SQLRowValues putAll(Map<String, ?> m) {
-        return this.loadAll(m, false);
+        return this.putAll(m, null);
     }
 
-    private final SQLRowValues loadAll(Map<String, ?> m, final boolean clear) {
-        return this.loadAll(m, null, false, clear);
+    public final SQLRowValues putAll(Map<String, ?> m, final Collection<String> keys) {
+        return this.loadAll(m, keys, false, FillMode.OVERWRITE);
     }
 
-    private final SQLRowValues loadAll(Map<String, ?> m, final Collection<String> keys, final boolean required, final boolean clear) {
+    static private enum FillMode {
+        CLEAR, OVERWRITE, DONT_OVERWRITE
+    }
+
+    private final SQLRowValues loadAll(Map<String, ?> m, final FillMode fillMode) {
+        return this.loadAll(m, null, false, fillMode);
+    }
+
+    private final SQLRowValues loadAll(Map<String, ?> m, final Collection<String> keys, final boolean required, final FillMode fillMode) {
         final Collection<String> keySet = keys == null ? m.keySet() : keys;
         if (!this.getTable().getFieldsName().containsAll(keySet))
             throw new IllegalArgumentException("fields " + keySet + " are not a subset of " + this.getTable() + " : " + this.getTable().getFieldsName());
         // copy before passing to fire()
-        final Map<String, Object> toLoad = new HashMap<String, Object>(m);
+        final Map<String, Object> toLoad = new LinkedHashMap<String, Object>(m);
         if (keys != null) {
             if (required && !m.keySet().containsAll(keys))
                 throw new IllegalArgumentException("Not all are keys " + keys + " are in " + m);
             toLoad.keySet().retainAll(keys);
         }
-        if (clear)
+        if (fillMode == FillMode.CLEAR) {
             clear();
+        } else if (fillMode == FillMode.DONT_OVERWRITE) {
+            toLoad.keySet().removeAll(this.getFields());
+        }
         for (final Map.Entry<String, ?> e : toLoad.entrySet()) {
             this._put(e.getKey(), e.getValue());
         }
@@ -978,14 +1188,42 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @return this.
      */
     public final SQLRowValues putNulls(Collection<String> fields, final boolean ignoreInexistant) {
-        final Map<String, Object> m = new HashMap<String, Object>(fields.size());
-        final Set<String> fieldsName = getTable().getFieldsName();
+        return this.fill(fields, null, ignoreInexistant, false);
+    }
+
+    /**
+     * Put the same value in all the passed fields.
+     * 
+     * @param fields fields to change, <code>null</code> meaning all the fields of the table.
+     * @param val the value to put, can be <code>null</code>.
+     * @param ignoreInexistant if <code>fields</code> that aren't in the table should be ignored
+     *        (not used if <code>fields</code> is <code>null</code>).
+     * @param ignoreExisting <code>true</code> if no value should be overwritten.
+     * @return this.
+     * @throws IllegalArgumentException if <code>!ignoreInexistant</code> and some fields aren't in
+     *         the table.
+     */
+    public final SQLRowValues fill(final Collection<String> fields, final Object val, final boolean ignoreInexistant, final boolean ignoreExisting) throws IllegalArgumentException {
+        final Set<String> tableFieldsNames = getTable().getFieldsName();
         // keep order
-        for (final String fn : new LinkedHashSet<String>(fields)) {
-            if (!ignoreInexistant || fieldsName.contains(fn))
-                m.put(fn, null);
+        final Set<String> actualFields = fields == null ? tableFieldsNames : new LinkedHashSet<String>(fields);
+        final Map<String, Object> m = createLinkedHashMap(actualFields.size());
+        for (final String fn : actualFields) {
+            if (fields == null || !ignoreInexistant || tableFieldsNames.contains(fn))
+                m.put(fn, val);
         }
-        return this.putAll(m);
+        return this.loadAll(m, ignoreExisting ? FillMode.DONT_OVERWRITE : FillMode.OVERWRITE);
+    }
+
+    /**
+     * Fill all fields with the passed value.
+     * 
+     * @param val the value to put, can be <code>null</code>.
+     * @param overwrite <code>true</code> if existing values must be replaced.
+     * @return this.
+     */
+    public final SQLRowValues fillWith(final Object val, final boolean overwrite) {
+        return this.fill(null, val, false, !overwrite);
     }
 
     /**
@@ -994,11 +1232,7 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @return this.
      */
     public final SQLRowValues setAllToNull() {
-        final Map<String, Object> nullMap = new HashMap<String, Object>();
-        for (final SQLField f : this.getTable().getFields()) {
-            nullMap.put(f.getName(), null);
-        }
-        return this.setAll(nullMap);
+        return this.fillWith(null, true);
     }
 
     // listener
@@ -1155,6 +1389,33 @@ public final class SQLRowValues extends SQLRowAccessor {
         return followPath(path, CreateMode.CREATE_NONE, false);
     }
 
+    /**
+     * Create all rows on the passed path and add them to this. There's
+     * {@link CreateMode#CREATE_ONE one row} per step.
+     * 
+     * @param p the path.
+     * @return the row at the end of the path.
+     * @throws IllegalStateException if the first step is a non-empty foreign link.
+     */
+    public final SQLRowValues createPathToOne(final Path p) {
+        final Collection<SQLRowValues> res = this.createPath(p, true);
+        assert res.size() == 1;
+        return res.iterator().next();
+    }
+
+    /**
+     * Create all rows on the passed path and add them to this.
+     * 
+     * @param p the path.
+     * @param createOne <code>true</code> to {@link CreateMode#CREATE_ONE create one} row per step,
+     *        <code>false</code> to {@link CreateMode#CREATE_MANY create} one row per link.
+     * @return the rows at the end of the path.
+     * @throws IllegalStateException if the first step is a non-empty foreign link.
+     */
+    public final Collection<SQLRowValues> createPath(final Path p, final boolean createOne) {
+        return this.followPath(p, createOne ? CreateMode.CREATE_ONE : CreateMode.CREATE_MANY, true, false, null);
+    }
+
     public final Collection<SQLRowValues> followPath(final Path p, final CreateMode create, final boolean onlyOne) {
         return followPath(p, create, onlyOne, DEFAULT_ALLOW_BACKTRACK);
     }
@@ -1172,44 +1433,39 @@ public final class SQLRowValues extends SQLRowAccessor {
      *         path.
      */
     public final Collection<SQLRowValues> followPath(final Path p, final CreateMode create, final boolean onlyOne, final boolean allowBackTrack) throws IllegalArgumentException, IllegalStateException {
-        return followPath(p, create, onlyOne, allowBackTrack ? null : new LinkedIdentitySet<SQLRowValues>());
+        return followPath(p, create, false, onlyOne, allowBackTrack ? null : new LinkedIdentitySet<SQLRowValues>());
     }
 
-    private final IdentitySet<SQLRowValues> followPath(final Path p, final CreateMode create, final boolean onlyOne, final IdentitySet<SQLRowValues> beenThere) {
+    // if alwaysCreate : CREATE_NONE is invalid and existing rows are ignored (i.e. rows are always
+    // created and an exception is thrown if there's a non-empty foreign link (perhaps add a force
+    // mode to replace it))
+    private final IdentitySet<SQLRowValues> followPath(final Path p, final CreateMode create, final boolean alwaysCreate, final boolean onlyOne, final IdentitySet<SQLRowValues> beenThere) {
         if (p.getFirst() != this.getTable())
             throw new IllegalArgumentException("path " + p + " doesn't start with us " + this);
+        final boolean neverCreate = create == CreateMode.CREATE_NONE;
+        if (alwaysCreate && neverCreate)
+            throw new IllegalArgumentException("If alwaysCreate, don't pass " + create);
+        if (alwaysCreate && beenThere != null)
+            throw new IllegalArgumentException("If alwaysCreate, existing rows are ignored so the same row can never be visited more than once");
         if (p.length() > 0) {
             // fail-fast : avoid creating rows
             if (onlyOne && create == CreateMode.CREATE_MANY && !p.isSingleLink())
                 throw new IllegalStateException("more than one link with " + create + " and onlyOne : " + p);
 
-            // Set is needed when a row is multi-linked to another (to avoid calling recursively
-            // followPath() on the same instance)
-            // IdentitySet is needed since multiple rows can be equal, e.g. empty rows :
-            // SITE -- chef -> CONTACT
-            // _____-- rapport -> CONTACT
-            final Set<SQLRowValues> next = new LinkedIdentitySet<SQLRowValues>();
             final Step firstStep = p.getStep(0);
             final Set<Link> ffs = firstStep.getLinks();
+            final SetMap<Link, SQLRowValues> existingRows = createSetMap(-1, 6);
+            final Set<Link> linksToCreate = neverCreate ? Collections.<Link> emptySet() : new HashSet<Link>();
             for (final Link l : ffs) {
                 final SQLField ff = l.getLabel();
                 if (firstStep.isForeign(l)) {
                     final Object fkValue = this.getObject(ff.getName());
                     if (fkValue instanceof SQLRowValues && (beenThere == null || !beenThere.contains(fkValue))) {
-                        next.add((SQLRowValues) fkValue);
-                    } else if (create == CreateMode.CREATE_ONE || create == CreateMode.CREATE_MANY) {
-                        assert create == CreateMode.CREATE_MANY || (create == CreateMode.CREATE_ONE && next.size() <= 1);
-                        final SQLRowValues nextOne;
-                        if (create == CreateMode.CREATE_ONE && next.size() == 1) {
-                            nextOne = next.iterator().next();
-                        } else {
-                            nextOne = new SQLRowValues(ff.getDBSystemRoot().getGraph().getForeignTable(ff));
-                            // keep the id, if present
-                            if (fkValue instanceof Number)
-                                nextOne.setID((Number) fkValue);
-                            next.add(nextOne);
-                        }
-                        this.put(ff.getName(), nextOne);
+                        if (alwaysCreate)
+                            throw new IllegalStateException("alwaysCreate=true but foreign link is not empty : " + l);
+                        existingRows.add(l, (SQLRowValues) fkValue);
+                    } else if (!neverCreate) {
+                        linksToCreate.add(l);
                     }
                 } else {
                     final Set<SQLRowValues> referentRows = this.getReferentRows(ff);
@@ -1220,23 +1476,70 @@ public final class SQLRowValues extends SQLRowAccessor {
                         validReferentRows = new LinkedIdentitySet<SQLRowValues>(referentRows);
                         validReferentRows.removeAll(beenThere);
                     }
-                    if (validReferentRows.size() > 0) {
-                        next.addAll(validReferentRows);
-                    } else if (create == CreateMode.CREATE_ONE || create == CreateMode.CREATE_MANY) {
-                        assert create == CreateMode.CREATE_MANY || (create == CreateMode.CREATE_ONE && next.size() <= 1);
-                        final SQLRowValues nextOne;
-                        if (create == CreateMode.CREATE_ONE && next.size() == 1) {
-                            nextOne = next.iterator().next();
-                        } else {
-                            nextOne = new SQLRowValues(ff.getTable());
-                            next.add(nextOne);
-                        }
-                        nextOne.put(ff.getName(), this);
+                    final boolean hasRef = validReferentRows.size() > 0;
+                    if (hasRef) {
+                        existingRows.addAll(l, validReferentRows);
+                    }
+                    if (alwaysCreate || !neverCreate && !hasRef) {
+                        linksToCreate.add(l);
                     }
                 }
             }
-            if (onlyOne && next.size() > 1)
-                throw new IllegalStateException("more than one row and onlyOne=true : " + next);
+            assert !alwaysCreate || linksToCreate.size() > 0;
+            // Set is needed when a row is multi-linked to another (to avoid calling recursively
+            // followPath() on the same instance)
+            // IdentitySet is needed since multiple rows can be equal, e.g. empty rows :
+            // SITE -- chef -> CONTACT
+            // _____-- rapport -> CONTACT
+            final Set<SQLRowValues> next = new LinkedIdentitySet<SQLRowValues>();
+            // by definition alwaysCreate implies ignoring existing rows
+            if (!alwaysCreate)
+                next.addAll(existingRows.allValues());
+            final int existingCount = next.size();
+            if (onlyOne && existingCount > 1)
+                throw new IllegalStateException("more than one row exist and onlyOne=true : " + existingRows);
+
+            final int newCount;
+            if (create == CreateMode.CREATE_MANY) {
+                newCount = existingCount + linksToCreate.size();
+            } else if (create == CreateMode.CREATE_ONE) {
+                // only enforce if we're creating rows, otherwise use "onlyOne"
+                if (linksToCreate.size() > 0 && existingCount > 1)
+                    throw new IllegalStateException("more than one row exist and " + create + ", this step won't be between two rows : " + existingRows);
+                newCount = Math.max(existingCount, 1);
+            } else {
+                assert neverCreate;
+                newCount = existingCount;
+            }
+            if (onlyOne && newCount > 1)
+                throw new IllegalStateException("Will have more than one row and onlyOne=true : " + existingRows + " to create : " + linksToCreate);
+
+            for (final Link l : linksToCreate) {
+                final SQLField ff = l.getLabel();
+                final boolean isForeign = firstStep.isForeign(l);
+
+                final SQLRowValues nextOne;
+                if (create == CreateMode.CREATE_ONE && next.size() == 1) {
+                    nextOne = next.iterator().next();
+                } else {
+                    assert create == CreateMode.CREATE_MANY || (create == CreateMode.CREATE_ONE && next.size() == 0) : "Creating more than one, already " + next.size();
+                    nextOne = new SQLRowValues(firstStep.getTo());
+                    if (isForeign) {
+                        // keep the id, if present
+                        final Object fkValue = this.getObject(ff.getName());
+                        if (fkValue instanceof Number)
+                            nextOne.setID((Number) fkValue);
+                    }
+                    next.add(nextOne);
+                }
+                if (isForeign) {
+                    this.put(ff.getName(), nextOne);
+                } else {
+                    nextOne.put(ff.getName(), this);
+                }
+            }
+            // already checked above
+            assert !(onlyOne && next.size() > 1);
 
             // see comment above for IdentitySet
             final IdentitySet<SQLRowValues> res = new LinkedIdentitySet<SQLRowValues>();
@@ -1249,7 +1552,7 @@ public final class SQLRowValues extends SQLRowAccessor {
                     final boolean added = newBeenThere.add(this);
                     assert added;
                 }
-                res.addAll(n.followPath(p.minusFirst(), create, onlyOne, newBeenThere));
+                res.addAll(n.followPath(p.minusFirst(), create, alwaysCreate, onlyOne, newBeenThere));
             }
             return res;
         } else {
@@ -1278,6 +1581,35 @@ public final class SQLRowValues extends SQLRowAccessor {
         return this;
     }
 
+    /**
+     * Flatten a foreign row values. NOTE : if there's no foreign row in <code>ff</code>, this
+     * method does nothing.
+     * 
+     * @param ff a foreign field.
+     * @param mode how to flatten.
+     * @return this.
+     */
+    public final SQLRowValues flatten(final String ff, final ForeignCopyMode mode) {
+        if (mode != ForeignCopyMode.COPY_ROW) {
+            final SQLRowValues foreign = this.foreigns.get(ff);
+            if (foreign != null) {
+                if (mode == ForeignCopyMode.COPY_NULL) {
+                    this.put(ff, null);
+                } else if (mode == ForeignCopyMode.NO_COPY) {
+                    this.remove(ff);
+                } else if (foreign.hasID()) {
+                    assert mode == ForeignCopyMode.COPY_ID_OR_ROW || mode == ForeignCopyMode.COPY_ID_OR_RM;
+                    this.put(ff, foreign.getIDNumber());
+                } else if (mode == ForeignCopyMode.COPY_ID_OR_RM) {
+                    this.remove(ff);
+                } else {
+                    assert mode == ForeignCopyMode.COPY_ID_OR_ROW && !foreign.hasID();
+                }
+            }
+        }
+        return this;
+    }
+
     // *** load
 
     public void loadAbsolutelyAll(SQLRow row) {
@@ -1293,7 +1625,7 @@ public final class SQLRowValues extends SQLRowAccessor {
     public void load(SQLRowAccessor row, final Set<String> fieldsNames) {
         // make sure we only define keys that row has
         // allow load( {'A':a, 'B':b}, {'A', 'B', 'C' } ) to not define 'C' to null
-        final Map<String, Object> m = new HashMap<String, Object>(row.getAbsolutelyAll());
+        final Map<String, Object> m = new LinkedHashMap<String, Object>(row.getAbsolutelyAll());
         if (fieldsNames != null)
             m.keySet().retainAll(fieldsNames);
 
@@ -1329,17 +1661,38 @@ public final class SQLRowValues extends SQLRowAccessor {
      *         </ol>
      */
     public Object[] getInvalid() {
-        final Set<SQLField> fk = this.getTable().getForeignKeys();
+        final Map<SQLField, Link> foreignLinks = new HashMap<SQLField, Link>();
+        for (final Link foreignLink : this.getTable().getDBSystemRoot().getGraph().getForeignLinks(this.getTable())) {
+            for (final SQLField f : foreignLink.getFields()) {
+                foreignLinks.put(f, foreignLink);
+            }
+        }
+
         for (final String fieldName : this.values.keySet()) {
             final SQLField field = this.getTable().getField(fieldName);
-            // verifie l'intégrité (a rowValues is obviously correct, as is EMPTY,
-            // DEFAULT is the responsability of the DB)
-            final Object fieldVal = this.getObject(fieldName);
-            if (fk.contains(field) && fieldVal != SQL_DEFAULT && !(fieldVal instanceof SQLRowValues)) {
-                final SQLRow pb = this.getTable().checkValidity(field.getName(), (Number) fieldVal);
-                if (pb != null)
-                    return new Object[] { fieldName, pb };
-            }
+            final Link foreignLink = foreignLinks.remove(field);
+            if (foreignLink != null) {
+                final SQLTable foreignTable = foreignLink.getTarget();
+                if (foreignTable.isRowable()) {
+                    // otherwise would have to check more than field
+                    assert foreignLink.getCols().size() == 1;
+                    // verifie l'intégrité (a rowValues is obviously correct, as is EMPTY,
+                    // DEFAULT is the responsability of the DB)
+                    final Object fieldVal = this.getObject(fieldName);
+                    if (fieldVal != null && fieldVal != SQL_DEFAULT && !(fieldVal instanceof SQLRowValues)) {
+                        final SQLRow pb = foreignTable.checkValidity(((Number) fieldVal).intValue());
+                        if (pb != null)
+                            return new Object[] { fieldName, pb };
+                    }
+                } else {
+                    // check that the foreign key is complete
+                    for (final String ff : foreignLink.getCols()) {
+                        if (!this.getFields().contains(ff))
+                            return new Object[] { ff, null };
+                    }
+                    // MAYBE also check foreign row is valid
+                }
+            } // else not a foreign key or already checked
         }
         return null;
     }
@@ -1541,16 +1894,25 @@ public final class SQLRowValues extends SQLRowAccessor {
 
     @Override
     public boolean equals(Object obj) {
+        if (obj == this)
+            return true;
         if (obj instanceof SQLRowValues) {
-            final SQLRowValues o = (SQLRowValues) obj;
-            return this.getTable().equals(o.getTable()) && this.values.equals(o.values);
+            return this.equalsGraph((SQLRowValues) obj);
         } else
             return false;
     }
 
     @Override
     public int hashCode() {
-        return this.getTable().hashCode();
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + this.getTable().hashCode();
+        // don't use SQLRowValues to avoid infinite loop
+        result = prime * result + this.getFields().hashCode();
+        result = prime * result + this.getGraphSize();
+        result = prime * result + this.foreigns.keySet().hashCode();
+        result = prime * result + this.referents.keySet().hashCode();
+        return result;
     }
 
     /**
@@ -1565,7 +1927,7 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     /**
-     * Return the first difference between this graph and another.
+     * Return the first difference between this graph and another, ignoring order of fields.
      * 
      * @param other another instance.
      * @return the first difference, <code>null</code> if equals.
@@ -1575,23 +1937,61 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     /**
-     * Return the first difference between this graph and another. Most of the time foreigns order
+     * Return the first difference between this graph and another. Most of the time fields orders
      * need not to be used, since when inserting they don't matter (which isn't true of the
      * referents). But they can matter if e.g. this is used to construct a query.
      * 
      * @param other another instance.
-     * @param useForeignsOrder <code>true</code> to also compare foreigns order.
+     * @param useOrder <code>true</code> to also compare the order of fields.
      * @return the first difference, <code>null</code> if equals.
      */
-    public final String getGraphFirstDifference(final SQLRowValues other, final boolean useForeignsOrder) {
-        return this.getGraph().getFirstDifference(this, other, useForeignsOrder);
+    public final String getGraphFirstDifference(final SQLRowValues other, final boolean useOrder) {
+        if (this == other)
+            return null;
+        return this.getGraph().getFirstDifference(this, other, useOrder, useOrder);
     }
 
-    final boolean equalsJustThis(final SQLRowValues o) {
-        // NO_COPY since foreign rows are handled by SQLRowValuesCluster.equals()
-        // LinkedHashMap.equals() does not compare the order of entries, which is fine since
-        // inserting doesn't change with the order of fields
-        return this.getTable().equals(o.getTable()) && new SQLRowValues(this, ForeignCopyMode.NO_COPY).values.equals(new SQLRowValues(o, ForeignCopyMode.NO_COPY).values);
+    public final boolean equalsJustThis(final SQLRowValues o) {
+        // don't compare the order of fields, since inserting doesn't change with it
+        return this.equalsJustThis(o, false);
+    }
+
+    /**
+     * Whether this equals the passed instance without following linked rows. This method use
+     * {@link ForeignCopyMode#COPY_ID_OR_RM}, so that a row having a foreign ID and a row having a
+     * foreign row with the same ID are equal.
+     * 
+     * @param o another instance.
+     * @param useFieldsOrder <code>true</code> if the order of {@link #getFields()} is to be
+     *        checked.
+     * @return <code>true</code> if both rows have the same {@link #getFields() fields} defined, and
+     *         {@link #getAllValues(ForeignCopyMode) all values} of this are equal to all values of
+     *         <code>o</code>.
+     * @see #equalsGraph(SQLRowValues)
+     */
+    public final boolean equalsJustThis(final SQLRowValues o, final boolean useFieldsOrder) {
+        return this.equalsJustThis(o, useFieldsOrder, true);
+    }
+
+    final boolean equalsJustThis(final SQLRowValues o, final boolean useFieldsOrder, final boolean useForeignID) {
+        if (this == o)
+            return true;
+        if (!this.getTable().equals(o.getTable()))
+            return false;
+        // first compare keySet as ForeignCopyMode can remove entries
+        if (useFieldsOrder) {
+            if (!CompareUtils.equalsUsingIterator(this.values.keySet(), o.values.keySet()))
+                return false;
+        } else {
+            if (!this.values.keySet().equals(o.values.keySet()))
+                return false;
+        }
+        // fields are already checked so if IDs are not wanted, just omit foreign rows
+        final ForeignCopyMode copyMode = useForeignID ? ForeignCopyMode.COPY_ID_OR_RM : ForeignCopyMode.NO_COPY;
+        final Map<String, Object> thisVals = this.getAllValues(copyMode);
+        final Map<String, Object> oVals = o.getAllValues(copyMode);
+        // LinkedHashMap.equals() does not compare the order of entries
+        return thisVals.equals(oVals);
     }
 
     // *** static

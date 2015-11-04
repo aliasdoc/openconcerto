@@ -14,7 +14,10 @@
  package org.openconcerto.utils;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import java.util.RandomAccess;
 
 /**
  * A simple class to hold 2 values in a type-safe manner.
@@ -27,6 +30,24 @@ import java.util.List;
 public class Tuple2<A, B> {
 
     public static class List2<A> extends Tuple2<A, A> {
+
+        public static <A> List2<A> create(Collection<? extends A> col) {
+            if (col.size() != 2)
+                throw new IllegalArgumentException("Wrong size : " + col.size());
+            final A a1, a2;
+            if (col instanceof RandomAccess && col instanceof List) {
+                final List<? extends A> l = (List<? extends A>) col;
+                a1 = l.get(0);
+                a2 = l.get(1);
+            } else {
+                final Iterator<? extends A> iter = col.iterator();
+                a1 = iter.next();
+                a2 = iter.next();
+                assert !iter.hasNext();
+            }
+            return new List2<A>(a1, a2);
+        }
+
         public List2(A a1, A a2) {
             super(a1, a2);
         }

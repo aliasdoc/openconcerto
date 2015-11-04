@@ -26,13 +26,56 @@ public class ViewTableModel extends TableModelAdapter {
 
     private final JTable table;
 
-    public ViewTableModel(JTable table) {
+    public ViewTableModel(final JTable table) {
         super(table.getModel());
         this.table = table;
     }
 
     @Override
-    protected int adaptCol(int columnIndex) {
+    protected int adaptCol(final int columnIndex) {
         return this.table.convertColumnIndexToModel(columnIndex);
+    }
+
+    @Override
+    public int getColumnCount() {
+        return this.table.getColumnCount();
+    }
+
+    @Override
+    protected int adaptRow(int rowIndex) {
+        return this.table.convertRowIndexToModel(rowIndex);
+    }
+
+    @Override
+    public int getRowCount() {
+        return this.table.getRowCount();
+    }
+
+    // the 4 methods above should be enough, but since JTable also defines the following ones, use
+    // them in case they are overloaded.
+
+    @Override
+    public String getColumnName(final int column) {
+        return this.table.getColumnName(column);
+    }
+
+    @Override
+    public Class<?> getColumnClass(final int column) {
+        return this.table.getColumnClass(column);
+    }
+
+    @Override
+    public Object getValueAt(final int row, final int column) {
+        return this.table.getValueAt(row, column);
+    }
+
+    @Override
+    public void setValueAt(final Object aValue, final int row, final int column) {
+        this.table.setValueAt(aValue, row, column);
+    }
+
+    @Override
+    public boolean isCellEditable(final int row, final int column) {
+        return this.table.isCellEditable(row, column);
     }
 }

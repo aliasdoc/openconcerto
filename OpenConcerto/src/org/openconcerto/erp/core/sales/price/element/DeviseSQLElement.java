@@ -13,11 +13,14 @@
  
  package org.openconcerto.erp.core.sales.price.element;
 
+import org.openconcerto.erp.core.finance.accounting.model.Currency;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.component.combo.ISearchableTextCombo;
 import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.model.DefaultIListModel;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -40,21 +43,20 @@ public class DeviseSQLElement extends ConfSQLElement {
 
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
-        l.add("NOM");
-        l.add("TAUX");
+        l.add("CODE");
         return l;
     }
 
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
-        l.add("NOM");
+        l.add("CODE");
         return l;
     }
 
     @Override
     public CollectionMap<String, String> getShowAs() {
         CollectionMap<String, String> map = new CollectionMap<String, String>();
-        map.put(null, "NOM");
+        map.put(null, "CODE");
         return map;
     }
 
@@ -67,26 +69,19 @@ public class DeviseSQLElement extends ConfSQLElement {
 
                 // Nom
                 JLabel labelCode = new JLabel(getLabelFor("CODE"));
-                JTextField textCode = new JTextField();
+                final ISearchableTextCombo textCode = new ISearchableTextCombo(true);
+                textCode.initCache(new DefaultIListModel<String>(Currency.ISO_CODES));
+                textCode.setSelectedItem("EUR");
                 this.add(labelCode, c);
                 c.gridx++;
                 c.weightx = 1;
                 this.add(textCode, c);
 
-                // Nom
-                JLabel labelNom = new JLabel(getLabelFor("NOM"));
-                JTextField textNom = new JTextField();
-                c.gridx++;
-                c.weightx = 0;
-                this.add(labelNom, c);
-                c.gridx++;
-                c.weightx = 1;
-                this.add(textNom, c);
-
-                // Nom
+                c.gridy++;
+                c.gridx = 0;
                 JLabel labelTaux = new JLabel(getLabelFor("TAUX"));
                 JTextField textTaux = new JTextField();
-                c.gridx++;
+
                 c.weightx = 0;
                 this.add(labelTaux, c);
                 c.gridx++;
@@ -94,31 +89,19 @@ public class DeviseSQLElement extends ConfSQLElement {
                 this.add(textTaux, c);
 
                 // Nom
-                JLabel labelNomDevise = new JLabel(getLabelFor("LIBELLE"));
-                JTextField textNomDevise = new JTextField();
-                c.gridx = 0;
-                c.gridy++;
-                c.weightx = 0;
-                this.add(labelNomDevise, c);
-                c.gridx++;
-                c.weightx = 1;
-                this.add(textNomDevise, c);
-
-                // Nom
-                JLabel labelNomCent = new JLabel(getLabelFor("LIBELLE_CENT"));
-                JTextField textNomCent = new JTextField();
+                JLabel labelTauxC = new JLabel(getLabelFor("TAUX_COMMERCIAL"));
+                JTextField textTauxC = new JTextField();
                 c.gridx++;
                 c.weightx = 0;
-                this.add(labelNomCent, c);
+                this.add(labelTauxC, c);
                 c.gridx++;
                 c.weightx = 1;
-                this.add(textNomCent, c);
+                this.add(textTauxC, c);
 
                 this.addView(textCode, "CODE", REQ);
-                this.addView(textNomDevise, "LIBELLE", REQ);
-                this.addView(textNomCent, "LIBELLE_CENT", REQ);
-                this.addView(textNom, "NOM", REQ);
                 this.addView(textTaux, "TAUX", REQ);
+                this.addView(textTauxC, "TAUX_COMMERCIAL", REQ);
+
             }
         };
     }

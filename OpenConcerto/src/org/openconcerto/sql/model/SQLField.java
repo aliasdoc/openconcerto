@@ -58,10 +58,13 @@ import org.jdom2.Element;
 @ThreadSafe
 public class SQLField extends SQLIdentifier implements FieldRef, IFieldPath {
 
+    static final char CHAR = '|';
+
     // nextVal('"SCHEMA"."seqName"'::regclass);
     static private final Pattern SEQ_PATTERN = Pattern.compile("nextval\\('(.+)'.*\\)");
 
     static final SQLField create(SQLTable t, ResultSet rs) throws SQLException {
+        final SQLSystem system = t.getServer().getSQLSystem();
         final String fieldName = rs.getString("COLUMN_NAME");
 
         final int dataType = rs.getInt("DATA_TYPE");
@@ -72,7 +75,18 @@ public class SQLField extends SQLIdentifier implements FieldRef, IFieldPath {
             // MS doesn't return an int
             final Object decDig = rs.getObject("DECIMAL_DIGITS");
             final Integer intDecDig = (Integer) (decDig == null || decDig instanceof Integer ? decDig : ((Number) decDig).intValue());
-            type = SQLType.get(t.getBase(), dataType, size, intDecDig, rs.getString("TYPE_NAME"));
+            String typeName = rs.getString("TYPE_NAME");
+            if (system == SQLSystem.POSTGRESQL) {
+                // AbstractJdbc2DatabaseMetaData.getColumns() convert the true type to serial. But
+                // the default value is kept, which is redundant. Further in the framework we need
+                // to know the true type (e.g. to cast), and there's SQLSyntax.isAuto()/getAuto() to
+                // handle serial.
+                if (typeName.toLowerCase().equals("bigserial"))
+                    typeName = "int8";
+                else if (typeName.toLowerCase().equals("serial"))
+                    typeName = "int4";
+            }
+            type = SQLType.get(t.getBase(), dataType, size, intDecDig, typeName);
         } catch (IllegalStateException e) {
             throw ExceptionUtils.createExn(IllegalStateException.class, "can't create " + t + " " + fieldName, e);
         }
@@ -80,7 +94,7 @@ public class SQLField extends SQLIdentifier implements FieldRef, IFieldPath {
         final Map<String, Object> map;
         // MS sql throws an exception for rs.getObject("IS_AUTOINCREMENT") :
         // La conversion de char en SMALLINT n'est pas prise en charge.
-        if (t.getServer().getSQLSystem() == SQLSystem.MSSQL) {
+        if (system == SQLSystem.MSSQL) {
             map = SQLDataSource.ROW_PROC.toMap(rs, Collections.singleton("IS_AUTOINCREMENT"));
             // get*(String) is costly so only use it for MS
             map.put("IS_AUTOINCREMENT", rs.getString("IS_AUTOINCREMENT"));
@@ -200,7 +214,7 @@ public class SQLField extends SQLIdentifier implements FieldRef, IFieldPath {
 
     @Override
     public String toString() {
-        return "|" + this.getFullName() + "|";
+        return CHAR + this.getFullName() + CHAR;
     }
 
     /**

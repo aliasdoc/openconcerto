@@ -19,6 +19,7 @@ import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.VerticalLayout;
 import org.openconcerto.ui.preferences.DefaultPreferencePanel;
 import org.openconcerto.ui.preferences.DefaultProps;
 
@@ -31,11 +32,9 @@ import javax.swing.BorderFactory;
 import javax.swing.JCheckBox;
 import javax.swing.JPanel;
 
-import org.jdesktop.swingx.VerticalLayout;
-
 public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
 
-    private final JCheckBox checkModeVente, checkLongueur, checkLargeur, checkPoids, checkGestionStockMin;
+    private final JCheckBox checkModeVente, checkLongueur, checkLargeur, checkPoids;
     private final JCheckBox checkService, checkVenteComptoir, checkShowPoids, checkShowStyle, checkSFE;
     private final JCheckBox checkDevise, checkMarge;
     private JCheckBox checkSite;
@@ -49,7 +48,6 @@ public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
 
         this.checkSFE = new JCheckBox("Activer la vente de formation");
         this.checkService = new JCheckBox("Activer la gestion de vente de service");
-        this.checkGestionStockMin = new JCheckBox("Activer la gestion de stock minimum par article");
         this.checkLargeur = new JCheckBox("Largeurs");
         this.checkLongueur = new JCheckBox("Longueurs");
         this.checkPoids = new JCheckBox("Poids");
@@ -64,8 +62,6 @@ public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
         this.add(this.checkDevise, c);
         c.gridy++;
         this.add(this.checkMarge, c);
-        c.gridy++;
-        this.add(this.checkGestionStockMin, c);
         c.gridy++;
         this.add(this.checkService, c);
         c.gridy++;
@@ -113,7 +109,6 @@ public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
             props.setProperty("ShowSiteFacture", String.valueOf(this.checkSite.isSelected()));
         }
         props.setProperty("ArticleVenteComptoir", String.valueOf(this.checkVenteComptoir.isSelected()));
-        props.setProperty("ArticleStockMin", String.valueOf(this.checkGestionStockMin.isSelected()));
         props.setProperty(AbstractVenteArticleItemTable.ARTICLE_SHOW_DEVISE, String.valueOf(this.checkDevise.isSelected()));
         props.setProperty(TotalPanel.MARGE_MARQUE, String.valueOf(this.checkMarge.isSelected()));
         props.store();
@@ -128,7 +123,6 @@ public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
         this.checkService.setSelected(true);
         this.checkSFE.setSelected(false);
         this.checkVenteComptoir.setSelected(true);
-        this.checkGestionStockMin.setSelected(true);
         this.checkDevise.setSelected(false);
         this.checkMarge.setSelected(false);
         if (this.checkSite != null) {
@@ -183,11 +177,6 @@ public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
 
         // Devise
         this.checkMarge.setSelected(props.getBooleanValue(TotalPanel.MARGE_MARQUE, false));
-
-        // Show Style
-        final String gestionStockMin = props.getStringProperty("ArticleStockMin");
-        final Boolean bStockMin = !gestionStockMin.equalsIgnoreCase("false");
-        this.checkGestionStockMin.setSelected(bStockMin == null || bStockMin.booleanValue());
 
         // Mode vente
         final String modeVente = props.getStringProperty("ArticleModeVenteAvance");

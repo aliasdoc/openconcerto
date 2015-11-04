@@ -17,6 +17,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.sqlobject.ITextArticleWithCompletionCellEditor;
@@ -213,6 +214,9 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
     }
 
     private void fillWithSelection(final SQLRowAccessor r, final int id, final int rowE) {
+
+        final SQLRowAccessor rowDest = (rowE >= 0 && rowE <= this.table.getRowCount()) ? this.table.getRowValuesTableModel().getRowValuesAt(rowE) : null;
+
         new Thread(new Runnable() {
             public void run() {
                 // final SQLRowValues rowV = new
@@ -232,7 +236,7 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
                         for (Iterator<String> iter = keys.iterator(); iter.hasNext();) {
                             String from = iter.next();
                             String to = AutoCompletionManager.this.fillBy.get(from);
-                            Object fromV = getValueFrom(rowV, from);
+                            Object fromV = getValueFrom(rowV, from, rowDest);
                             int column = AutoCompletionManager.this.tableModel.getColumnForField(to);
                             if (column >= 0) {
 
@@ -264,7 +268,16 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
         }).start();
     }
 
-    protected Object getValueFrom(SQLRow row, String field) {
+    public void fillRowValues(SQLRowAccessor from, SQLRowValues to) {
+        final Set<String> keys = AutoCompletionManager.this.fillBy.keySet();
+        for (Iterator<String> iter = keys.iterator(); iter.hasNext();) {
+            String fromField = iter.next();
+            String toField = AutoCompletionManager.this.fillBy.get(fromField);
+            to.put(toField, getValueFrom(from.asRow(), fromField, to));
+        }
+    }
+
+    protected Object getValueFrom(SQLRow row, String field, SQLRowAccessor rowDest) {
         return row.getObject(field);
     }
 

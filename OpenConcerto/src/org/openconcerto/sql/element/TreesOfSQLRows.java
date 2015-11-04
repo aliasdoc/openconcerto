@@ -204,7 +204,7 @@ public final class TreesOfSQLRows {
             final String ffName = link.getLabel().getName();
             final SQLElement refElem = this.elem.getElementLenient(link.getSource());
             // play it safe
-            final ReferenceAction action = refElem != null ? refElem.getActions().get(ffName) : ReferenceAction.RESTRICT;
+            final ReferenceAction action = refElem != null ? refElem.getActions().get(link) : ReferenceAction.RESTRICT;
             if (action == null) {
                 throw new IllegalStateException("Null action for " + refElem + " " + ffName);
             }
@@ -216,7 +216,7 @@ public final class TreesOfSQLRows {
                     throw new UnsupportedOperationException("Cannot cascade to private element " + refElem + " from " + link);
                 graphToFetch = refElem.getPrivateGraph(EnumSet.of(VirtualFields.FOREIGN_KEYS));
             } else {
-                graphToFetch = new SQLRowValues(link.getSource()).put(ffName, null);
+                graphToFetch = new SQLRowValues(link.getSource()).putNulls(link.getCols());
             }
             final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(graphToFetch);
             fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {

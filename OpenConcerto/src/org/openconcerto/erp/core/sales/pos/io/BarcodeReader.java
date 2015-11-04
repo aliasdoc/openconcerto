@@ -94,6 +94,7 @@ public class BarcodeReader implements KeyEventDispatcher {
     public void stop() {
         if (this.timer != null) {
             this.timer.cancel();
+            this.timer = null;
         }
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(this);
     }

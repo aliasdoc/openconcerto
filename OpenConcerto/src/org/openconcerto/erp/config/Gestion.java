@@ -214,6 +214,10 @@ public class Gestion {
         System.setProperty(EditPanel.NOBORDER, "true");
         System.setProperty(EditPanel.ADD_AT_THE_END, "true");
         System.setProperty("org.openconcerto.sql.listPanel.deafEditPanel", "true");
+
+        // Gérer avec le droit SAVE_LIST
+        System.setProperty("org.openconcerto.sql.canSaveInList", "false");
+
         System.setProperty("org.openconcerto.ui.addComboButton", "true");
         System.setProperty(SQLBase.STRUCTURE_USE_XML, "true");
         // don't put any suffix, rely on Animator
@@ -231,8 +235,6 @@ public class Gestion {
         System.setProperty(ITextCombo.SIMPLE_TRAVERSAL, "true");
 
         RemoteShell.startDefaultInstance();
-        IListe.setForceAlternateCellRenderer(true);
-        ITableModel.setDefaultEditable(false);
         ComboSQLRequest.setDefaultItemsOrder(CompareUtils.<IComboSelectionItem> naturalOrder());
         // Initialisation du splashScreen
         // ne pas oublier en param -splash:image.png
@@ -338,6 +340,10 @@ public class Gestion {
 
             public void run() {
                 long t1 = System.currentTimeMillis();
+
+                IListe.setForceAlternateCellRenderer(true);
+                // ITableModel.setDefaultCellsEditable(false);
+                // ITableModel.setDefaultOrderEditable(true);
 
                 AWTEventListener awtListener = new AWTEventListener() {
                     @Override
@@ -557,7 +563,7 @@ public class Gestion {
         frameExit.setVisible(true);
     }
 
-    public static List<Image> getFrameIcon() {
+    public static synchronized List<Image> getFrameIcon() {
         if (frameIcon == null) {
             frameIcon = new ArrayList<Image>();
             int[] sizes = { 16, 32, 48, 96 };

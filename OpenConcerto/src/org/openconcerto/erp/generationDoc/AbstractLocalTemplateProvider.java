@@ -46,18 +46,29 @@ public abstract class AbstractLocalTemplateProvider implements TemplateProvider 
         if (templateId == null) {
             throw new NullPointerException("null templateId");
         }
-        File templateFile = getTemplateFromLocalFile(templateId, language, type);
-        if (templateFile != null && templateFile.exists()) {
-            return templateFile;
+        File templateFile1 = getTemplateFromLocalFile(templateId, language, type);
+        if (templateFile1 != null && templateFile1.exists()) {
+            return templateFile1;
         }
-        templateFile = getTemplateFromLocalFile(templateId + ".ods", language, type);
-        if (templateFile != null && templateFile.exists()) {
-            return templateFile;
+        File templateFile2 = getTemplateFromLocalFile(templateId + ".ods", language, type);
+        if (templateFile2 != null && templateFile2.exists()) {
+            return templateFile2;
         }
-        templateFile = getTemplateFromLocalFile(templateId + ".odt", language, type);
-        if (templateFile != null && templateFile.exists()) {
-            return templateFile;
+        File templateFile3 = getTemplateFromLocalFile(templateId + ".odt", language, type);
+        if (templateFile3 != null && templateFile3.exists()) {
+            return templateFile3;
         }
+        String files = "";
+        if (templateFile1 != null) {
+            files += "'" + templateFile1.getAbsolutePath() + "' ";
+        }
+        if (templateFile2 != null) {
+            files += "'" + templateFile2.getAbsolutePath() + "' ";
+        }
+        if (templateFile3 != null) {
+            files += "'" + templateFile3.getAbsolutePath() + "'";
+        }
+        System.err.println("AbstractLocalTemplateProvider.getFileTemplate() failed for id:" + templateId + " language:" + language + " type:" + type + " files:" + files);
         return null;
     }
 

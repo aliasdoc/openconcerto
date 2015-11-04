@@ -15,7 +15,6 @@
 
 import org.openconcerto.sql.element.RIVPanel;
 import org.openconcerto.sql.element.SQLComponentItem;
-import org.openconcerto.sql.model.SQLImmutableRowValues;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -27,6 +26,8 @@ import org.openconcerto.sql.request.SQLRowItemView;
 import org.openconcerto.sql.view.search.SearchSpec;
 import org.openconcerto.ui.FontUtils;
 import org.openconcerto.ui.component.ComboLockedMode;
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.ui.component.InteractionMode.InteractionComponent;
 import org.openconcerto.ui.component.combo.ISearchableCombo;
 import org.openconcerto.ui.component.combo.SearchMode;
 import org.openconcerto.ui.component.text.TextComponent;
@@ -74,18 +75,9 @@ import javax.swing.text.JTextComponent;
  * @author Sylvain CUAZ
  * @see #uiInit(ComboSQLRequest)
  */
-public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView, ValueWrapper<Integer>, EmptyObj, TextComponent, Pulseable, SQLComponentItem {
+public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView, ValueWrapper<Integer>, EmptyObj, TextComponent, Pulseable, SQLComponentItem, InteractionComponent {
 
     public static final String UNDEFINED_STRING = "----- ??? -----";
-
-    public static enum ComboMode {
-        /** The combo is completely disabled */
-        DISABLED,
-        /** The combo is disabled but the magnifying glass is enabled */
-        ENABLED,
-        /** The combo is fully functionnal (its default) */
-        EDITABLE
-    }
 
     // on l'a pas toujours à l'instanciation
     private IComboModel req;
@@ -98,10 +90,10 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
     private final EmptyChangeSupport emptySupp;
 
     // le mode actuel
-    private ComboMode mode;
+    private InteractionMode mode;
     // le mode à sélectionner à la fin du updateAll
     // null when not used
-    private ComboMode modeToSelect;
+    private InteractionMode modeToSelect;
 
     // to speed up the combo
     private final String stringStuff;
@@ -116,7 +108,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
 
     public SQLRequestComboBox(boolean addUndefined, int preferredWidthInChar) {
         this.setOpaque(false);
-        this.mode = ComboMode.EDITABLE;
+        this.mode = InteractionMode.READ_WRITE;
         this.modeToSelect = null;
         if (preferredWidthInChar > 0) {
             final char[] a = new char[preferredWidthInChar];
@@ -188,7 +180,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
 
         this.req = req;
         // listeners
-        this.req.addListener("updating", new PropertyChangeListener() {
+        this.addModelListener("updating", new PropertyChangeListener() {
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
                 updateEnabled();
@@ -196,13 +188,13 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         });
         // since modelValueChanged() updates the UI use selectedValue (i.e. IComboSelectionItem
         // with a label)
-        this.req.addListener("selectedValue", new PropertyChangeListener() {
+        this.addModelListener("selectedValue", new PropertyChangeListener() {
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
                 modelValueChanged();
             }
         });
-        this.req.addListener("wantedID", new PropertyChangeListener() {
+        this.addModelListener("wantedID", new PropertyChangeListener() {
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
                 SQLRequestComboBox.this.supp.fireValueChange();
@@ -292,7 +284,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         // either not created or depending on the request). Do it before setRunning() since it might
         // trigger setEnabled() and the one below would be unnecessary.
         if (!updateEnabled())
-            this.setEnabled(this.getEnabled());
+            this.setInteractionMode(this.getInteractionMode());
 
         // *without* : resetValue() => doUpdateAll() since it was never filled
         // then this is made displayable => setRunning(true) => dirty = true since not on screen
@@ -310,9 +302,9 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
             // don't overwrite, happens if updateEnabled() is called twice and isDisabledState() is
             // false both times. In that case getEnabled() would return DISABLED
             if (this.modeToSelect == null) {
-                this.modeToSelect = this.getEnabled();
+                this.modeToSelect = this.getInteractionMode();
                 // ne pas interagir pendant le chargement
-                this.setEnabled(ComboMode.DISABLED, true);
+                this.setEnabled(InteractionMode.DISABLED, true);
                 res = true;
             }
         } else {
@@ -320,7 +312,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
             // is true both times and modeToSelect wasn't cleared it could be obsolete (another
             // setEnabled() could have been called)
             if (this.modeToSelect != null) {
-                final ComboMode m = this.modeToSelect;
+                final InteractionMode m = this.modeToSelect;
                 this.modeToSelect = null;
                 this.setEnabled(m, true);
                 res = true;
@@ -476,7 +468,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         if (res == null || res instanceof SQLRow)
             return res;
         else
-            return new SQLImmutableRowValues((SQLRowValues) res);
+            return ((SQLRowValues) res).toImmutable();
     }
 
     private void modelValueChanged() {
@@ -508,21 +500,16 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         this.req.setAddMissingItem(addMissingItem);
     }
 
-    public final void setEditable(boolean b) {
-        this.setEnabled(b ? ComboMode.EDITABLE : ComboMode.ENABLED);
-    }
-
     @Override
-    public final void setEnabled(boolean b) {
-        // FIXME add mode to RIV
-        this.setEnabled(b ? ComboMode.EDITABLE : ComboMode.ENABLED);
+    public void setInteractionMode(InteractionMode mode) {
+        this.setEnabled(mode);
     }
 
-    public final void setEnabled(ComboMode mode) {
+    public final void setEnabled(InteractionMode mode) {
         this.setEnabled(mode, false);
     }
 
-    private final void setEnabled(ComboMode mode, boolean priv) {
+    private final void setEnabled(InteractionMode mode, boolean priv) {
         assert SwingUtilities.isEventDispatchThread();
         if (!priv && this.isDisabledState()) {
             this.modeToSelect = mode;
@@ -532,11 +519,12 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         }
     }
 
-    protected void modeChanged(ComboMode mode) {
-        this.combo.setEnabled(mode == ComboMode.EDITABLE);
+    protected void modeChanged(InteractionMode mode) {
+        mode.applyTo(this.combo);
     }
 
-    public final ComboMode getEnabled() {
+    @Override
+    public final InteractionMode getInteractionMode() {
         return this.mode;
     }
 

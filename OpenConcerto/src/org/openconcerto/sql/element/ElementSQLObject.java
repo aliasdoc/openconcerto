@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.request.SQLForeignRowItemView;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.checks.EmptyChangeSupport;
 import org.openconcerto.utils.checks.EmptyListener;
 import org.openconcerto.utils.checks.ValidChangeSupport;
@@ -224,11 +225,13 @@ public abstract class ElementSQLObject extends BaseSQLObject implements SQLForei
         this.helper.removeEmptyListener(l);
     }
 
+    @Override
     public final void addValueListener(PropertyChangeListener l) {
         this.supp.addPropertyChangeListener(l);
     }
 
-    public final void rmValueListener(PropertyChangeListener l) {
+    @Override
+    public final void removeValueListener(PropertyChangeListener l) {
         this.supp.removePropertyChangeListener(l);
     }
 
@@ -301,8 +304,9 @@ public abstract class ElementSQLObject extends BaseSQLObject implements SQLForei
         this.validSupp.fireValidChange(getValidState());
     }
 
-    public void setEditable(boolean enabled) {
-        this.comp.setEditable(enabled);
+    @Override
+    public void setEditable(InteractionMode mode) {
+        this.comp.setEditable(mode);
     }
 
     public void insert(SQLRowValues vals) {

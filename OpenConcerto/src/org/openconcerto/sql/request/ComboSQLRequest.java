@@ -27,6 +27,7 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.sqlobject.ElementComboBoxUtils;
 import org.openconcerto.sql.sqlobject.IComboSelectionItem;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.CompareUtils;
@@ -41,24 +42,78 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedList;
 import java.util.List;
 
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.Immutable;
+import net.jcip.annotations.ThreadSafe;
+
 // final: use setSelectTransf()
+@ThreadSafe
 public final class ComboSQLRequest extends FilteredFillSQLRequest {
 
     static private final SQLCache<CacheKey, List<IComboSelectionItem>> cache = new SQLCache<CacheKey, List<IComboSelectionItem>>(60, -1, "items of " + ComboSQLRequest.class);
 
     // encapsulate all values that can change the result
-    protected static final class CacheKey extends LinkedList<Object> {
-        public CacheKey(SQLRowValuesListFetcher a, String fieldSeparator, String undefLabel, IClosure<IComboSelectionItem> c, KeepMode keepRows, Comparator<? super IComboSelectionItem> itemsOrder) {
+    @Immutable
+    protected static final class CacheKey {
+
+        private final SQLRowValues graph;
+        private final SQLRowValuesListFetcher fetcher;
+        private final Where where;
+        private final String fieldSeparator;
+        private final String undefLabel;
+        private final KeepMode keepRows;
+
+        private final IClosure<IComboSelectionItem> customizeItem;
+        private final Comparator<? super IComboSelectionItem> itemsOrder;
+
+        public CacheKey(SQLRowValues graph, SQLRowValuesListFetcher f, Where w, String fieldSeparator, String undefLabel, IClosure<IComboSelectionItem> c, KeepMode keepRows,
+                Comparator<? super IComboSelectionItem> itemsOrder) {
             super();
-            this.add(a);
-            this.add(c);
-            this.add(fieldSeparator);
-            this.add(undefLabel);
-            this.add(keepRows);
-            this.add(itemsOrder);
+            if (!graph.isFrozen())
+                throw new IllegalArgumentException("Not frozen : " + graph);
+            this.graph = graph;
+            // frozen, thus immutable otherwise it will change with the filter and that will cause
+            // the cache to fail
+            if (f != null && !f.isFrozen())
+                throw new IllegalArgumentException("Not frozen : " + f);
+            this.fetcher = f;
+            this.where = w;
+
+            this.fieldSeparator = fieldSeparator;
+            this.undefLabel = undefLabel;
+            this.keepRows = keepRows;
+
+            this.customizeItem = c;
+            this.itemsOrder = itemsOrder;
+        }
+
+        public final KeepMode getKeepMode() {
+            return this.keepRows;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((this.fetcher == null) ? 0 : this.fetcher.hashCode());
+            result = prime * result + this.fieldSeparator.hashCode();
+            result = prime * result + this.keepRows.hashCode();
+            result = prime * result + ((this.undefLabel == null) ? 0 : this.undefLabel.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (getClass() != obj.getClass())
+                return false;
+            final CacheKey other = (CacheKey) obj;
+            return this.keepRows == other.keepRows && this.fieldSeparator.equals(other.fieldSeparator) && CompareUtils.equals(this.undefLabel, other.undefLabel)
+                    && CompareUtils.equals(this.where, other.where) && this.graph.getGraphFirstDifference(other.graph, true) == null && CompareUtils.equals(this.fetcher, other.fetcher)
+                    && CompareUtils.equals(this.customizeItem, other.customizeItem) && CompareUtils.equals(this.itemsOrder, other.itemsOrder);
         }
     };
 
@@ -78,7 +133,9 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
     }
 
     private static final String SEP_CHILD = " ◄ ";
+    @GuardedBy("this")
     private static String SEP_FIELD;
+    @GuardedBy("this")
     private static Comparator<? super IComboSelectionItem> DEFAULT_COMPARATOR;
 
     /**
@@ -86,12 +143,20 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      * 
      * @param separator the default separator to use from now on.
      */
-    public static void setDefaultFieldSeparator(String separator) {
+    public static synchronized void setDefaultFieldSeparator(String separator) {
         SEP_FIELD = separator;
     }
 
-    public static void setDefaultItemsOrder(final Comparator<? super IComboSelectionItem> comp) {
+    public static synchronized String getDefaultFieldSeparator() {
+        return SEP_FIELD;
+    }
+
+    public static synchronized void setDefaultItemsOrder(final Comparator<? super IComboSelectionItem> comp) {
         DEFAULT_COMPARATOR = comp;
+    }
+
+    public static synchronized Comparator<? super IComboSelectionItem> getDefaultItemsOrder() {
+        return DEFAULT_COMPARATOR;
     }
 
     static {
@@ -100,15 +165,22 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
     }
 
     // immutable
+    @GuardedBy("this")
     private List<SQLField> comboFields;
     private final TransfFieldExpander exp;
 
-    private String fieldSeparator = SEP_FIELD;
+    @GuardedBy("this")
+    private String fieldSeparator = getDefaultFieldSeparator();
+    @GuardedBy("this")
     private String undefLabel;
+    @GuardedBy("this")
     private KeepMode keepRows;
+    @GuardedBy("this")
     private IClosure<IComboSelectionItem> customizeItem;
 
+    @GuardedBy("this")
     private List<Path> order;
+    @GuardedBy("this")
     private Comparator<? super IComboSelectionItem> itemsOrder;
 
     public ComboSQLRequest(SQLTable table, List<String> l) {
@@ -122,7 +194,7 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         this.keepRows = KeepMode.NONE;
         this.customizeItem = null;
         this.order = null;
-        this.itemsOrder = DEFAULT_COMPARATOR;
+        this.itemsOrder = getDefaultItemsOrder();
         this.exp = new TransfFieldExpander(new ITransformer<SQLField, List<SQLField>>() {
             @Override
             public List<SQLField> transformChecked(SQLField fk) {
@@ -133,17 +205,36 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         this.setFields(l);
     }
 
-    // public since this class is final (otherwise should be protected)
-    public ComboSQLRequest(ComboSQLRequest c) {
-        super(c);
+    protected ComboSQLRequest(ComboSQLRequest c, final boolean freeze) {
+        super(c, freeze);
         this.exp = new TransfFieldExpander(c.exp);
-        this.comboFields = c.comboFields;
-        this.order = c.order == null ? null : new ArrayList<Path>(c.order);
+        synchronized (c) {
+            this.comboFields = c.comboFields;
+            this.order = c.order == null ? null : new ArrayList<Path>(c.order);
+            this.itemsOrder = c.itemsOrder;
 
-        this.fieldSeparator = c.fieldSeparator;
-        this.undefLabel = c.undefLabel;
-        this.keepRows = c.keepRows;
-        this.customizeItem = c.customizeItem;
+            this.fieldSeparator = c.fieldSeparator;
+            this.undefLabel = c.undefLabel;
+            this.keepRows = c.keepRows;
+            this.customizeItem = c.customizeItem;
+        }
+    }
+
+    @Override
+    public ComboSQLRequest toUnmodifiable() {
+        return this.toUnmodifiableP(this.getClass());
+    }
+
+    @Override
+    public ComboSQLRequest clone() {
+        synchronized (this) {
+            return this.clone(false);
+        }
+    }
+
+    @Override
+    protected ComboSQLRequest clone(boolean forFreeze) {
+        return new ComboSQLRequest(this, forFreeze);
     }
 
     public final void setFields(Collection<String> fields) {
@@ -161,7 +252,8 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         setSQLFieldsUnsafe(new ArrayList<SQLField>(fields));
     }
 
-    private void setSQLFieldsUnsafe(List<SQLField> fields) {
+    private synchronized void setSQLFieldsUnsafe(List<SQLField> fields) {
+        checkFrozen();
         this.comboFields = Collections.unmodifiableList(fields);
         this.clearGraph();
     }
@@ -172,15 +264,17 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      * 
      * @param undefLabel the new label, can be <code>null</code>.
      */
-    public final void setUndefLabel(final String undefLabel) {
+    public synchronized final void setUndefLabel(final String undefLabel) {
+        checkFrozen();
         this.undefLabel = undefLabel;
     }
 
-    public final String getUndefLabel() {
+    public synchronized final String getUndefLabel() {
         return this.undefLabel;
     }
 
-    public final void setItemCustomizer(IClosure<IComboSelectionItem> customizeItem) {
+    public synchronized final void setItemCustomizer(IClosure<IComboSelectionItem> customizeItem) {
+        checkFrozen();
         this.customizeItem = customizeItem;
     }
 
@@ -192,8 +286,9 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      *         autrement.
      */
     public final IComboSelectionItem getComboItem(int id) {
-        final SQLRowValues res = this.getValues(id);
-        return res == null ? null : createItem(res);
+        // historically this method didn't use the cache
+        final List<IComboSelectionItem> res = getComboItems(id, false, false);
+        return getSole(res, id);
     }
 
     public final List<IComboSelectionItem> getComboItems() {
@@ -201,14 +296,18 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
     }
 
     public final List<IComboSelectionItem> getComboItems(final boolean readCache) {
+        return this.getComboItems(null, readCache, true);
+    }
+
+    private final List<IComboSelectionItem> getComboItems(final Number id, final boolean readCache, final boolean writeCache) {
         if (this.getFields().isEmpty())
             throw new IllegalStateException("Empty fields");
+        final Where w = id == null ? null : new Where(this.getPrimaryTable().getKey(), "=", id);
 
-        // freeze the fetcher otherwise it will change with the filter
-        // and that will cause the cache to fail
-        final SQLRowValuesListFetcher comboSelect = this.getFetcher(null).freeze();
-
-        final CacheKey cacheKey = getCacheKey(comboSelect);
+        // this encapsulates a snapshot of our state, so this method doesn't access any of our
+        // fields and doesn't need to be synchronized
+        final CacheKey cacheKey = getCacheKey(w);
+        final SQLRowValuesListFetcher comboSelect = cacheKey.fetcher;
         if (readCache) {
             final CacheResult<List<IComboSelectionItem>> l = cache.check(cacheKey);
             if (l.getState() == CacheResult.State.INTERRUPTED)
@@ -218,47 +317,54 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         }
 
         try {
+            // group fields by ancestor, need not be part of CacheKey assuming parent-child
+            // relations don't change
+            final List<Tuple2<Path, List<FieldPath>>> ancestors = ElementComboBoxUtils.expandGroupBy(cacheKey.graph, Configuration.getInstance().getDirectory());
             final List<IComboSelectionItem> result = new ArrayList<IComboSelectionItem>();
-            // SQLRowValuesListFetcher don't cache
-            for (final SQLRowValues vals : comboSelect.fetch()) {
+            // SQLRowValuesListFetcher doesn't cache
+            for (final SQLRowValues vals : comboSelect.fetch(w)) {
                 if (Thread.currentThread().isInterrupted())
                     throw new RTInterruptedException("interrupted in fill");
-                result.add(createItem(vals));
+                // each item should be created with the same state and since it will be put in
+                // cache it should only depend on the cache key.
+                result.add(createItem(vals, cacheKey, ancestors));
             }
-            if (this.itemsOrder != null)
-                Collections.sort(result, this.itemsOrder);
+            if (cacheKey.itemsOrder != null)
+                Collections.sort(result, cacheKey.itemsOrder);
 
-            cache.put(cacheKey, result, comboSelect.getGraph().getGraph().getTables());
+            if (writeCache)
+                cache.put(cacheKey, result, comboSelect.getGraph().getGraph().getTables());
 
             return result;
         } catch (RuntimeException exn) {
             // don't use finally, otherwise we'll do both put() and rmRunning()
-            cache.removeRunning(cacheKey);
+            if (readCache)
+                cache.removeRunning(cacheKey);
             throw exn;
         }
     }
 
     protected final CacheKey getCacheKey() {
-        return getCacheKey(this.getFetcher(null).freeze());
+        return getCacheKey(null);
     }
 
-    private final CacheKey getCacheKey(final SQLRowValuesListFetcher comboSelect) {
-        return new CacheKey(comboSelect, this.fieldSeparator, this.undefLabel, this.customizeItem, this.keepRows, this.itemsOrder);
+    private final synchronized CacheKey getCacheKey(final Where w) {
+        return new CacheKey(this.getGraph(), this.getFetcher(), w, this.fieldSeparator, this.undefLabel, this.customizeItem, this.keepRows, this.itemsOrder);
     }
 
     @Override
-    protected final SQLSelect transformSelect(SQLSelect sel) {
-        sel.setExcludeUndefined(this.undefLabel == null, getPrimaryTable());
+    protected synchronized final SQLSelect transformSelect(SQLSelect sel) {
+        sel.setExcludeUndefined(this.getUndefLabel() == null, getPrimaryTable());
         return super.transformSelect(sel);
     }
 
     @Override
-    protected final List<Path> getOrder() {
+    protected synchronized final List<Path> getOrder() {
         if (this.order != null)
             return this.order;
 
         // order the combo by ancestors
-        final List<Tuple2<Path, List<FieldPath>>> expandGroupBy = this.getShowAs().expandGroupBy(getFields());
+        final List<Tuple2<Path, List<FieldPath>>> expandGroupBy = ElementComboBoxUtils.expandGroupBy(getGraph(), Configuration.getInstance().getDirectory());
         final List<Path> res = new ArrayList<Path>(expandGroupBy.size());
         for (final Tuple2<Path, List<FieldPath>> ancestor : expandGroupBy)
             res.add(0, ancestor.get0());
@@ -270,8 +376,9 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      * 
      * @param l the list of tables, <code>null</code> to restore the default.
      */
-    public final void setOrder(List<Path> l) {
-        this.order = l;
+    public synchronized final void setOrder(List<Path> l) {
+        checkFrozen();
+        this.order = Collections.unmodifiableList(new ArrayList<Path>(l));
         this.clearGraph();
     }
 
@@ -285,20 +392,22 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      * @param comp how to sort items, <code>null</code> meaning don't sort (i.e. only
      *        {@link #getOrder() SQL order} will be used).
      */
-    public final void setItemsOrder(final Comparator<? super IComboSelectionItem> comp) {
+    public synchronized final void setItemsOrder(final Comparator<? super IComboSelectionItem> comp) {
+        checkFrozen();
         this.itemsOrder = comp;
     }
 
-    public final Comparator<? super IComboSelectionItem> getItemsOrder() {
+    public synchronized final Comparator<? super IComboSelectionItem> getItemsOrder() {
         return this.itemsOrder;
     }
 
-    private final IComboSelectionItem createItem(final SQLRowValues rs) {
+    // static to make sure that this method doesn't access any instance state
+    static private final IComboSelectionItem createItem(final SQLRowValues rs, final CacheKey ck, final List<Tuple2<Path, List<FieldPath>>> ancestors) {
         final String desc;
-        if (this.undefLabel != null && rs.getID() == getPrimaryTable().getUndefinedID())
-            desc = this.undefLabel;
+        if (ck.undefLabel != null && rs.isUndefined())
+            desc = ck.undefLabel;
         else
-            desc = CollectionUtils.join(this.getShowAs().expandGroupBy(this.getFields()), SEP_CHILD, new ITransformer<Tuple2<Path, List<FieldPath>>, Object>() {
+            desc = CollectionUtils.join(ancestors, SEP_CHILD, new ITransformer<Tuple2<Path, List<FieldPath>>, Object>() {
                 public Object transformChecked(Tuple2<Path, List<FieldPath>> ancestorFields) {
                     final List<String> filtered = CollectionUtils.transformAndFilter(ancestorFields.get1(), new ITransformer<FieldPath, String>() {
                         // no need to keep this Transformer in an attribute
@@ -307,21 +416,22 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
                             return getFinalValueOf(input, rs);
                         }
                     }, IPredicate.notNullPredicate(), new ArrayList<String>());
-                    return CollectionUtils.join(filtered, ComboSQLRequest.this.fieldSeparator);
+                    return CollectionUtils.join(filtered, ck.fieldSeparator);
                 }
             });
         final IComboSelectionItem res;
-        if (this.getKeepMode() == KeepMode.GRAPH)
+        if (ck.getKeepMode() == KeepMode.GRAPH)
             res = new IComboSelectionItem(rs, desc);
-        else if (this.getKeepMode() == KeepMode.ROW)
+        else if (ck.getKeepMode() == KeepMode.ROW)
             res = new IComboSelectionItem(rs.asRow(), desc);
         else
             res = new IComboSelectionItem(rs.getID(), desc);
-        if (this.customizeItem != null)
-            this.customizeItem.executeChecked(res);
+        if (ck.customizeItem != null)
+            ck.customizeItem.executeChecked(res);
         return res;
     }
 
+    @Override
     protected final TransfFieldExpander getShowAs() {
         return this.exp;
     }
@@ -345,7 +455,8 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         return result;
     }
 
-    public final List<SQLField> getFields() {
+    @Override
+    public synchronized final List<SQLField> getFields() {
         return this.comboFields;
     }
 
@@ -354,7 +465,8 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      * 
      * @param string the new separator, e.g. " | ".
      */
-    public final void setFieldSeparator(String string) {
+    public synchronized final void setFieldSeparator(String string) {
+        checkFrozen();
         this.fieldSeparator = string;
     }
 
@@ -363,11 +475,11 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
      * 
      * @return characters that may not be displayed correctly.
      */
-    public String getSeparatorsChars() {
+    public synchronized String getSeparatorsChars() {
         return SEP_CHILD + this.fieldSeparator;
     }
 
-    public final KeepMode getKeepMode() {
+    public synchronized final KeepMode getKeepMode() {
         return this.keepRows;
     }
 
@@ -381,7 +493,8 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         this.keepRows(b ? KeepMode.ROW : KeepMode.NONE);
     }
 
-    public final void keepRows(final KeepMode mode) {
+    public synchronized final void keepRows(final KeepMode mode) {
+        checkFrozen();
         this.keepRows = mode;
     }
 }

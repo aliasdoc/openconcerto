@@ -38,7 +38,6 @@ import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.PanelFrame;
 import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.GestionDevise;
 import org.openconcerto.utils.TableSorter;
 import org.openconcerto.utils.cc.IClosure;
 
@@ -47,8 +46,6 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.math.BigInteger;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -56,7 +53,6 @@ import java.util.Date;
 import java.util.List;
 
 import javax.swing.JButton;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
@@ -66,14 +62,10 @@ public class ListeDesVentesPanel extends JPanel implements ActionListener {
 
     private ListeGestCommEltPanel listeFact;
     private JButton buttonEnvoye, buttonRegle, buttonDupliquer;
-    private static SQLElement eltClient = Configuration.getInstance().getDirectory().getElement(((ComptaPropsConfiguration) Configuration.getInstance()).getRootSociete().getTable("CLIENT"));
-    JLabelBold textField = new JLabelBold("0");
-    JLabelBold textField2 = new JLabelBold("0");
+    private JLabelBold textField = new JLabelBold("0");
+    private JLabelBold textField2 = new JLabelBold("0");
 
     public ListeDesVentesPanel() {
-
-        super();
-
         this.setLayout(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(2, 2, 1, 2);
@@ -299,7 +291,7 @@ public class ListeDesVentesPanel extends JPanel implements ActionListener {
     public void actionPerformed(ActionEvent e) {
 
         if (e.getSource() == this.buttonEnvoye) {
-            final List<SQLRowAccessor> selectedRows = this.listeFact.getListe().getSelectedRows();
+            final List<SQLRowValues> selectedRows = this.listeFact.getListe().getSelectedRows();
             for (SQLRowAccessor sqlRowAccessor : selectedRows) {
                 final SQLRowValues rowVals = sqlRowAccessor.asRow().createEmptyUpdateRow();
                 rowVals.put("DATE_ENVOI", new Date());
@@ -311,7 +303,7 @@ public class ListeDesVentesPanel extends JPanel implements ActionListener {
             }
 
         } else if (e.getSource() == this.buttonRegle) {
-            final List<SQLRowAccessor> selectedRows = this.listeFact.getListe().getSelectedRows();
+            final List<SQLRowValues> selectedRows = this.listeFact.getListe().getSelectedRows();
             for (SQLRowAccessor sqlRowAccessor : selectedRows) {
                 final SQLRowValues rowVals = sqlRowAccessor.asRow().createEmptyUpdateRow();
                 rowVals.put("DATE_REGLEMENT", new Date());

@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.FileUtils;
 
 import java.awt.GridBagConstraints;
@@ -74,7 +75,11 @@ public class BilanPanel extends JPanel {
             public void actionPerformed(ActionEvent e) {
                 String file = TemplateNXProps.getInstance().getStringProperty("Location2033APDF");
                 File f = new File(file);
-                FileUtils.browseFile(f);
+                try {
+                    FileUtils.browseFile(f);
+                } catch (Exception ex) {
+                    ExceptionHandler.handle("Impossible de trouver le dossier " + f.getAbsolutePath(), ex);
+                }
             };
         });
 

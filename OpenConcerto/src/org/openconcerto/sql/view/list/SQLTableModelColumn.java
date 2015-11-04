@@ -115,7 +115,23 @@ public abstract class SQLTableModelColumn {
      * @return a set of identifier.
      * @see #getIdentifier()
      */
-    public abstract Set<String> getUsedCols();
+    // not supported for now :
+    // 1. SQLTableModelColumn.show() should take a map of dependent columns' values
+    // 2. ListSQLLine.loadCache() and updateValueAt() should load in order (and throw exception if
+    // there's a cycle in the dependencies).
+    public final Set<String> getUsedCols() {
+        return Collections.emptySet();
+    }
+
+    /**
+     * If this column depends on some data outside rows. The returned identifiers are to be passed
+     * to {@link UpdateQueue#putExternalUpdated(String, org.openconcerto.utils.cc.IPredicate)}.
+     * 
+     * @return the external identifiers used by this column.
+     */
+    public Set<String> getUsedExternals() {
+        return Collections.emptySet();
+    }
 
     /**
      * The class of the object returned by {@link #show(SQLRowAccessor)}.

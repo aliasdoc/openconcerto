@@ -18,6 +18,7 @@ import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.ui.IListFilterDatePanel;
 import org.openconcerto.erp.core.common.ui.IListTotalPanel;
 import org.openconcerto.erp.core.sales.order.report.CommandeClientXmlSheet;
+import org.openconcerto.erp.core.sales.shipment.report.BonLivraisonXmlSheet;
 import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
@@ -59,7 +60,7 @@ public class ListeDesBonsDeLivraisonAction extends CreateFrameAbstractAction {
         final JFrame frame = new JFrame("Bons de livraison");
         PredicateRowAction toInvoiceAction = new PredicateRowAction(new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                transfertFactureClient(IListe.get(e).copySelectedRows());
+                transfertFactureClient(IListe.get(e).getSelectedRows());
             }
         }, false, "sales.shipment.create.invoice");
         toInvoiceAction.setPredicate(IListeEvent.getNonEmptySelectionPredicate());
@@ -71,7 +72,7 @@ public class ListeDesBonsDeLivraisonAction extends CreateFrameAbstractAction {
         tabs.addTab("Toutes les livraisons", createAllDeliveryPanel(toInvoiceAction));
         frame.setContentPane(tabs);
 
-        final SQLElement eltCmd = Configuration.getInstance().getDirectory().getElement("COMMANDE_CLIENT");
+        final SQLElement eltCmd = Configuration.getInstance().getDirectory().getElement("BON_DE_LIVRAISON");
         FrameUtil.setBounds(frame);
         final File file = IListFrame.getConfigFile(eltCmd, frame.getClass());
         if (file != null)
@@ -96,7 +97,7 @@ public class ListeDesBonsDeLivraisonAction extends CreateFrameAbstractAction {
         // Date panel
         final IListFilterDatePanel datePanel = new IListFilterDatePanel(panel.getListe(), eltCmd.getTable().getField("DATE"), IListFilterDatePanel.getDefaultMap());
 
-        panel.getListe().addIListeActions(new MouseSheetXmlListeListener(CommandeClientXmlSheet.class) {
+        panel.getListe().addIListeActions(new MouseSheetXmlListeListener(BonLivraisonXmlSheet.class) {
             @Override
             public List<RowAction> addToMenu() {
                 return allowedActions;

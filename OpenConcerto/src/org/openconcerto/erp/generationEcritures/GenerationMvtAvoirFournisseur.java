@@ -32,14 +32,14 @@ public class GenerationMvtAvoirFournisseur extends GenerationEcritures {
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
 
-    public GenerationMvtAvoirFournisseur(int idAvoirFourn) {
-        this.idMvt = 1;
-        this.idAvoirFourn = idAvoirFourn;
+    public GenerationMvtAvoirFournisseur(SQLRow row) {
+        this(row, 1);
     }
 
-    public GenerationMvtAvoirFournisseur(int idAvoirFourn, int idMvt) {
+    public GenerationMvtAvoirFournisseur(SQLRow row, int idMvt) {
         this.idMvt = idMvt;
-        this.idAvoirFourn = idAvoirFourn;
+        this.idAvoirFourn = row.getID();
+        setRowAnalytiqueSource(row);
     }
 
     public int genereMouvement() throws Exception {
@@ -88,8 +88,8 @@ public class GenerationMvtAvoirFournisseur extends GenerationEcritures {
         this.mEcritures.put("ID_COMPTE_PCE", Integer.valueOf(idCompteAchat));
         this.mEcritures.put("DEBIT", Long.valueOf(0));
         this.mEcritures.put("CREDIT", Long.valueOf(prixHT.getLongValue()));
-SQLRow rowEcr =        ajoutEcriture();
-        addAssocAnalytiqueFromProvider(rowEcr, avoirRow);
+        SQLRow rowEcr = ajoutEcriture();
+        // addAssocAnalytiqueFromProvider(rowEcr, avoirRow);
 
         if (prixTVA.getLongValue() > 0) {
             // compte TVA

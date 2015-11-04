@@ -42,7 +42,7 @@ import javax.swing.SwingUtilities;
 
 public class ImpressionBalancePanel extends JPanel implements SpreadSheetGeneratorListener {
 
-    private final JDate dateDeb, dateEnd;
+    private final JDate dateEnd;
     private JButton valid;
     private JButton annul;
     private JCheckBox checkImpr;
@@ -59,26 +59,10 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
         SQLRow rowSociete = ((ComptaPropsConfiguration) Configuration.getInstance()).getRowSociete();
         SQLRow rowExercice = Configuration.getInstance().getBase().getTable("EXERCICE_COMMON").getRow(rowSociete.getInt("ID_EXERCICE_COMMON"));
 
-        this.dateDeb = new JDate();
         this.dateEnd = new JDate();
 
         // Période
-        this.add(new JLabel("Période du"), c);
-        c.gridx++;
-        c.weightx = 1;
-        this.add(this.dateDeb, c);
-        // Chargement des valeurs par défaut
-        String valueDateDeb = DefaultNXProps.getInstance().getStringProperty("BalanceDateDeb");
-        if (valueDateDeb.trim().length() > 0) {
-            Long l = new Long(valueDateDeb);
-            this.dateDeb.setValue(new Date(l.longValue()));
-        } else {
-            this.dateDeb.setValue((Date) rowExercice.getObject("DATE_DEB"));
-        }
-
-        c.gridx++;
-        c.weightx = 0;
-        this.add(new JLabel("Au"), c);
+        this.add(new JLabel("Balance au"), c);
         c.gridx++;
         c.weightx = 1;
         this.add(this.dateEnd, c);
@@ -164,8 +148,7 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
                 bar.setValue(1);
                 new Thread(new Runnable() {
                     public void run() {
-                        BalanceSheet bSheet = new BalanceSheet(dateDeb.getDate(), dateEnd.getDate(), compteDeb.getText(), compteEnd.getText(), checkClientCentral.isSelected(), checkFournCentral
-                                .isSelected());
+                        BalanceSheet bSheet = new BalanceSheet(dateEnd.getDate(), compteDeb.getText(), compteEnd.getText(), checkClientCentral.isSelected(), checkFournCentral.isSelected());
                         final SpreadSheetGeneratorCompta generator = new SpreadSheetGeneratorCompta(bSheet, "Balance" + new Date().getTime(), checkImpr.isSelected(), checkVisu.isSelected());
 
                         SwingUtilities.invokeLater(new Runnable() {
@@ -185,12 +168,6 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
             }
         });
 
-        this.dateDeb.addValueListener(new PropertyChangeListener() {
-            public void propertyChange(PropertyChangeEvent evt) {
-                checkValidity();
-                storeValue();
-            }
-        });
         this.dateEnd.addValueListener(new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent evt) {
                 checkValidity();
@@ -200,29 +177,17 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
     }
 
     private void checkValidity() {
-
-        Date beginDate = this.dateDeb.getDate();
         Date endDate = this.dateEnd.getDate();
 
         // System.err.println("Check validity between ");
-        if (beginDate == null || endDate == null) {
+        if (endDate == null) {
             this.valid.setEnabled(false);
         } else {
-            if (beginDate.after(endDate)) {
-                this.valid.setEnabled(false);
-            } else {
-                this.valid.setEnabled(true);
-            }
+            this.valid.setEnabled(true);
         }
     }
 
     private void storeValue() {
-
-        // Set date debut
-        Date d = this.dateDeb.getDate();
-        if (d != null) {
-            DefaultNXProps.getInstance().setProperty("BalanceDateDeb", String.valueOf(d.getTime()));
-        }
 
         // Set date Fin
         Date dFin = this.dateEnd.getDate();

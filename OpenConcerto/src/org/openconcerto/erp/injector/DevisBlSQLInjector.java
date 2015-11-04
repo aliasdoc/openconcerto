@@ -28,10 +28,16 @@ public class DevisBlSQLInjector extends SQLInjector {
         final SQLTable tableDevis = getSource();
         final SQLTable tableBon = getDestination();
         map(tableDevis.getField("ID_CLIENT"), tableBon.getField("ID_CLIENT"));
+        if (getSource().getTable().contains("ID_CONTACT")) {
+            map(tableDevis.getField("ID_CONTACT"), tableBon.getField("ID_CONTACT"));
+        }
         mapDefaultValues(tableBon.getField("SOURCE"), tableBon.getName());
         map(tableDevis.getField("ID_DEVIS"), tableBon.getField("IDSOURCE"));
         if (tableDevis.getTable().contains("ID_POLE_PRODUIT")) {
             map(tableDevis.getField("ID_POLE_PRODUIT"), tableBon.getField("ID_POLE_PRODUIT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
         }
     }
 

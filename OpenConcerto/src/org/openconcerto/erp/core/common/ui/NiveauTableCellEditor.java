@@ -44,6 +44,7 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
     private final int max;
     private final JPopupMenu popup;
     private final JPanel btnPanel;
+    private final JLabel btnEmpty = new JLabel(String.valueOf("Ø"));
     private int value;
     final NiveauTableCellRender renderer = new NiveauTableCellRender();
 
@@ -89,6 +90,26 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
         p.setFocusable(true);
         p.setBackground(Color.WHITE);
         p.add(new JLabel(" Niveau"), BorderLayout.PAGE_START);
+
+        this.btnEmpty.setHorizontalAlignment(SwingConstants.CENTER);
+        this.btnEmpty.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                levelChosen(-1);
+            }
+        });
+
+        this.btnEmpty.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                highlight(-1);
+            }
+        });
+
+        this.btnEmpty.setPreferredSize(new Dimension(this.btnEmpty.getMinimumSize().width + 12, this.btnEmpty.getMinimumSize().height + 6));
+        this.btnEmpty.setOpaque(true);
+        this.btnPanel.add(this.btnEmpty);
+
         for (int i = 1; i <= NiveauTableCellEditor.this.max; i++) {
             final JLabel btn = new JLabel(String.valueOf(i));
             btn.setHorizontalAlignment(SwingConstants.CENTER);
@@ -116,6 +137,9 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
             public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_RIGHT || e.getKeyCode() == KeyEvent.VK_UP) {
                     value++;
+                    if (value == 0) {
+                        value = 1;
+                    }
                     if (value > max) {
                         value = max;
                     }
@@ -123,7 +147,7 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
                 } else if (e.getKeyCode() == KeyEvent.VK_LEFT || e.getKeyCode() == KeyEvent.VK_DOWN) {
                     value--;
                     if (value < 1) {
-                        value = 1;
+                        value = -1;
                     }
                     highlight(value);
                 } else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
@@ -162,15 +186,22 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
     }
 
     private Component getBtnForLevel(final int level) {
-        return this.btnPanel.getComponent(level - 1);
+        if (level == -1) {
+            return this.btnEmpty;
+        }
+        return this.btnPanel.getComponent(level);
     }
 
     public void highlight(final int btnLevel) {
-        for (int index = 1; index <= NiveauTableCellEditor.this.max; index++) {
-            if (index != btnLevel) {
-                getBtnForLevel(index).setBackground(Color.WHITE);
-            } else {
-                getBtnForLevel(index).setBackground(BG);
+
+        for (int index = 0; index <= NiveauTableCellEditor.this.max; index++) {
+            final Component btnForLevel = getBtnForLevel(index);
+            if (btnForLevel != null) {
+                if (index == btnLevel || (btnLevel == -1 && index == 0)) {
+                    btnForLevel.setBackground(BG);
+                } else {
+                    btnForLevel.setBackground(Color.WHITE);
+                }
             }
         }
     }
@@ -181,7 +212,11 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
             value = Integer.valueOf(1);
         }
         this.value = ((Number) value).intValue();
-        this.renderer.setText(String.valueOf(this.value));
+        if (this.value == -1) {
+            this.renderer.setText("Ø");
+        } else {
+            this.renderer.setText(String.valueOf(this.value));
+        }
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {

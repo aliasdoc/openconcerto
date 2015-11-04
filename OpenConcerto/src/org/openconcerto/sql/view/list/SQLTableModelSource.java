@@ -31,11 +31,13 @@ import java.beans.PropertyChangeSupport;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+
+import javax.swing.SwingUtilities;
+
+import net.jcip.annotations.GuardedBy;
 
 /**
  * Define the columns and lines for ITableModel.
@@ -44,11 +46,45 @@ import java.util.Set;
  */
 public abstract class SQLTableModelSource {
 
+    protected static final class DebugRow extends BaseSQLTableModelColumn {
+        private final SQLTable t;
+
+        protected DebugRow(final SQLTable t) {
+            // don't put SQLRowAccessor: it's an interface and thus JTable.getDefaultRenderer()
+            // returns null
+            super("Fields", Object.class);
+            this.t = t;
+        }
+
+        @Override
+        protected Object show_(SQLRowAccessor r) {
+            if (r instanceof SQLRow)
+                return r;
+            else
+                return new SQLRowValues((SQLRowValues) r, ForeignCopyMode.COPY_ID_OR_RM);
+        }
+
+        @Override
+        public Set<SQLField> getFields() {
+            return this.t.getFields();
+        }
+
+        @Override
+        public Set<FieldPath> getPaths() {
+            return FieldPath.create(Path.get(this.t), this.t.getFieldsName());
+        }
+    }
+
     private final SQLTable table;
+    // only from EDT
     private SQLRowValues inited;
-    private final List<SQLTableModelColumn> allCols;
+    // this.cols + debugCols, unmodifiable
+    @GuardedBy("this")
+    private SQLTableModelColumns allCols;
+    // only from EDT
     private final ListChangeRecorder<SQLTableModelColumn> cols;
-    private final Map<String, SQLTableModelColumn> colsByName;
+    // only from EDT
+    private final List<SQLTableModelColumn> debugCols;
     // to notify of columns change, better than having one listener per line
     private final List<WeakReference<SQLTableModelLinesSource>> lines;
 
@@ -61,21 +97,20 @@ public abstract class SQLTableModelSource {
 
     public SQLTableModelSource(SQLRowValues graph) {
         this.table = graph.getTable();
-        this.allCols = new ArrayList<SQLTableModelColumn>();
+        this.setAllCols(SQLTableModelColumns.empty());
         this.cols = new ListChangeRecorder<SQLTableModelColumn>(new ArrayList<SQLTableModelColumn>());
-        this.colsByName = new HashMap<String, SQLTableModelColumn>();
+        this.debugCols = new ArrayList<SQLTableModelColumn>();
         this.inited = graph;
     }
 
     // lazy initialization since this method calls colsChanged() which subclasses overload and
     // they need their own attribute that aren't set yet since super() must be the first statement.
-    private void init() {
+    public void init() {
+        assert SwingUtilities.isEventDispatchThread();
         if (this.inited == null)
             return;
 
         final SQLRowValues graph = this.inited;
-
-        listenToCols();
 
         graph.walkFields(new IClosure<FieldPath>() {
             @Override
@@ -85,7 +120,7 @@ public abstract class SQLTableModelSource {
                     final SQLTableModelColumnPath col = new SQLTableModelColumnPath(input);
                     SQLTableModelSource.this.cols.add(col);
                 } else
-                    SQLTableModelSource.this.allCols.add(new SQLTableModelColumnPath(input.getPath(), f.getName(), f.toString()) {
+                    SQLTableModelSource.this.debugCols.add(new SQLTableModelColumnPath(input.getPath(), f.getName(), f.toString()) {
                         // don't show the rowValues since it's very verbose (and all content fields
                         // are already displayed as normal columns) and unsortable
                         @Override
@@ -96,77 +131,59 @@ public abstract class SQLTableModelSource {
                     });
             }
         }, true);
-        // allCols = this.cols + debugCols
-        // don't put SQLRowAccessor: it's an interface and thus JTable.getDefaultRenderer()
-        // returns null
-        this.allCols.add(new BaseSQLTableModelColumn("Fields", Object.class) {
-            @Override
-            protected Object show_(SQLRowAccessor r) {
-                if (r instanceof SQLRow)
-                    return r;
-                else
-                    return new SQLRowValues((SQLRowValues) r, ForeignCopyMode.COPY_ID_OR_RM);
-            }
 
-            @Override
-            public Set<SQLField> getFields() {
-                return getPrimaryTable().getFields();
-            }
-
-            @Override
-            public Set<FieldPath> getPaths() {
-                return FieldPath.create(Path.get(getPrimaryTable()), getPrimaryTable().getFieldsName());
-            }
-        });
-        this.allCols.add(new SQLTableModelColumnPath(Path.get(getPrimaryTable()), getPrimaryTable().getKey().getName(), "PrimaryKey"));
+        this.debugCols.add(new DebugRow(getPrimaryTable()));
+        final SQLField orderField = getPrimaryTable().getOrderField();
+        if (orderField != null)
+            this.debugCols.add(new SQLTableModelColumnPath(Path.get(getPrimaryTable()), orderField.getName(), "Order"));
+        this.debugCols.add(new SQLTableModelColumnPath(Path.get(getPrimaryTable()), getPrimaryTable().getKey().getName(), "PrimaryKey"));
 
         // at the end so that fireColsChanged() can use it
         this.inited = null;
+        listenToCols();
+        updateCols(null);
     }
 
     public SQLTableModelSource(SQLTableModelSource src) {
         this.table = src.table;
-        this.allCols = new ArrayList<SQLTableModelColumn>(src.allCols);
+        this.setAllCols(src.getAllColumns());
         this.cols = new ListChangeRecorder<SQLTableModelColumn>(new ArrayList<SQLTableModelColumn>(src.cols));
-        this.colsByName = new HashMap<String, SQLTableModelColumn>(src.colsByName);
+        this.debugCols = new ArrayList<SQLTableModelColumn>(src.debugCols);
         this.inited = null;
         listenToCols();
     }
 
     private void listenToCols() {
+        assert SwingUtilities.isEventDispatchThread();
         // keep allCols in sync with cols, and listen to any change
-        this.cols.getRecipe().bind(this.allCols);
         this.cols.getRecipe().addListener(new IClosure<ListChangeIndex<SQLTableModelColumn>>() {
             @Override
             public void executeChecked(ListChangeIndex<SQLTableModelColumn> change) {
-                for (final SQLTableModelColumn col : change.getItemsRemoved()) {
-                    SQLTableModelSource.this.colsByName.remove(col.getName());
-                }
-                for (final SQLTableModelColumn col : change.getItemsAdded()) {
-                    SQLTableModelSource.this.colsByName.put(col.getName(), col);
-                }
-                colsChanged(change);
-                fireColsChanged();
+                updateCols(change);
             }
         });
     }
 
+    protected final void updateCols(ListChangeIndex<SQLTableModelColumn> change) {
+        assert SwingUtilities.isEventDispatchThread();
+        // do not fire while initializing
+        assert this.inited == null;
+
+        if (change != null && change.getItemsAdded().isEmpty() && change.getItemsRemoved().isEmpty())
+            return;
+        final SQLTableModelSourceState beforeState = this.createState();
+        this.setAllCols(new SQLTableModelColumns(this.cols, this.debugCols));
+        colsChanged(change == null ? new ListChangeIndex.Add<SQLTableModelColumn>(0, this.getAllColumns().getAllColumns()) : change);
+        final SQLTableModelSourceState afterState = this.createState();
+        fireColsChanged(beforeState, afterState);
+    }
+
+    protected abstract SQLTableModelSourceState createState();
+
     protected void colsChanged(final ListChangeIndex<SQLTableModelColumn> change) {
     }
 
-    private void fireColsChanged() {
-        // do not fire while initializing, otherwise the first getColumns() will fire, eg :
-        // a class does that in constructor :
-        // -addColumnListener({updateColNames();});
-        // -updateColNames();
-        // and in updateColNames(), uses getColumns() :
-        // -this.colNames.clear();
-        // -for (final SQLTableModelColumn col : getCols())
-        // -this.colNames.add(col.getName());
-        // with this code this.colNames will contain twice our scolumns
-        if (this.inited != null)
-            return;
-
+    private void fireColsChanged(final SQLTableModelSourceState beforeState, final SQLTableModelSourceState afterState) {
         // let know each of our LinesSource that the columns have changed
         int i = 0;
         while (i < this.lines.size()) {
@@ -175,7 +192,7 @@ public abstract class SQLTableModelSource {
             if (line == null)
                 this.lines.remove(i);
             else {
-                line.colsChanged();
+                line.colsChanged(beforeState, afterState);
                 i++;
             }
         }
@@ -184,6 +201,7 @@ public abstract class SQLTableModelSource {
     }
 
     public final SQLTableModelLinesSource createLinesSource(ITableModel model) {
+        this.init();
         final SQLTableModelLinesSource res = this._createLinesSource(model);
         this.lines.add(new WeakReference<SQLTableModelLinesSource>(res));
         return res;
@@ -210,25 +228,27 @@ public abstract class SQLTableModelSource {
         return this.cols;
     }
 
+    private synchronized void setAllCols(SQLTableModelColumns allCols) {
+        this.allCols = allCols;
+    }
+
     /**
      * The normal columns plus some debug columns. Usually primary and foreign keys.
      * 
      * @return the debub columns.
      */
-    public final List<SQLTableModelColumn> getAllColumns() {
-        this.init();
-        return Collections.unmodifiableList(this.allCols);
+    public synchronized final SQLTableModelColumns getAllColumns() {
+        return this.allCols;
     }
 
     public final void addDebugColumn(final SQLTableModelColumn col) {
         this.init();
-        this.allCols.add(col);
-        colsChanged(new ListChangeIndex.Add<SQLTableModelColumn>(this.allCols.size() - 1, Collections.singleton(col)));
-        this.fireColsChanged();
+        this.debugCols.add(col);
+        updateCols(new ListChangeIndex.Add<SQLTableModelColumn>(this.getAllColumns().size(), Collections.singleton(col)));
     }
 
     public final SQLTableModelColumn getColumn(int index) {
-        return this.getAllColumns().get(index);
+        return this.getAllColumns().getAllColumns().get(index);
     }
 
     /**
@@ -238,11 +258,7 @@ public abstract class SQLTableModelSource {
      * @return all columns needing <code>f</code>.
      */
     public final List<SQLTableModelColumn> getColumns(SQLField f) {
-        final List<SQLTableModelColumn> res = new ArrayList<SQLTableModelColumn>();
-        for (final SQLTableModelColumn col : this.getColumns())
-            if (col.getFields().contains(f))
-                res.add(col);
-        return res;
+        return this.getAllColumns().getColumns(f);
     }
 
     /**
@@ -253,16 +269,7 @@ public abstract class SQLTableModelSource {
      * @throws IllegalArgumentException if more than one column matches.
      */
     public final SQLTableModelColumn getColumn(SQLField f) {
-        final Set<SQLField> singleton = Collections.singleton(f);
-        SQLTableModelColumn res = null;
-        for (final SQLTableModelColumn col : this.getColumns())
-            if (col.getFields().equals(singleton)) {
-                if (res == null)
-                    res = col;
-                else
-                    throw new IllegalArgumentException("Not exactly one column for " + f);
-            }
-        return res;
+        return this.getAllColumns().getColumn(f);
     }
 
     /**
@@ -273,16 +280,7 @@ public abstract class SQLTableModelSource {
      * @throws IllegalArgumentException if more than one column matches.
      */
     public final SQLTableModelColumn getColumn(FieldPath fp) {
-        final Set<FieldPath> singleton = Collections.singleton(fp);
-        SQLTableModelColumn res = null;
-        for (final SQLTableModelColumn col : this.getColumns())
-            if (col.getPaths().equals(singleton)) {
-                if (res == null)
-                    res = col;
-                else
-                    throw new IllegalArgumentException("Not exactly one column for " + fp);
-            }
-        return res;
+        return this.getAllColumns().getColumn(fp);
     }
 
     public final void addColumnListener(PropertyChangeListener l) {

@@ -23,7 +23,6 @@ import org.openconcerto.utils.cc.IPredicate;
 import org.openconcerto.xml.JDOMUtils;
 import org.openconcerto.xml.Validator;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
@@ -156,15 +155,15 @@ public abstract class OOXML implements Comparable<OOXML> {
     }
 
     // from OpenDocument-v1.2-schema.rng : a coordinate is a length
-    static private final BigDecimal parseCoordinate(final Element elem, final String attrName, final Namespace ns, LengthUnit unit) {
-        return parseLength(elem, attrName, ns, unit);
+    static private final Length parseCoordinate(final Element elem, final String attrName, final Namespace ns) {
+        return parseLength(elem, attrName, ns);
     }
 
-    static private final BigDecimal parseLength(final Element elem, final String attrName, final Namespace ns, LengthUnit unit) {
+    static private final Length parseLength(final Element elem, final String attrName, final Namespace ns) {
         final String attr = elem.getAttributeValue(attrName, ns);
-        if (attr == null)
-            return null;
-        return LengthUnit.parseLength(attr, unit);
+        final Length res = LengthUnit.parseLength(attr);
+        assert res != null;
+        return res.isNone() ? null : res;
     }
 
     // *** instances
@@ -404,50 +403,48 @@ public abstract class OOXML implements Comparable<OOXML> {
      * Return the coordinates of the top-left and bottom-right of the passed shape.
      * 
      * @param elem an XML element.
-     * @param unit the unit of the returned numbers.
-     * @return an array of 4 numbers, <code>null</code> if <code>elem</code> is not a shape, numbers
+     * @return an array of 4 lengths, <code>null</code> if <code>elem</code> is not a shape, items
      *         themselves are never <code>null</code>.
      */
-    public final BigDecimal[] getCoordinates(Element elem, LengthUnit unit) {
-        return this.getCoordinates(elem, unit, true, true);
+    public final Length[] getCoordinates(Element elem) {
+        return this.getCoordinates(elem, true, true);
     }
 
     /**
      * Return the coordinates of the top-left and bottom-right of the passed shape.
      * 
      * @param elem an XML element.
-     * @param unit the unit of the returned numbers.
      * @param horizontal <code>true</code> if the x coordinates should be computed,
      *        <code>false</code> meaning items 0 and 2 of the result are <code>null</code>.
      * @param vertical <code>true</code> if the y coordinates should be computed, <code>false</code>
      *        meaning items 1 and 3 of the result are <code>null</code>.
-     * @return an array of 4 numbers, <code>null</code> if <code>elem</code> is not a shape, numbers
+     * @return an array of 4 lengths, <code>null</code> if <code>elem</code> is not a shape, items
      *         themselves are only <code>null</code> if requested with <code>horizontal</code> or
      *         <code>vertical</code>.
      */
-    public final BigDecimal[] getCoordinates(Element elem, LengthUnit unit, final boolean horizontal, final boolean vertical) {
-        return getCoordinates(elem, getVersion().getNS("svg"), unit, horizontal, vertical);
+    public final Length[] getCoordinates(Element elem, final boolean horizontal, final boolean vertical) {
+        return getCoordinates(elem, getVersion().getNS("svg"), horizontal, vertical);
     }
 
-    static private final BigDecimal[] getCoordinates(Element elem, final Namespace svgNS, LengthUnit unit, final boolean horizontal, final boolean vertical) {
+    static private final Length[] getCoordinates(Element elem, final Namespace svgNS, final boolean horizontal, final boolean vertical) {
         if (elem.getName().equals("g") && elem.getNamespacePrefix().equals("draw")) {
             // put below if to allow null to be returned by getLocalCoordinates() if elem isn't a
             // shape
             if (!horizontal && !vertical)
-                return new BigDecimal[] { null, null, null, null };
+                return new Length[] { null, null, null, null };
 
             // an OpenDocument group (of shapes) doesn't have any coordinates nor any width and
             // height so iterate through its components to find its coordinates
-            BigDecimal minX = null, minY = null;
-            BigDecimal maxX = null, maxY = null;
+            Length minX = null, minY = null;
+            Length maxX = null, maxY = null;
             for (final Object c : elem.getChildren()) {
                 final Element child = (Element) c;
-                final BigDecimal[] childCoord = getCoordinates(child, svgNS, unit, horizontal, vertical);
+                final Length[] childCoord = getCoordinates(child, svgNS, horizontal, vertical);
                 // e.g. <office:event-listeners>, <svg:desc>, <svg:title>
                 if (childCoord != null) {
                     {
-                        final BigDecimal x = childCoord[0];
-                        final BigDecimal x2 = childCoord[2];
+                        final Length x = childCoord[0];
+                        final Length x2 = childCoord[2];
                         if (x != null) {
                             assert x2 != null;
                             if (minX == null || x.compareTo(minX) < 0)
@@ -457,8 +454,8 @@ public abstract class OOXML implements Comparable<OOXML> {
                         }
                     }
                     {
-                        final BigDecimal y = childCoord[1];
-                        final BigDecimal y2 = childCoord[3];
+                        final Length y = childCoord[1];
+                        final Length y2 = childCoord[3];
                         if (y != null) {
                             assert y2 != null;
                             if (minY == null || y.compareTo(minY) < 0)
@@ -472,34 +469,34 @@ public abstract class OOXML implements Comparable<OOXML> {
             // works because we check above if both horizontal and vertical are false
             if (minX == null && minY == null)
                 throw new IllegalArgumentException("Empty group : " + JDOMUtils.output(elem));
-            return new BigDecimal[] { minX, minY, maxX, maxY };
+            return new Length[] { minX, minY, maxX, maxY };
         } else {
-            return getLocalCoordinates(elem, svgNS, unit, horizontal, vertical);
+            return getLocalCoordinates(elem, svgNS, horizontal, vertical);
         }
     }
 
     // return null if elem isn't a shape (no x/y or no width/height)
     // BigDecimal null if and only if horizontal/vertical is false
-    static private final BigDecimal[] getLocalCoordinates(Element elem, final Namespace svgNS, LengthUnit unit, final boolean horizontal, final boolean vertical) {
-        final BigDecimal x = parseCoordinate(elem, "x", svgNS, unit);
-        final BigDecimal x1 = parseCoordinate(elem, "x1", svgNS, unit);
+    static private final Length[] getLocalCoordinates(Element elem, final Namespace svgNS, final boolean horizontal, final boolean vertical) {
+        final Length x = parseCoordinate(elem, "x", svgNS);
+        final Length x1 = parseCoordinate(elem, "x1", svgNS);
         if (x == null && x1 == null)
             return null;
 
-        final BigDecimal y = parseCoordinate(elem, "y", svgNS, unit);
-        final BigDecimal y1 = parseCoordinate(elem, "y1", svgNS, unit);
+        final Length y = parseCoordinate(elem, "y", svgNS);
+        final Length y1 = parseCoordinate(elem, "y1", svgNS);
         if (y == null && y1 == null)
             throw new IllegalArgumentException("Have x but missing y in " + JDOMUtils.output(elem));
 
-        final BigDecimal startX;
-        final BigDecimal endX;
+        final Length startX;
+        final Length endX;
         if (horizontal) {
             if (x == null) {
                 startX = x1;
-                endX = parseCoordinate(elem, "x2", svgNS, unit);
+                endX = parseCoordinate(elem, "x2", svgNS);
             } else {
                 startX = x;
-                final BigDecimal width = parseLength(elem, "width", svgNS, unit);
+                final Length width = parseLength(elem, "width", svgNS);
                 endX = width == null ? null : startX.add(width);
             }
             // return null if there's no second coordinate (it's a point)
@@ -510,15 +507,15 @@ public abstract class OOXML implements Comparable<OOXML> {
             endX = null;
         }
 
-        final BigDecimal startY;
-        final BigDecimal endY;
+        final Length startY;
+        final Length endY;
         if (vertical) {
             if (y == null) {
                 startY = y1;
-                endY = parseCoordinate(elem, "y2", svgNS, unit);
+                endY = parseCoordinate(elem, "y2", svgNS);
             } else {
                 startY = y;
-                final BigDecimal height = parseLength(elem, "height", svgNS, unit);
+                final Length height = parseLength(elem, "height", svgNS);
                 endY = height == null ? null : startY.add(height);
             }
             // return null if there's no second coordinate (it's a point)
@@ -529,7 +526,7 @@ public abstract class OOXML implements Comparable<OOXML> {
             endY = null;
         }
 
-        return new BigDecimal[] { startX, startY, endX, endY };
+        return new Length[] { startX, startY, endX, endY };
     }
 
     @Immutable

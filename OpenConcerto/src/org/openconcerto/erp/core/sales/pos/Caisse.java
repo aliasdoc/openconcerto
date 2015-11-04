@@ -29,7 +29,7 @@ import org.openconcerto.erp.core.sales.pos.model.ReceiptCode;
 import org.openconcerto.erp.core.sales.pos.model.Ticket;
 import org.openconcerto.erp.core.sales.pos.model.TicketLine;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
-import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.Type;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.generationEcritures.GenerationMvtTicketCaisse;
 import org.openconcerto.erp.generationEcritures.GenerationMvtVirement;
@@ -358,7 +358,7 @@ public class Caisse {
             public String getLabel(SQLRowAccessor rowOrigin, SQLRowAccessor rowElt) {
                 return "Ticket N°" + rowOrigin.getString("NUMERO");
             }
-        }, row, row.getReferentRows(getClientCaisse().getTable().getTable("SAISIE_VENTE_FACTURE_ELEMENT")), Type.REAL_DELIVER);
+        }, row, row.getReferentRows(getClientCaisse().getTable().getTable("SAISIE_VENTE_FACTURE_ELEMENT")), TypeStockUpdate.REAL_DELIVER);
 
         stockUpdater.update();
 

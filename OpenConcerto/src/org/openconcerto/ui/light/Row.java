@@ -13,6 +13,9 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONconverter;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -20,7 +23,7 @@ import java.io.ObjectOutput;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Row implements Externalizable {
+public class Row implements Externalizable, JSONAble {
 
     private long id;
     private List<Object> values;
@@ -44,39 +47,49 @@ public class Row implements Externalizable {
     }
 
     public List<Object> getValues() {
-        return values;
+        return this.values;
     }
 
     public long getId() {
-        return id;
+        return this.id;
     }
 
     @Override
     public String toString() {
-        return "Row id: " + id + " values: " + values;
+        return "Row id: " + this.id + " values: " + this.values;
     }
 
     public void addValue(Object v) {
-        values.add(v);
+        this.values.add(v);
 
     }
 
     public void setValue(int index, Object v) {
-        values.set(index, v);
+        this.values.set(index, v);
     }
 
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
-        out.writeLong(id);
-        out.writeObject(values);
+        out.writeLong(this.id);
+        out.writeObject(this.values);
 
     }
 
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        id = in.readLong();
-        values = (List<Object>) in.readObject();
+        this.id = in.readLong();
+        this.values = (List<Object>) in.readObject();
+    }
 
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+        
+        result.append("\"id\":" + JSONconverter.getJSON(this.id) + ",");
+        result.append("\"values\":" + JSONconverter.getJSON(this.values));
+        
+        result.append("}");
+        return result.toString();
     }
 
 }

@@ -33,6 +33,8 @@
 		<FIELD name="LIBELLE" label="Label" />
 		<FIELD name="LIBELLE_CENT" label="Label for cents" />
 		<FIELD name="TAUX" label="Rate" />
+		<FIELD name="TAUX_COMMERCIAL" label="Rate for sales" />
+		<FIELD name="SYMBOLE" label="Symbol" />
 	</TABLE>
 
 	<TABLE name="EXERCICE_COMMON">

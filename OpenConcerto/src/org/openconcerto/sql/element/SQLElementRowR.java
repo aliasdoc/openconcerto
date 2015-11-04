@@ -32,12 +32,17 @@ class SQLElementRowR extends BaseSQLElementRow {
         super(element, row);
     }
 
+    @Override
     public boolean equals(Object obj) {
+        return this.equals(obj, false);
+    }
+
+    public boolean equals(Object obj, final boolean ignoreNotDeepCopied) {
         if (obj instanceof SQLElementRowR) {
             final SQLElementRowR o = (SQLElementRowR) obj;
             // test relations parent-enfant
             final Map<SQLRow, SQLRow> copies = new HashMap<SQLRow, SQLRow>();
-            if (!equalsRec(o, copies))
+            if (!equalsRec(o, copies, ignoreNotDeepCopied))
                 return false;
 
             // test relations normal ff
@@ -47,7 +52,7 @@ class SQLElementRowR extends BaseSQLElementRow {
                     final SQLRow foreignRow = thisRow.getForeignRow(ff);
                     if (copies.containsKey(foreignRow)) {
                         final SQLRow copy = copies.get(thisRow);
-                        if (!SQLElementRow.equals(copy.getForeignRow(ff), foreignRow))
+                        if (!getElement(foreignRow).equals(copy.getForeignRow(ff), foreignRow, ignoreNotDeepCopied))
                             return false;
                     }
                 }
@@ -58,8 +63,8 @@ class SQLElementRowR extends BaseSQLElementRow {
             return false;
     }
 
-    private boolean equalsRec(SQLElementRowR o, Map<SQLRow, SQLRow> copies) {
-        if (!SQLElementRow.equals(this.getRow(), o.getRow()))
+    private boolean equalsRec(SQLElementRowR o, Map<SQLRow, SQLRow> copies, final boolean ignoreNotDeepCopied) {
+        if (!this.getElem().equals(this.getRow(), o.getRow(), ignoreNotDeepCopied))
             return false;
         final Map<SQLTable, List<SQLRow>> children1 = this.getElem().getChildrenRows(this.getRow());
         final Map<SQLTable, List<SQLRow>> children2 = this.getElem().getChildrenRows(o.getRow());
@@ -78,12 +83,12 @@ class SQLElementRowR extends BaseSQLElementRow {
                 final SQLRow r2 = lIter2.next();
                 final SQLElementRowR o1 = new SQLElementRowR(r1);
                 final SQLElementRowR o2 = new SQLElementRowR(r2);
-                if (!o1.equalsRec(o2, copies))
+                if (!o1.equalsRec(o2, copies, ignoreNotDeepCopied))
                     return false;
-                copies.put(r1, r2);
             }
 
         }
+        copies.put(this.getRow(), o.getRow());
         return true;
     }
 

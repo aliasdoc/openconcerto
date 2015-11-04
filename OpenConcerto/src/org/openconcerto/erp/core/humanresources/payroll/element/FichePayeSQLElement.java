@@ -13,36 +13,6 @@
  
  package org.openconcerto.erp.core.humanresources.payroll.element;
 
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.erp.core.common.ui.JNiceButton;
-import org.openconcerto.erp.core.humanresources.payroll.component.VariableRowTreeNode;
-import org.openconcerto.erp.core.humanresources.payroll.ui.FichePayeRenderer;
-import org.openconcerto.erp.generationEcritures.GenerationMvtFichePaye;
-import org.openconcerto.erp.model.FichePayeModel;
-import org.openconcerto.erp.model.RubriquePayeTree;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.element.BaseSQLComponent;
-import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.sql.element.SQLElementDirectory;
-import org.openconcerto.sql.element.TreesOfSQLRows;
-import org.openconcerto.sql.model.SQLBase;
-import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowListRSH;
-import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLSelect;
-import org.openconcerto.sql.model.SQLSystem;
-import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.sqlobject.ElementComboBox;
-import org.openconcerto.sql.view.EditFrame;
-import org.openconcerto.sql.view.IListFrame;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.ui.JDate;
-import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.checks.ValidState;
-
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -71,6 +41,37 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.TreePath;
+
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.JNiceButton;
+import org.openconcerto.erp.core.humanresources.payroll.component.VariableRowTreeNode;
+import org.openconcerto.erp.core.humanresources.payroll.ui.FichePayeRenderer;
+import org.openconcerto.erp.generationEcritures.GenerationMvtFichePaye;
+import org.openconcerto.erp.model.FichePayeModel;
+import org.openconcerto.erp.model.RubriquePayeTree;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.element.BaseSQLComponent;
+import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.SQLElementDirectory;
+import org.openconcerto.sql.element.TreesOfSQLRows;
+import org.openconcerto.sql.model.SQLBase;
+import org.openconcerto.sql.model.SQLField;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowListRSH;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLSystem;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.sql.view.IListFrame;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.JDate;
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.checks.ValidState;
 
 public class FichePayeSQLElement extends ComptaSQLConfElement {
 
@@ -529,7 +530,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
                 this.addRequiredSQLObject(this.dateDu, "DU");
                 this.addRequiredSQLObject(this.dateAu, "AU");
 
-                this.selSalCombo.setEditable(false);
+                this.selSalCombo.setInteractionMode(InteractionMode.DISABLED);
                 this.selSalCombo.setEnabled(false);
                 this.selSalCombo.setButtonsVisible(false);
                 // this.selSalCombo.setVisible(false);
@@ -593,7 +594,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
                     this.buttonValider.setVisible(!((Boolean) r.getObject("VALIDE")).booleanValue());
                     setpDateEnabled(!((Boolean) r.getObject("VALIDE")).booleanValue());
                 }
-                this.selSalCombo.setEditable(false);
+                this.selSalCombo.setInteractionMode(InteractionMode.DISABLED);
                 this.selSalCombo.setEnabled(false);
                 this.selMois.setButtonsVisible(false);
                 this.selSalCombo.setButtonsVisible(false);
@@ -602,17 +603,14 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
             private void setpDateEnabled(boolean b) {
 
                 // System.err.println("Set date enable --> " + b);
-                this.selMois.setEditable(b);
+                this.selMois.setInteractionMode((b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
                 // this.selMois.setEnabled(b);
 
                 this.textAnnee.setEditable(b);
                 this.textAnnee.setEnabled(b);
 
-                this.dateDu.setEditable(b);
-                this.dateDu.setEnabled(b);
-
-                this.dateAu.setEditable(b);
-                this.dateAu.setEnabled(b);
+                this.dateDu.setInteractionMode(InteractionMode.DISABLED);
+                this.dateAu.setInteractionMode(InteractionMode.DISABLED);
             }
 
             private void validationFiche() throws SQLException {
@@ -645,7 +643,8 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
         super.archive(trees, cutLinks);
         for (SQLRow row : trees.getRows()) {
             if (row != null && row.getID() > 1) {
-                if (JOptionPane.showConfirmDialog(null, "Soustraire les cumuls de cette fiche à celle en cours?", "Suppression d'une fiche de paye", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                if (JOptionPane.showConfirmDialog(null, "Soustraire les cumuls de cette fiche à celle en cours?", "Suppression d'une fiche de paye",
+                        JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                     // on effectue le cumul
                     // System.err.println("Calcul des cumuls");
 

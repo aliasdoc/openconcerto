@@ -14,6 +14,7 @@
  package org.openconcerto.erp.generationDoc;
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.jopendocument.link.Component;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.FileUtils;
@@ -53,7 +54,7 @@ public abstract class AbstractSheetXml extends SheetXml {
 
                             @Override
                             public void run() {
-                                JOptionPane.showMessageDialog(null, "Impossible de trouver le modele " + modeleFinal + ". \n Le modéle par défaut sera utilisé!");
+                                JOptionPane.showMessageDialog(null, "Impossible de trouver le modèle " + modeleFinal + ". \n Le modèle par défaut sera utilisé!");
                             }
                         });
                         templateId = getDefaultTemplateId();
@@ -61,6 +62,13 @@ public abstract class AbstractSheetXml extends SheetXml {
                     final OOgenerationXML oXML = new OOgenerationXML(AbstractSheetXml.this.row);
                     AbstractSheetXml.this.generatedOpenDocumentFile = oXML.createDocument(templateId, getType(), getDocumentOutputDirectory(), getValidFileName(getName()), getRowLanguage(),
                             AbstractSheetXml.this.getMetaGeneration());
+                    if (isRefreshFormulasRequired()) {
+                        final Component doc = ComptaPropsConfiguration.getOOConnexion().loadDocument(AbstractSheetXml.this.generatedOpenDocumentFile, true);
+                        // Remove from code, better use the pref in LO
+                        // doc.refreshFormulas();
+                        doc.save();
+                        doc.close();
+                    }
 
                 } catch (Exception e) {
                     DEFAULT_HANDLER.uncaughtException(null, e);

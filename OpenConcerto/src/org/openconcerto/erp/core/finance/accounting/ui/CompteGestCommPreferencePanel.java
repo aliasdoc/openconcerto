@@ -48,6 +48,7 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
     private SQLRowValues rowPrefCompteVals = new SQLRowValues(tablePrefCompte);
     private JCheckBox checkHideCompteFacture = new JCheckBox("Ne pas afficher les comptes dans les factures.");
     private JCheckBox checkHideCompteClient = new JCheckBox("Ne pas afficher les comptes dans les clients.");
+    private JCheckBox checkHideAnalytique = new JCheckBox("Ne pas afficher l'analityque dans les saisies au kilomètre.");
 
     public CompteGestCommPreferencePanel() {
         super();
@@ -76,6 +77,8 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
         this.add(this.checkHideCompteClient, c);
         c.gridy++;
         this.add(this.checkHideCompteFacture, c);
+        c.gridy++;
+        this.add(this.checkHideAnalytique, c);
         c.gridy++;
 
         /*******************************************************************************************
@@ -267,6 +270,7 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
         this.rowPrefCompteVals.put("ID_COMPTE_PCE_TVA_IMMO", this.selCompteTVAImmo.getValue());
         DefaultNXProps.getInstance().setProperty("HideCompteClient", String.valueOf(this.checkHideCompteClient.isSelected()));
         DefaultNXProps.getInstance().setProperty("HideCompteFacture", String.valueOf(this.checkHideCompteFacture.isSelected()));
+        DefaultNXProps.getInstance().setProperty("HideAnalytique", String.valueOf(this.checkHideAnalytique.isSelected()));
         DefaultNXProps.getInstance().store();
         try {
             this.rowPrefCompteVals.update();
@@ -373,6 +377,7 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
             setComboValues(selCompteTVAImmo, "ID_COMPTE_PCE_TVA_IMMO", "TVAImmo");
             this.checkHideCompteClient.setSelected(Boolean.valueOf(DefaultNXProps.getInstance().getProperty("HideCompteClient")));
             this.checkHideCompteFacture.setSelected(Boolean.valueOf(DefaultNXProps.getInstance().getProperty("HideCompteFacture")));
+            this.checkHideAnalytique.setSelected(Boolean.valueOf(DefaultNXProps.getInstance().getProperty("HideAnalytique")));
         } catch (Exception e) {
             e.printStackTrace();
         }

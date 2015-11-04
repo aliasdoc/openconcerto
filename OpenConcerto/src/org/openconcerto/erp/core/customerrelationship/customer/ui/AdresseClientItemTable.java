@@ -19,6 +19,7 @@ import org.openconcerto.map.model.Ville;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.UndefinedRowValuesCache;
 import org.openconcerto.sql.view.list.RowValuesTable;
 import org.openconcerto.sql.view.list.RowValuesTableControlPanel;
 import org.openconcerto.sql.view.list.RowValuesTableModel;
@@ -40,7 +41,7 @@ import javax.swing.ToolTipManager;
 
 public class AdresseClientItemTable extends JPanel {
     private RowValuesTable table;
-    private SQLTableElement type, dest, rue, cedex, ville, province, pays, email;
+    private SQLTableElement dest, rue, cedex, ville, province, pays, email;
     private RowValuesTableModel model;
     private SQLRowValues defaultRowVals;
 
@@ -61,8 +62,14 @@ public class AdresseClientItemTable extends JPanel {
         final List<SQLTableElement> list = new Vector<SQLTableElement>();
 
         // Destinataire
-        this.type = new SQLTableElement(e.getTable().getField("TYPE"));
-        list.add(this.type);
+
+        SQLTableElement type = new SQLTableElement(e.getTable().getField("TYPE"), String.class, new ComboBoxAdresseTypeCellEditor());
+        type.setRenderer(new AdresseTypeCellRenderer());
+        list.add(type);
+
+        // Libellé
+        SQLTableElement lib = new SQLTableElement(e.getTable().getField("LIBELLE"));
+        list.add(lib);
 
         // Destinataire
         this.dest = new SQLTableElement(e.getTable().getField("DEST"));
@@ -111,7 +118,9 @@ public class AdresseClientItemTable extends JPanel {
         this.email = new SQLTableElement(e.getTable().getField("EMAIL_CONTACT"));
         list.add(this.email);
 
-        this.model = new RowValuesTableModel(e, list, e.getTable().getField("VILLE"));
+        SQLRowValues rowVals = new SQLRowValues(UndefinedRowValuesCache.getInstance().getDefaultRowValues(getSQLElement().getTable()));
+        rowVals.put("TYPE", AdresseType.Delivery.getId());
+        this.model = new RowValuesTableModel(e, list, e.getTable().getField("VILLE"), false, rowVals);
 
         this.table = new RowValuesTable(this.model, null, true);
 
@@ -174,6 +183,11 @@ public class AdresseClientItemTable extends JPanel {
 
     public void insertFrom(String field, int id) {
         this.table.insertFrom(field, id);
+
+    }
+
+    public void insertFrom(String field, SQLRowValues rowVals) {
+        this.table.insertFrom(field, rowVals);
 
     }
 

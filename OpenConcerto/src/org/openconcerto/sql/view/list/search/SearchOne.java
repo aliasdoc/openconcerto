@@ -29,30 +29,19 @@ public final class SearchOne extends SearchRunnable {
     final Collection<Integer> modifiedIndex;
     final int id;
 
-    private Mode mode;
+    private final Mode mode;
 
-    public SearchOne(SearchQueue q, int id, ListSQLLine modifiedLine, final Collection<Integer> modifiedIndex) {
+    public SearchOne(final SearchQueue q, final int id, final ListSQLLine modifiedLine, final Collection<Integer> modifiedIndex, final Mode fullListEvent) {
         super(q);
         this.id = id;
         this.modifiedLine = modifiedLine;
         this.modifiedIndex = modifiedIndex;
 
-        this.mode = null;
+        this.mode = fullListEvent;
     }
 
-    public synchronized void setMode(Mode m) {
-        if (this.mode != null)
-            throw new IllegalStateException("mode not null");
-        this.mode = m;
-    }
-
+    @Override
     public void run() {
-        synchronized (this) {
-            if (this.mode == null) {
-                throw new IllegalStateException("null mode");
-            }
-        }
-
         if (this.mode == Mode.ADD) {
             if (this.matchFilter(this.modifiedLine))
                 add();
@@ -61,6 +50,7 @@ public final class SearchOne extends SearchRunnable {
         } else if (this.mode == Mode.CHANGE) {
             if (this.matchFilter(this.modifiedLine))
                 SwingUtilities.invokeLater(new Runnable() {
+                    @Override
                     public void run() {
                         SearchOne.this.getAccess().fullListChanged(SearchOne.this.modifiedLine, SearchOne.this.modifiedIndex);
                     }
@@ -72,6 +62,7 @@ public final class SearchOne extends SearchRunnable {
 
     private void add() {
         SwingUtilities.invokeLater(new Runnable() {
+            @Override
             public void run() {
                 SearchOne.this.getAccess().addToList(SearchOne.this.modifiedLine);
             }
@@ -80,6 +71,7 @@ public final class SearchOne extends SearchRunnable {
 
     private void remove() {
         SwingUtilities.invokeLater(new Runnable() {
+            @Override
             public void run() {
                 SearchOne.this.getAccess().removeFromList(SearchOne.this.id);
             }

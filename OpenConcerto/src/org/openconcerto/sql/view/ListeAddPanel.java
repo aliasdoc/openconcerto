@@ -21,6 +21,8 @@ import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.ui.FrameUtil;
 
+import java.awt.Container;
+import java.awt.GridBagConstraints;
 import java.awt.event.ActionEvent;
 
 import javax.swing.JButton;
@@ -44,15 +46,26 @@ public class ListeAddPanel extends IListPanel {
         super(component, list, variant);
     }
 
+    @Override
+    protected void addComponents(Container container, GridBagConstraints c) {
+        super.addComponents(container, c);
+        // If write protected (because of rights or locked row) still allow to display
+        this.btnMngr.setFallback(this.buttonModifier, "modify", "display");
+    }
+
+    @Override
     protected void handleAction(JButton source, ActionEvent evt) {
         if (source == this.buttonModifier) {
+            // can't change mode of EditPanel as a function of our FALLBACK_KEY (i.e. modify or
+            // display). Would have to change our EditFrame instance, but some of our caller will
+            // need to be changed. For now, rely on SQLComponent safeties.
             this.getEditFrame().selectionId(this.getListe().getSelectedId(), -1);
             FrameUtil.show(getEditFrame());
         } else {
             super.handleAction(source, evt);
         }
     }
-    
+
     @Override
     protected boolean modifyIsImmediate() {
         // EditFrame is displayed

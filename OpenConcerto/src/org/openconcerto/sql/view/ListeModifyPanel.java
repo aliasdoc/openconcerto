@@ -20,6 +20,7 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLComponent.Mode;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidObject;
@@ -109,12 +110,12 @@ public class ListeModifyPanel extends IListPanel implements ValidListener {
         super.listSelectionChanged(id);
         // keep the current scrolling value, to restore it afterwards
         final int scroll = this.scrollPane.getVerticalScrollBar().getValue();
+        this.getModifComp().setEditable(id == -1 ? InteractionMode.DISABLED : InteractionMode.READ_WRITE);
         this.getModifComp().select(id);
         // force buttonModifier update because the super method enables it
         // if a line is selected, then we select the new id, but if the new line
         // has the same empty fields than the previous one, no validChange is fired
         this.validChange(this.getModifComp(), this.getModifComp().getValidState());
-        this.getModifComp().setEditable(id != -1);
         // have to invokeLater() since the scrollbar is changed after this method return
         // eg DefaultCaret.changeCaretPosition() -- caused by this.modifComp.select(id) -- will
         // invokeLater() repaintNewCaret() which will scrollRectToVisible()

@@ -164,24 +164,40 @@ public class CollectionUtils {
 
     /**
      * Return an index between <code>0</code> and <code>l.size()</code> inclusive. If <code>i</code>
-     * is negative, it is added to <code>l.size()</code> (but bounded to 0), ie for a list of 3
-     * items, -1 is the index of the last item ; -3 and -4 are both the first. If <code>i</code> is
-     * greater than <code>l.size()</code> then <code>l.size()</code> is returned.
+     * is negative, it is added to <code>l.size()</code> (i.e. -1 is the index of the last item and
+     * -size is the first) :
      * 
      * <pre>
      *    a  b  c  a  b  c
      *   -3 -2 -1  0  1  2  3
      * </pre>
      * 
-     * @param l the list, eg a list of 3 items.
-     * @param i the virtual index, eg -1.
-     * @return the real index, eg 2.
+     * @param l the list, e.g. a list of 3 items.
+     * @param i the virtual index, e.g. -1.
+     * @return the real index, e.g. 2.
+     * @throws IndexOutOfBoundsException if not <code>0 &le; abs(i) &le; l.size()</code>
      */
-    static public int getValidIndex(final List<?> l, final int i) {
-        return getValidIndex(l, i, false);
+    static public int getValidIndex(final List<?> l, final int i) throws IndexOutOfBoundsException {
+        return getValidIndex(l, i, true);
     }
 
-    static public int getValidIndex(final List<?> l, final int i, final boolean strict) {
+    /**
+     * Return an index between <code>0</code> and <code>l.size()</code> inclusive. If <code>i</code>
+     * is negative, it is added to <code>l.size()</code> (bounded to 0 if <code>strict</code> is
+     * <code>false</code>), i.e. for a list of 3 items, -1 is the index of the last item ; -3 and -4
+     * are both the first. If <code>i</code> is greater than <code>l.size()</code> then
+     * <code>l.size()</code> is returned if not <code>strict</code>.
+     * 
+     * @param l the list, e.g. a list of 3 items.
+     * @param i the virtual index, e.g. -1.
+     * @param strict if <code>true</code> <code>abs(i)</code> must be between <code>0</code> and
+     *        <code>l.size()</code>, else values are bounded between <code>0</code> and
+     *        <code>l.size()</code>.
+     * @return the real index between <code>0</code> and <code>l.size()</code>, e.g. 2.
+     * @throws IndexOutOfBoundsException if <code>strict</code> is <code>true</code> and not
+     *         <code>0 &le; abs(i) &le; l.size()</code>
+     */
+    static public int getValidIndex(final List<?> l, final int i, final boolean strict) throws IndexOutOfBoundsException {
         final int size = l.size();
         if (i > size) {
             if (strict)
@@ -199,8 +215,8 @@ public class CollectionUtils {
     }
 
     /**
-     * Deletes a slice of a list. Pass indexes to {@link #getValidIndex(List, int)} to allow
-     * delete(l, 0, -1) to clear l or delete(l, -2, -2) to remove the penultimate item.
+     * Deletes a slice of a list. Pass indexes to {@link #getValidIndex(List, int, boolean)} to
+     * allow delete(l, 0, -1) to clear l or delete(l, -2, -2) to remove the penultimate item.
      * 
      * @param l the list to delete from.
      * @param from the first index to be removed (inclusive).
@@ -208,7 +224,7 @@ public class CollectionUtils {
      */
     static public void delete(List<?> l, int from, int to) {
         if (!l.isEmpty())
-            l.subList(getValidIndex(l, from), getValidIndex(l, to) + 1).clear();
+            l.subList(getValidIndex(l, from, false), getValidIndex(l, to, false) + 1).clear();
     }
 
     /**
@@ -356,6 +372,14 @@ public class CollectionUtils {
 
     static public <C extends Collection<?>> boolean containsAny(final C coll1, final C coll2) {
         return org.apache.commons.collections.CollectionUtils.containsAny(coll1, coll2);
+    }
+
+    static public final <T> boolean identityContains(final Collection<T> coll, final T item) {
+        for (final T v : coll) {
+            if (item == v)
+                return true;
+        }
+        return false;
     }
 
     /**

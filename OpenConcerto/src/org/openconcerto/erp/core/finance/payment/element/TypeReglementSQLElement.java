@@ -34,6 +34,7 @@ public class TypeReglementSQLElement extends ComptaSQLConfElement {
     public static final int CB = 3;
     public static final int ESPECE = 4;
     public static final int TRAITE = 5;
+    public static final int INDEFINI = 7;
 
     public TypeReglementSQLElement() {
         super("TYPE_REGLEMENT", "Type de règlement", "Type de règlement");

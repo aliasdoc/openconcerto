@@ -239,9 +239,16 @@ class SQLSyntaxMS extends SQLSyntax {
     }
 
     @Override
-    public String getDropTableIfExists(SQLName name) {
-        final String quoted = name.quote();
-        return "IF OBJECT_ID(" + SQLBase.quoteStringStd(quoted) + ", 'U') IS NOT NULL DROP TABLE " + quoted;
+    public String getDropTable(SQLName name, boolean ifExists, boolean restrict) {
+        // doesn't support cascade
+        if (!restrict)
+            return null;
+        if (!ifExists) {
+            return super.getDropTable(name, ifExists, restrict);
+        } else {
+            final String quoted = name.quote();
+            return "IF OBJECT_ID(" + SQLBase.quoteStringStd(quoted) + ", 'U') IS NOT NULL DROP TABLE " + quoted;
+        }
     }
 
     @Override

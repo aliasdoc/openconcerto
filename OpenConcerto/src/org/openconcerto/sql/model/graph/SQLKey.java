@@ -16,15 +16,22 @@
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.CompareUtils;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
+
+import net.jcip.annotations.Immutable;
 
 /**
  * Toutes les méthodes utilisent des heuristiques. Utiliser par DatabaseGraph pour faire la carte
  * d'une base MySQL.
  */
+@Immutable
 public class SQLKey {
 
     static public final String PREFIX = "ID_";
@@ -103,4 +110,71 @@ public class SQLKey {
         }
     }
 
+    static public enum Type {
+        PRIMARY_KEY, FOREIGN_KEY
+    }
+
+    static public SQLKey createPrimaryKey(SQLTable t) {
+        final List<String> pk = t.getPKsNames();
+        if (pk.isEmpty())
+            return null;
+        return new SQLKey(pk, null);
+    }
+
+    static public SQLKey createForeignKey(final Link link) {
+        return new SQLKey(link.getCols(), link);
+    }
+
+    private final List<String> fields;
+    private final Link link;
+
+    private SQLKey(final List<String> fields, final Link link) {
+        if (fields.isEmpty())
+            throw new IllegalArgumentException("Empty fields");
+        this.fields = Collections.unmodifiableList(new ArrayList<String>(fields));
+        this.link = link;
+    }
+
+    public final List<String> getFields() {
+        return this.fields;
+    }
+
+    public final Type getType() {
+        return this.link == null ? Type.PRIMARY_KEY : Type.FOREIGN_KEY;
+    }
+
+    /**
+     * The foreign link of this key.
+     * 
+     * @return the foreign link, <code>null</code> for {@link Type#PRIMARY_KEY}.
+     */
+    public final Link getForeignLink() {
+        return this.link;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + this.fields.hashCode();
+        result = prime * result + ((this.link == null) ? 0 : this.link.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        final SQLKey other = (SQLKey) obj;
+        return this.fields.equals(other.fields) && CompareUtils.equals(this.link, other.link);
+    }
+
+    @Override
+    public String toString() {
+        return this.getType() + " " + this.getFields();
+    }
 }

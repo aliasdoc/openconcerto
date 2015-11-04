@@ -19,11 +19,17 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
+import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 
 public class DateRangeTableModel extends AbstractTableModel {
     private static final long serialVersionUID = 5076344567233395335L;
     private final List<DateRange> ranges = new ArrayList<DateRange>();
+    private final boolean withDesc;
+
+    public DateRangeTableModel(boolean withDesc) {
+        this.withDesc = withDesc;
+    }
 
     @Override
     public int getRowCount() {
@@ -32,7 +38,7 @@ public class DateRangeTableModel extends AbstractTableModel {
 
     @Override
     public int getColumnCount() {
-        return 2;
+        return this.withDesc ? 4 : 3;
     }
 
     public DateRange getRange(int index) {
@@ -44,24 +50,60 @@ public class DateRangeTableModel extends AbstractTableModel {
         final Calendar c = Calendar.getInstance();
         if (columnIndex == 0) {
             c.setTimeInMillis(this.ranges.get(rowIndex).getStart());
-        } else {
+        } else if (columnIndex == 1) {
             c.setTimeInMillis(this.ranges.get(rowIndex).getStop());
+        } else if (columnIndex == 2) {
+            DateRange r = this.ranges.get(rowIndex);
+            int minutes = (int) (r.getStop() - r.getStart()) / (60 * 1000);
+            return Integer.valueOf(minutes);
+        } else {
+            return this.ranges.get(rowIndex).getInfos();
         }
         return c.getTime();
     }
 
     @Override
-    public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-        if (aValue == null || !(aValue instanceof Date)) {
+    public void setValueAt(Object aValue, final int rowIndex, final int columnIndex) {
+        if (columnIndex < 2 && (aValue == null || !(aValue instanceof Date))) {
             throw new IllegalArgumentException("Cannot set " + aValue + " at " + rowIndex + ":" + columnIndex);
         }
-        long time = ((Date) aValue).getTime();
-
         if (columnIndex == 0) {
-            this.ranges.get(rowIndex).setStart(time);
+
+            final long endTime = this.ranges.get(rowIndex).getStop();
+            final long duration = endTime - this.ranges.get(rowIndex).getStart();
+
+            final long startTime = ((Date) aValue).getTime();
+            this.ranges.get(rowIndex).setStart(startTime);
+            this.ranges.get(rowIndex).setStop(startTime + duration);
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    fireTableCellUpdated(rowIndex, 1);
+                }
+            });
+        } else if (columnIndex == 1) {
+            long endTime = ((Date) aValue).getTime();
+            this.ranges.get(rowIndex).setStop(endTime);
+            long startTime = this.ranges.get(rowIndex).getStart();
+            if (startTime > endTime) {
+                Calendar c = Calendar.getInstance();
+                c.setTimeInMillis(endTime);
+                c.add(Calendar.HOUR_OF_DAY, -1);
+                setValueAt(c.getTime(), rowIndex, 0);
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        fireTableCellUpdated(rowIndex, 0);
+                    }
+                });
+            }
+        } else if (columnIndex == 2) {
+            int m = ((Integer) aValue);
+            this.ranges.get(rowIndex).setStop(this.ranges.get(rowIndex).getStart() + 60 * 1000 * m);
         } else {
-            this.ranges.get(rowIndex).setStop(time);
+            this.ranges.get(rowIndex).setInfos((String) aValue);
         }
+        fireTableDataChanged();
     }
 
     public void addNewLine() {
@@ -86,8 +128,12 @@ public class DateRangeTableModel extends AbstractTableModel {
     public String getColumnName(final int column) {
         if (column == 0) {
             return "Début";
-        } else {
+        } else if (column == 1) {
             return "Fin";
+        } else if (column == 2) {
+            return "Durée (minutes)";
+        } else {
+            return "Résumé";
         }
     }
 

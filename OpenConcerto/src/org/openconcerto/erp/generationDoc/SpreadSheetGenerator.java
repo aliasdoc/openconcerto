@@ -128,9 +128,9 @@ public abstract class SpreadSheetGenerator implements Runnable {
                 if (cellValid) {
                     MutableCell cell = sheet.getCellAt(p.x, p.y);
                     // on replace les retours a la ligne
-                    final String stringValue = value.toString();
-                    if (value != null && stringValue.indexOf('\n') >= 0) {
 
+                    if (value != null && value.toString().indexOf('\n') >= 0) {
+                        final String stringValue = value.toString();
                         String firstPart = stringValue.substring(0, stringValue.indexOf('\n'));
                         String secondPart = stringValue.substring(stringValue.indexOf('\n') + 1, stringValue.length());
                         secondPart = secondPart.replace('\n', ',');

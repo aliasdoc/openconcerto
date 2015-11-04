@@ -13,13 +13,14 @@
  
  package org.openconcerto.ui.light;
 
-import java.io.Serializable;
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
 
-public class ColumnSpec implements Serializable {
+public class ColumnSpec implements Transferable {
     // Must stay immutable
 
     private String id;
-    private Class valueClass;
+    private Class<?> valueClass;
     private String columnName;
     // Default value (to add a new line)
     private Object defaultValue;
@@ -27,7 +28,7 @@ public class ColumnSpec implements Serializable {
     private boolean editable;
     private LightUIElement editors;
 
-    public ColumnSpec(String id, Class valueClass, String columnName, Object defaultValue, int width, boolean editable, LightUIElement editors) {
+    public ColumnSpec(String id, Class<?> valueClass, String columnName, Object defaultValue, int width, boolean editable, LightUIElement editors) {
         this.id = id;
         this.valueClass = valueClass;
         this.columnName = columnName;
@@ -38,23 +39,23 @@ public class ColumnSpec implements Serializable {
     }
 
     public String getId() {
-        return id;
+        return this.id;
     }
 
     public void setId(String id) {
         this.id = id;
     }
 
-    public Class getValueClass() {
-        return valueClass;
+    public Class<?> getValueClass() {
+        return this.valueClass;
     }
 
-    public void setValueClass(Class valueClass) {
+    public void setValueClass(Class<?> valueClass) {
         this.valueClass = valueClass;
     }
 
     public String getColumnName() {
-        return columnName;
+        return this.columnName;
     }
 
     public void setColumnName(String columnName) {
@@ -62,7 +63,7 @@ public class ColumnSpec implements Serializable {
     }
 
     public Object getDefaultValue() {
-        return defaultValue;
+        return this.defaultValue;
     }
 
     public void setDefaultValue(Object defaultValue) {
@@ -70,7 +71,7 @@ public class ColumnSpec implements Serializable {
     }
 
     public int getWidth() {
-        return width;
+        return this.width;
     }
 
     public void setWidth(int width) {
@@ -78,7 +79,7 @@ public class ColumnSpec implements Serializable {
     }
 
     public boolean isEditable() {
-        return editable;
+        return this.editable;
     }
 
     public void setEditable(boolean editable) {
@@ -86,11 +87,27 @@ public class ColumnSpec implements Serializable {
     }
 
     public LightUIElement getEditor() {
-        return editors;
+        return this.editors;
     }
 
     public void setEditors(LightUIElement editors) {
         this.editors = editors;
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+        
+        result.append("\"id\":" + JSONconverter.getJSON(this.id) + ",");
+        result.append("\"columnName\":" + JSONconverter.getJSON(this.columnName) + ",");
+        result.append("\"width\":" + JSONconverter.getJSON(this.width) + ",");
+        result.append("\"defaultValue\":" + JSONconverter.getJSON(this.defaultValue) + ",");
+        result.append("\"editable\":" + JSONconverter.getJSON(this.editable) + ",");
+        result.append("\"editors\":" + JSONconverter.getJSON(this.editors) + ",");
+        result.append("\"valueClass\":" + JSONconverter.getJSON(this.valueClass));
+        
+        result.append("}");
+        return result.toString();
     }
 
 }

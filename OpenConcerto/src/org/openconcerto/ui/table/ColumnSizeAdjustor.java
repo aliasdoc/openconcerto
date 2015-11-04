@@ -24,7 +24,8 @@ import java.util.Collections;
 import java.util.List;
 
 import javax.swing.JTable;
-import javax.swing.SwingUtilities;
+import javax.swing.event.TableColumnModelEvent;
+import javax.swing.event.TableColumnModelListener;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.TableCellRenderer;
@@ -41,12 +42,14 @@ import javax.swing.table.TableModel;
 public class ColumnSizeAdjustor {
 
     private final JTable table;
+    private final PropertyChangeListener propL;
+    // keep a reference to be able to remove our listener
+    private TableColumnModel columnModel;
+    private final TableColumnModelListener columnL;
     // keep a reference to be able to remove our listener
     private TableModel tableModel;
     private final TableModelListener tableL;
     private int origAutoResizeMode;
-    // true if we can create columns ourselves
-    private boolean createColumns;
     private final PropertyChangeListener autoResizeL;
     private final List<Integer> maxWidths;
 
@@ -58,13 +61,35 @@ public class ColumnSizeAdjustor {
         this.autoResizeL = new PropertyChangeListener() {
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
-                if (evt.getPropertyName().equals("autoResizeMode") || evt.getPropertyName().equals("autoCreateColumnsFromModel")) {
+                if (evt.getPropertyName().equals("autoResizeMode")) {
                     Log.get().warning(evt.getPropertyName() + " changed so uninstalling " + ColumnSizeAdjustor.this);
                     uninstall();
                 } else if (evt.getPropertyName().equals("model")) {
-                    uninstall();
-                    install();
+                    removeTableModelListener();
+                    addTableModelListener();
+                    // the columns should be recreated by the JTable so no need to call
+                    // packColumns() since columnL will do it for each column
                 }
+            }
+        };
+        this.propL = new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                removeColModelListener();
+                addColModelListener();
+            }
+        };
+        this.columnL = new TableColumnModelAdapter() {
+            @Override
+            public void columnRemoved(TableColumnModelEvent e) {
+                // nothing to do, if the column is later added again, columnAdded() will discard the
+                // current width.
+            }
+
+            @Override
+            public void columnAdded(TableColumnModelEvent e) {
+                final TableColumnModel model = (TableColumnModel) e.getSource();
+                packColumn(model.getColumn(e.getToIndex()).getModelIndex(), TableModelEvent.UPDATE, 0, -1);
             }
         };
         this.tableL = new TableModelListener() {
@@ -73,34 +98,9 @@ public class ColumnSizeAdjustor {
                 if (e == null || e.getFirstRow() == TableModelEvent.HEADER_ROW) {
                     // structure change, the columns and the data model can be out of sync since the
                     // columns are also created by e
-                    if (ColumnSizeAdjustor.this.createColumns) {
-                        // if we can, update columModel so we can compute new widths immediately,
-                        // avoiding flicker (since otherwise new columns will be resized in an
-                        // invokeLater())
-                        // following lines pasted from JTable.createDefaultColumnsFromModel()
-                        TableModel m = (TableModel) e.getSource();
-                        // Remove any current columns
-                        TableColumnModel cm = table.getColumnModel();
-                        while (cm.getColumnCount() > 0) {
-                            cm.removeColumn(cm.getColumn(0));
-                        }
-                        if (m != null) {
-                            // Create new columns from the data model info
-                            for (int i = 0; i < m.getColumnCount(); i++) {
-                                TableColumn newColumn = new TableColumn(i);
-                                table.addColumn(newColumn);
-                            }
-                        }
-                        packColumns();
-                    } else
-                        // if we don't create the columns ourselves we can't know when they will be,
-                        // thus invokeLater() so that ColumModel and TableModel are coherent again
-                        SwingUtilities.invokeLater(new Runnable() {
-                            @Override
-                            public void run() {
-                                packColumns();
-                            }
-                        });
+                    // the columns have changed so discard all current states (new columns will be
+                    // handled by columnAdded())
+                    ColumnSizeAdjustor.this.maxWidths.clear();
                 } else {
                     // only row change
                     final boolean allCols = e.getColumn() == TableModelEvent.ALL_COLUMNS;
@@ -113,7 +113,7 @@ public class ColumnSizeAdjustor {
                 }
             }
         };
-        this.maxWidths = new ArrayList<Integer>(this.table.getColumnCount());
+        this.maxWidths = new ArrayList<Integer>();
         this.installed = false;
         this.tableModel = null;
         this.install();
@@ -129,26 +129,52 @@ public class ColumnSizeAdjustor {
                 // Disable auto resizing
                 this.origAutoResizeMode = this.table.getAutoResizeMode();
                 this.table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-                // if the table was creating the columns, take over, so as to keep the column model
-                // and the data model in sync
-                this.createColumns = this.table.getAutoCreateColumnsFromModel();
-                if (this.createColumns)
-                    this.table.setAutoCreateColumnsFromModel(false);
-
                 this.table.addPropertyChangeListener(this.autoResizeL);
-                this.tableModel = this.table.getModel();
-                this.tableModel.addTableModelListener(this.tableL);
+                this.table.addPropertyChangeListener("columnModel", this.propL);
+                addColModelListener();
+                addTableModelListener();
                 this.packColumns();
             } else {
-                this.tableModel.removeTableModelListener(this.tableL);
-                this.tableModel = null;
+                removeTableModelListener();
                 this.table.removePropertyChangeListener(this.autoResizeL);
                 if (this.table.getAutoResizeMode() == JTable.AUTO_RESIZE_OFF)
                     this.table.setAutoResizeMode(this.origAutoResizeMode);
-                if (this.createColumns)
-                    this.table.setAutoCreateColumnsFromModel(true);
+                this.table.removePropertyChangeListener("columnModel", this.propL);
+                removeColModelListener();
             }
             this.installed = b;
+        }
+    }
+
+    private void addTableModelListener() {
+        this.removeTableModelListener();
+        // start with a clean state
+        assert this.tableModel == null && this.maxWidths.isEmpty();
+        this.tableModel = this.table.getModel();
+        this.tableModel.addTableModelListener(this.tableL);
+    }
+
+    private void removeTableModelListener() {
+        if (this.tableModel != null) {
+            this.tableModel.removeTableModelListener(this.tableL);
+            this.tableModel = null;
+            this.maxWidths.clear();
+        }
+    }
+
+    private void addColModelListener() {
+        this.removeColModelListener();
+        // start with a clean state
+        assert this.columnModel == null && this.maxWidths.isEmpty();
+        this.columnModel = this.table.getColumnModel();
+        this.columnModel.addColumnModelListener(this.columnL);
+    }
+
+    private void removeColModelListener() {
+        if (this.columnModel != null) {
+            this.columnModel.removeColumnModelListener(this.columnL);
+            this.columnModel = null;
+            this.maxWidths.clear();
         }
     }
 
@@ -161,7 +187,7 @@ public class ColumnSizeAdjustor {
     }
 
     public void packColumns() {
-        final int columnCount = this.table.getColumnCount();
+        final int columnCount = this.tableModel.getColumnCount();
         this.maxWidths.clear();
         this.maxWidths.addAll(Collections.<Integer> nCopies(columnCount, null));
         for (int c = 0; c < columnCount; c++) {
@@ -175,6 +201,10 @@ public class ColumnSizeAdjustor {
         if (type == TableModelEvent.DELETE)
             return;
 
+        final int missing = colModelIndex - this.maxWidths.size() + 1;
+        if (missing > 0) {
+            this.maxWidths.addAll(Collections.<Integer> nCopies(missing, null));
+        }
         final int initialWidth = this.maxWidths.get(colModelIndex) == null ? 0 : this.maxWidths.get(colModelIndex).intValue();
         final Tuple2<TableColumn, Integer> colAndWidth = computeMaxWidth(colModelIndex, initialWidth, firstModelRow, lastModelRow);
         final Integer width = colAndWidth.get1();
@@ -203,7 +233,7 @@ public class ColumnSizeAdjustor {
         if (viewIndex < 0)
             // not displayed
             return new Tuple2<TableColumn, Integer>(null, null);
-        final TableColumn col = this.table.getColumnModel().getColumn(viewIndex);
+        final TableColumn col = this.columnModel.getColumn(viewIndex);
 
         final int rowCount = this.table.getRowCount();
         // TableModelEvent use Integer.MAX_VALUE

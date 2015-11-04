@@ -20,6 +20,7 @@
 		<FIELD name="ID_USER_COMMON" label="Utilisateur" titlelabel="Utilis." />
 		<FIELD name="ID_RIGHT" label="Droit" />
 		<FIELD name="OBJECT" label="Objet" />
+		<FIELD name="user.right.parameters.editor" label="Objet" />		
 		<FIELD name="HAVE_RIGHT" label="Droit accordé" titlelabel="Accordé" />
 	</TABLE>
 </ROOT>

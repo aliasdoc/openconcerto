@@ -23,7 +23,7 @@ import javax.swing.JFrame;
 public class ExportRelationExpertAction extends CreateFrameAbstractAction {
     public ExportRelationExpertAction() {
         super();
-        this.putValue(Action.NAME, "Export relation expert");
+        this.putValue(Action.NAME, "Export des écritures");
     }
 
     @Override

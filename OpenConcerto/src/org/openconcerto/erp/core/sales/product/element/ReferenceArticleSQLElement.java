@@ -89,6 +89,16 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
     @Override
     protected SQLTableModelSourceOnline createTableSource() {
         SQLTableModelSourceOnline source = super.createTableSource();
+        source.init();
+        final SQLTableModelColumn pvHA1Col = source.getColumn(getTable().getField("PRIX_METRIQUE_HA_1"));
+        if (pvHA1Col != null) {
+            pvHA1Col.setRenderer(CURRENCY_RENDERER);
+        }
+
+        final SQLTableModelColumn pvHT1Col = source.getColumn(getTable().getField("PRIX_METRIQUE_VT_1"));
+        if (pvHT1Col != null) {
+            pvHT1Col.setRenderer(CURRENCY_RENDERER);
+        }
 
         final SQLTableModelColumn pvHTCol = source.getColumn(getTable().getField("PV_HT"));
         if (pvHTCol != null) {
@@ -110,6 +120,10 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
         final List<String> l = new ArrayList<String>();
 
         l.add("CODE");
+        SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
+        if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.SHOW_PRODUCT_BAR_CODE, false)) {
+            l.add("CODE_BARRE");
+        }
         l.add("NOM");
         String articleAdvanced = DefaultNXProps.getInstance().getStringProperty("ArticleModeVenteAvance");
         Boolean bArticleAdvanced = Boolean.valueOf(articleAdvanced);
@@ -125,6 +139,7 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
         l.add("PV_TTC");
         l.add("ID_FAMILLE_ARTICLE");
         l.add("ID_FOURNISSEUR");
+        l.add("SKU");
         l.add("ID_STOCK");
         String val = DefaultNXProps.getInstance().getStringProperty("ArticleService");
         Boolean b = Boolean.valueOf(val);
@@ -137,6 +152,10 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
     @Override
     public CollectionMap<String, String> getShowAs() {
         final CollectionMap<String, String> res = new CollectionMap<String, String>();
+        SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
+        if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.SHOW_PRODUCT_BAR_CODE, false)) {
+            res.put(null, "CODE_BARRE");
+        }
         res.put(null, "NOM");
         res.put(null, "ID_FAMILLE_ARTICLE");
         return res;
@@ -234,22 +253,6 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
         float valMetrique2 = (rowVals.getObject("VALEUR_METRIQUE_2") == null) ? 0.0F : rowVals.getFloat("VALEUR_METRIQUE_2");
         float valMetrique3 = (rowVals.getObject("VALEUR_METRIQUE_3") == null) ? 0.0F : rowVals.getFloat("VALEUR_METRIQUE_3");
 
-        // Mode de vente à la piece
-        if (mode == A_LA_PIECE) {
-            if (value == PRIX_HA) {
-                if (rowVals.getObject("PA_HT") != null) {
-                    return (BigDecimal) rowVals.getObject("PA_HT");
-
-                }
-                return BigDecimal.ZERO;
-
-            }
-            if (rowVals.getObject("PV_HT") != null) {
-                return (BigDecimal) rowVals.getObject("PV_HT");
-            }
-            return BigDecimal.ZERO;
-
-        }
         // Mode de vente au metre carré
         if (mode == AU_METRE_CARRE) {
             float surface = valMetrique1 * valMetrique2;
@@ -281,7 +284,18 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
             }
             return metrique1VT.multiply(BigDecimal.valueOf(p), DecimalUtils.HIGH_PRECISION);
         }
-        throw new IllegalStateException("Unknown mode:" + mode);
+
+        // Mode de vente à la piece et autres
+        if (value == PRIX_HA) {
+            if (rowVals.getObject("PA_HT") != null) {
+                return (BigDecimal) rowVals.getObject("PA_HT");
+            }
+            return BigDecimal.ZERO;
+        }
+        if (rowVals.getObject("PV_HT") != null) {
+            return (BigDecimal) rowVals.getObject("PV_HT");
+        }
+        return BigDecimal.ZERO;
 
     }
 
@@ -293,7 +307,6 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
      * @return id de l'article correspondant
      */
     public static int getIdForCNM(SQLRowValues row, boolean createIfNotExist) {
-
         return getIdFor(row, true, createIfNotExist);
     }
 
@@ -309,6 +322,7 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
         return getIdFor(row, false, createIfNotExist);
     }
 
+    @SuppressWarnings("rawtypes")
     private static int getIdFor(SQLRowValues row, boolean includeMetrique, boolean createIfNotExist) {
 
         // On cherche l'article qui lui correspond
@@ -322,11 +336,11 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
             return ((Number) tmp[0]).intValue();
         }
 
-        if (createIfNotExist) {
+        if (createIfNotExist && row.getString("CODE") != null && row.getString("CODE").trim().length() > 0 && row.getString("NOM") != null && row.getString("NOM").trim().length() > 0) {
             SQLRowValues vals = new SQLRowValues(row);
             BigDecimal taux = BigDecimal.ONE.add(new BigDecimal(TaxeCache.getCache().getTauxFromId(row.getForeignID("ID_TAXE")) / 100f));
             vals.put("PV_TTC", vals.getBigDecimal("PV_HT").multiply(taux));
-            SQLRow rowNew;
+            int idArticle;
             try {
 
                 // Liaison avec l'article fournisseur si il existe
@@ -339,19 +353,32 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
                 wMatchingCodeF = wMatchingCodeF.and(new Where(table.getField("NOM"), "=", vals.getString("NOM")));
                 selMatchingCodeF.setWhere(wMatchingCodeF);
 
-                List<SQLRow> l = SQLRowListRSH.execute(selMatchingCodeF);
+                // FIXME utiliser une transaction bloquante sur la table
+                List<SQLRow> l = SQLRowListRSH.execute(selMatchingCodeF, false, false);
                 if (l.size() > 0) {
                     SQLRowValues rowVals = l.get(0).asRowValues();
                     vals.put("ID_FOURNISSEUR", rowVals.getObject("ID_FOURNISSEUR"));
                     vals.put("CODE_BARRE", rowVals.getObject("CODE_BARRE"));
                     vals.put("QTE_ACHAT", rowVals.getObject("QTE_ACHAT"));
-                    rowNew = vals.insert();
-                    rowVals.put("ID_ARTICLE", rowNew.getID());
+                    SQLRow rowNew = vals.insert();
+                    idArticle = rowNew.getID();
+                    rowVals.put("ID_ARTICLE", idArticle);
                     rowVals.commit();
                 } else {
-                    rowNew = vals.insert();
+                    SQLSelect selMatchingCodeArticle = new SQLSelect();
+                    selMatchingCodeArticle.addSelect(tableArt.getKey());
+                    Where wMatchingCode = new Where(tableArt.getField("CODE"), "=", vals.getString("CODE"));
+                    wMatchingCode = wMatchingCode.and(new Where(tableArt.getField("NOM"), "=", vals.getString("NOM")));
+                    selMatchingCodeArticle.setWhere(wMatchingCode);
+                    List<SQLRow> matchingArticles = SQLRowListRSH.execute(selMatchingCodeArticle, false, false);
+                    if (matchingArticles.size() > 0) {
+                        idArticle = matchingArticles.get(0).getID();
+                    } else {
+                        SQLRow rowNew = vals.insert();
+                        idArticle = rowNew.getID();
+                    }
                 }
-                return rowNew.getID();
+                return idArticle;
             } catch (SQLException e) {
                 e.printStackTrace();
             }
@@ -381,6 +408,7 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
         return isArticleMatchExist(row, true);
     }
 
+    @SuppressWarnings("rawtypes")
     private static boolean isArticleMatchExist(SQLRowValues row, boolean includeMetrique) {
         SQLTable sqlTableArticle = ((ComptaPropsConfiguration) Configuration.getInstance()).getRootSociete().getTable("ARTICLE");
         SQLElement eltArticle = Configuration.getInstance().getDirectory().getElement(sqlTableArticle);

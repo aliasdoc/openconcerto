@@ -13,9 +13,10 @@
  
  package org.openconcerto.ui.light;
 
-import java.io.Serializable;
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
 
-public class LightControler implements Serializable {
+public class LightControler implements Transferable {
     /**
      * 
      */
@@ -36,19 +37,31 @@ public class LightControler implements Serializable {
     }
 
     public String getType() {
-        return type;
+        return this.type;
     }
 
     public String getSrc() {
-        return src;
+        return this.src;
     }
 
     public String getDest() {
-        return dest;
+        return this.dest;
     }
 
     @Override
     public String toString() {
-        return super.getClass().getName() + " : " + type + " :" + src + "," + dest;
+        return super.getClass().getName() + " : " + this.type + " :" + this.src + "," + this.dest;
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+        
+        result.append("\"type\":" + JSONconverter.getJSON(this.type) + ",");
+        result.append("\"src\":" + JSONconverter.getJSON(this.src) + ",");
+        result.append("\"dest\":" + JSONconverter.getJSON(this.dest));
+        
+        result.append("}");
+        return result.toString();
     }
 }

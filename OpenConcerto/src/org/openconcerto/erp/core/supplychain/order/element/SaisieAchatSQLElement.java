@@ -113,7 +113,7 @@ public class SaisieAchatSQLElement extends ComptaSQLConfElement {
                 editFrame.setVisible(true);
             }
         }, true, "purchase.clone") {
-            public boolean enabledFor(java.util.List<org.openconcerto.sql.model.SQLRowAccessor> selection) {
+            public boolean enabledFor(java.util.List<org.openconcerto.sql.model.SQLRowValues> selection) {
                 return (selection != null && selection.size() == 1);
             };
         };

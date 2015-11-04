@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
+import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.FileUtils;
 import org.openconcerto.utils.Tuple2;
 
@@ -203,7 +204,11 @@ public class DeclarationTVAPanel extends JPanel {
 
         String file = TemplateNXProps.getInstance().getStringProperty(locationProperty) + File.separator + String.valueOf(Calendar.getInstance().get(Calendar.YEAR));
         File f = new File(file);
-        FileUtils.browseFile(f);
+        try {
+            FileUtils.browseFile(f);
+        } catch (Exception e) {
+            ExceptionHandler.handle("Impossible de trouver le dossier " + f.getAbsolutePath(), e);
+        }
     }
 
     private void setUpDatePeriode() {

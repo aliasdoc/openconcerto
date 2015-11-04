@@ -83,7 +83,7 @@ public class SQLInjector {
 
     public synchronized SQLRowValues createRowValuesFrom(int idSrc) {
         final List<SQLRowAccessor> srcRows = new ArrayList<SQLRowAccessor>(1);
-        srcRows.add(new SQLImmutableRowValues(getSource().getRow(idSrc).asRowValues()));
+        srcRows.add(getSource().getRow(idSrc));
         return createRowValuesFrom(srcRows);
     }
 

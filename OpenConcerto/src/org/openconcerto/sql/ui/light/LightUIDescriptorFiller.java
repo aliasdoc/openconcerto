@@ -13,6 +13,9 @@
  
  package org.openconcerto.sql.ui.light;
 
+import java.util.Calendar;
+import java.util.List;
+
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.PropsConfiguration;
 import org.openconcerto.sql.model.SQLField;
@@ -26,12 +29,9 @@ import org.openconcerto.ui.light.LightUIDescriptor;
 import org.openconcerto.ui.light.LightUIElement;
 import org.openconcerto.ui.light.LightUILine;
 
-import java.util.Calendar;
-import java.util.List;
-
 /**
  * Fill value from default or database
- * */
+ */
 public class LightUIDescriptorFiller {
     private final LightUIDescriptor desc;
 
@@ -80,14 +80,19 @@ public class LightUIDescriptorFiller {
                     SQLTable foreignTable = field.getForeignTable();
                     final List<SQLField> fieldsToFetch = configuration.getDirectory().getElement(foreignTable).getComboRequest().getFields();
 
-                    final Where where = new Where(foreignTable.getKey(), "=", row.getLong(field.getName()));
-                    List<SQLRowValues> fetchedRows = ElementComboBoxUtils.fetchRows(configuration, foreignTable, fieldsToFetch, where);
-                    if (fetchedRows.size() > 1) {
-                        throw new IllegalStateException("multiple rows fetched for id " + id + " on table " + table.getName());
-                    }
-                    for (final SQLRowValues vals : fetchedRows) {
-                        StringWithId s = ElementComboBoxUtils.createItem(configuration, foreignTable, vals, fieldsToFetch);
-                        element.setValue(s.toCondensedString());
+                    if (row.getObject(field.getName()) != null) {
+                        final Where where = new Where(foreignTable.getKey(), "=", row.getLong(field.getName()));
+                        List<SQLRowValues> fetchedRows = ElementComboBoxUtils.fetchRows(configuration, foreignTable, fieldsToFetch, where);
+                        if (fetchedRows.size() > 1) {
+                            throw new IllegalStateException("multiple rows fetched for id " + id + " on table " + table.getName());
+                        }
+
+                        for (final SQLRowValues vals : fetchedRows) {
+                            StringWithId s = ElementComboBoxUtils.createItem(configuration, foreignTable, vals, fieldsToFetch);
+                            element.setValue(s.toCondensedString());
+                        }
+                    } else {
+                        element.setValue(null);
                     }
 
                 } else if (type == LightUIElement.TYPE_CHECKBOX) {

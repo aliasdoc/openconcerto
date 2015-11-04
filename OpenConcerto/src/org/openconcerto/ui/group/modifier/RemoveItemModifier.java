@@ -36,7 +36,7 @@ public class RemoveItemModifier extends ItemGroupModifier {
 
     @Override
     public boolean isCompatibleWith(GroupModifier g) {
-        if (g instanceof ItemGroupModifier) {
+        if (g instanceof AddItemModifier) {
             return !((AddItemModifier) g).getItemId().equals(getItemId());
         }
         return true;

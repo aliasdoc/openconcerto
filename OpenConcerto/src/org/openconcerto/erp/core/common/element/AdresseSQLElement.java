@@ -35,6 +35,7 @@ public class AdresseSQLElement extends ComptaSQLConfElement {
 
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
+        l.add("LIBELLE");
         l.add("RUE");
         l.add("CODE_POSTAL");
         l.add("VILLE");

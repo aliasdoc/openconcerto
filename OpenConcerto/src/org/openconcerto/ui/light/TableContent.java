@@ -13,12 +13,14 @@
  
  package org.openconcerto.ui.light;
 
-import java.io.Serializable;
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class TableContent implements Serializable {
+public class TableContent implements Transferable {
     private static final long serialVersionUID = 3648381615123520834L;
     private List<Row> rows;
     private RowSpec spec;
@@ -28,7 +30,7 @@ public class TableContent implements Serializable {
     }
 
     public List<Row> getRows() {
-        return rows;
+        return this.rows;
     }
 
     public void setRows(List<Row> rows) {
@@ -36,7 +38,7 @@ public class TableContent implements Serializable {
     }
 
     public RowSpec getSpec() {
-        return spec;
+        return this.spec;
     }
 
     public void setSpec(RowSpec spec) {
@@ -45,6 +47,17 @@ public class TableContent implements Serializable {
 
     @Override
     public String toString() {
-        return "TableContent of " + spec.getTableId() + " columns: " + new ArrayList<String>(Arrays.asList(spec.getIds())) + " : " + getRows().size() + " lines";
+        return "TableContent of " + this.spec.getTableId() + " columns: " + new ArrayList<String>(Arrays.asList(this.spec.getIds())) + " : " + getRows().size() + " lines";
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+
+        result.append("\"rows\":" + JSONconverter.getJSON(this.rows) + ",");
+        result.append("\"spec\":" + JSONconverter.getJSON(this.spec));
+
+        result.append("}");
+        return result.toString();
     }
 }

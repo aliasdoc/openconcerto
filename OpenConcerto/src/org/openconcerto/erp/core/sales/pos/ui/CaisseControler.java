@@ -24,6 +24,7 @@ import org.openconcerto.utils.Pair;
 
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 public class CaisseControler implements BarcodeListener {
@@ -245,6 +246,7 @@ public class CaisseControler implements BarcodeListener {
     public void saveAndClearTicket() {
         if (this.t.getTotalInCents() > 0) {
             if (this.getPaidTotal() >= this.getTotal()) {
+                this.t.setCreationCal(Calendar.getInstance());
                 this.t.save();
                 t = new Ticket(Caisse.getID());
                 p1 = new Paiement(Paiement.ESPECES);

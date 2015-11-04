@@ -13,23 +13,38 @@
  
  package org.openconcerto.erp.core.sales.quote.element;
 
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.preferences.DefaultNXProps;
+import org.openconcerto.erp.utils.KDUtils;
+import org.openconcerto.erp.utils.KDUtils.Folder;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.UISQLComponent;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
+import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.FileUtils;
 
+import java.awt.event.ActionEvent;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.AbstractAction;
 import javax.swing.JTextField;
 
 public class DevisItemSQLElement extends ComptaSQLConfElement {
 
     public DevisItemSQLElement() {
         super("DEVIS_ELEMENT", "un element de devis", "éléments de devis");
+
     }
+
 
     protected List<String> getListFields() {
         List<String> l = new ArrayList<String>();

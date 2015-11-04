@@ -141,9 +141,12 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
         vals.put("ID_COMPTE_PCE", null);
         vals.put("COMPTE_NUMERO", null);
         vals.put("COMPTE_NOM", null);
+        if (tableEcriture.contains("NOM_PIECE")) {
+            vals.put("NOM_PIECE", null);
+        }
         vals.put("ID_JOURNAL", null);
         vals.put("JOURNAL_CODE", null);
-        vals.putRowValues("ID_MOUVEMENT").put("NUMERO", null);
+        vals.putRowValues("ID_MOUVEMENT").put("NUMERO", null).putRowValues("ID_PIECE").put("NOM", null);
         vals.put("CREDIT", null);
         vals.put("DEBIT", null);
         vals.put("DATE", null);
@@ -193,6 +196,7 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
 
                     w = w.and(new Where(tableEcriture.getField("ID_COMPTE_PCE"), lCompteSolde).not());
                 }
+                w = w.and(new Where(tableEcriture.getField("NOM"), "NOT LIKE", "Fermeture du compte%"));
 
                 if (!UserManager.getInstance().getCurrentUser().getRights().haveRight(ComptaUserRight.ACCES_NOT_RESCTRICTED_TO_411)) {
                     // TODO Show Restricted acces in UI
@@ -420,11 +424,15 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
 
                         ooLine.put("JOURNAL", rowEcr.getString("JOURNAL_CODE"));
                         ooLine.put("MOUVEMENT", rowEcr.getForeign("ID_MOUVEMENT").getObject("NUMERO"));
+                        ooLine.put("PIECE", rowEcr.getForeign("ID_MOUVEMENT").getForeign("ID_PIECE").getObject("NOM"));
                         ooLine.put("LIBELLE", rowEcr.getObject("NOM"));
                         ooLine.put("CODE_LETTRAGE", rowEcr.getObject("LETTRAGE"));
                         ooLine.put("CODE_POINTAGE", rowEcr.getObject("POINTEE"));
                         ooLine.put("DATE_LETTRAGE", rowEcr.getObject("DATE_LETTRAGE"));
                         ooLine.put("DATE_POINTAGE", rowEcr.getObject("DATE_LETTRAGE"));
+                        if (tableEcriture.contains("NOM_PIECE")) {
+                            ooLine.put("NOM_PIECE", rowEcr.getObject("NOM_PIECE"));
+                        }
 
                         totalCredit += cred;
                         totalDebit += deb;

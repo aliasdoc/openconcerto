@@ -20,25 +20,43 @@ public class QuoteEditGroup extends Group {
 
     public QuoteEditGroup() {
         super("sales.quote");
+
         final Group g = new Group("sales.quote.identifier");
         g.addItem("sales.quote.number");
         g.addItem("sales.quote.date");
         g.addItem("sales.quote.label", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
         g.addItem("sales.quote.saleman");
-        g.addItem("sales.quote.state");
+        g.addItem("sales.quote.validity");
+        g.addItem("sales.quote.state", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
         this.add(g);
 
-        final Group gCustomer = new Group("sales.quote.customer");
+        final Group gCustomer = new Group("sales.quote.customer.info");
         gCustomer.addItem("sales.quote.customer", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
+        // Service
+        // gCustomer.addItem("sales.quote.customer.service", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
+        // gCustomer.addItem("sales.quote.customer.contact");
+        // gCustomer.addItem("sales.quote.customer.tarif");
+        // gCustomer.addItem("sales.quote.customer.discount");
         add(gCustomer);
 
+        final Group bottom = new Group("sales.quote.footer");
         final Group gElements = new Group("sales.quote.items");
-        gElements.addItem("sales.quote.items.list", LayoutHints.DEFAULT_LIST_HINTS);
-        add(gElements);
+        gElements.addItem("sales.quote.items.list", new LayoutHints(true, true, false, true, true, true, true, true));
+        bottom.add(gElements);
 
         final Group gInfos = new Group("sales.quote.info");
-        gInfos.addItem("sales.quote.info.general", LayoutHints.DEFAULT_VERY_LARGE_TEXT_HINTS);
-        add(gInfos);
+        gInfos.addItem("sales.quote.info.general", new LayoutHints(false, false, true, false, true, false, false, true));
+        bottom.add(gInfos);
+
+        final Group gTotal = new Group("sales.quote.total");
+        gTotal.addItem("sales.quote.total.amount");
+        bottom.add(gTotal);
+
+        final Group gOO = new Group("sales.quote.oo");
+        gOO.addItem("panel.oo", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
+        bottom.add(gOO);
+
+        add(bottom);
 
     }
 

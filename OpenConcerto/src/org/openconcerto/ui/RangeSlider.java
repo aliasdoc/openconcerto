@@ -69,7 +69,7 @@ public class RangeSlider extends JPanel implements ComponentListener, MouseListe
 
     private Font font;
     private FontMetrics fm;
-    private static Calendar cal = Calendar.getInstance();
+    private Calendar cal = Calendar.getInstance();
     private int year;
     long COEF = (24 * 3600 * 1000); // nb de millis par jour
 
@@ -105,12 +105,12 @@ public class RangeSlider extends JPanel implements ComponentListener, MouseListe
 
     }
 
-    private static long timeOfFirstDayOfYear(int ayear) {
+    private long timeOfFirstDayOfYear(int ayear) {
         cal.set(ayear, Calendar.JANUARY, 1);
         return cal.getTimeInMillis();
     }
 
-    private static long timeOfLastDayOfYear(int ayear) {
+    private long timeOfLastDayOfYear(int ayear) {
         cal.set(ayear, Calendar.DECEMBER, 31);
         return cal.getTimeInMillis();
     }
@@ -119,7 +119,7 @@ public class RangeSlider extends JPanel implements ComponentListener, MouseListe
      * @param ayear
      * @return
      */
-    private static int getNbDayOfYear(int ayear) {
+    private int getNbDayOfYear(int ayear) {
         cal.set(ayear, Calendar.DECEMBER, 31);
         int nbday = cal.get(Calendar.DAY_OF_YEAR);
         return nbday;

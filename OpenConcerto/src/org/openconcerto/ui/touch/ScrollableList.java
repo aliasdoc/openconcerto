@@ -151,11 +151,11 @@ public class ScrollableList extends JComponent implements MouseListener, MouseMo
         g.drawString(object.toString(), 14, posY + 43);
     }
 
-    private int getIndexFromY(int y) {
+    public int getIndexFromY(int y) {
         return (offsetY + y) / cellHeight;
     }
 
-    private int getYFromIndex(int index) {
+    public int getYFromIndex(int index) {
         return (index * cellHeight) - offsetY;
     }
 
@@ -285,6 +285,11 @@ public class ScrollableList extends JComponent implements MouseListener, MouseMo
             }
 
         }
+    }
+
+    public void setCellHeight(int cellHeight) {
+        this.cellHeight = cellHeight;
+        repaint();
     }
 
     public static void main(String[] args) {

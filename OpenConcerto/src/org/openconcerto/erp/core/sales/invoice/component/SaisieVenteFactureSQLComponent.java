@@ -22,6 +22,7 @@ import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.AbstractArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseType;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.finance.payment.component.ModeDeReglementSQLComponent;
@@ -31,7 +32,7 @@ import org.openconcerto.erp.core.sales.invoice.element.SaisieVenteFactureSQLElem
 import org.openconcerto.erp.core.sales.invoice.report.VenteFactureXmlSheet;
 import org.openconcerto.erp.core.sales.invoice.ui.SaisieVenteFactureItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
-import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.Type;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.generationEcritures.GenerationMvtSaisieVenteFacture;
 import org.openconcerto.erp.model.BanqueModifiedListener;
@@ -39,6 +40,7 @@ import org.openconcerto.erp.model.ISQLCompteSelector;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
 import org.openconcerto.erp.preferences.ModeReglementDefautPrefPanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.ElementSQLObject;
@@ -103,6 +105,7 @@ import org.apache.commons.dbutils.handlers.ArrayListHandler;
 public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     private AbstractArticleItemTable tableFacture;
     private JLabel labelAffaire = new JLabel("Affaire");
+    private final JDate dateSaisie = new JDate(true);
     private DeviseField textPortHT, textAvoirTTC, textRemiseHT, fieldTTC, textTotalAvoir;
     private SQLElement factureElt = Configuration.getInstance().getDirectory().getElement("SAISIE_VENTE_FACTURE");
     private SQLTable tableAvoir = Configuration.getInstance().getDirectory().getElement("AVOIR_CLIENT").getTable();
@@ -110,7 +113,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     private SQLTable tableClient = ((ComptaPropsConfiguration) Configuration.getInstance()).getRootSociete().getTable("CLIENT");
     private final SQLElement client = Configuration.getInstance().getDirectory().getElement(this.tableClient);
     private JUniqueTextField textNumeroUnique;
-    private ElementComboBox comboClient, comboAdresse;
+    private ElementComboBox comboClient;
     private ISQLCompteSelector compteSel;
     private final SQLTable tableNum = this.factureElt.getTable().getBase().getTable("NUMEROTATION_AUTO");
     private JCheckBox checkCompteServiceAuto, checkPrevisionnelle, checkComplement, checkAcompte, checkCT;
@@ -127,12 +130,14 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     private JTextField refClient = new JTextField();
     private SQLRowValues defaultContactRowValues = new SQLRowValues(this.eltContact.getTable());
     protected TotalPanel totalTTC;
+    private final boolean displayDpt;
+    private final ElementComboBox comboDpt = new ElementComboBox();
+
     // Type intervention
     private SQLTextCombo textTypeMission = new SQLTextCombo();
 
     private PropertyChangeListener listenerModeReglDefaut = new PropertyChangeListener() {
         public void propertyChange(PropertyChangeEvent arg0) {
-
             int idCli = SaisieVenteFactureSQLComponent.this.comboClient.getWantedID();
             if (idCli > 1) {
                 SQLRow rowCli = SaisieVenteFactureSQLComponent.this.client.getTable().getRow(idCli);
@@ -148,6 +153,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                     }
                 }
             }
+
             Where w = new Where(SaisieVenteFactureSQLComponent.this.tableAvoir.getField("SOLDE"), "=", Boolean.FALSE);
             if (SaisieVenteFactureSQLComponent.this.comboClient.isEmpty()) {
                 w = w.and(new Where(getTable().getBase().getTable("AVOIR_CLIENT").getField("ID_CLIENT"), "=", -1));
@@ -172,17 +178,36 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     private ElementComboBox comboVerificateur = new ElementComboBox();;
     private SQLTable tableBanque = getTable().getTable(BanqueSQLElement.TABLENAME);
 
-    public SaisieVenteFactureSQLComponent() {
+    private final SQLRowAccessor defaultNum;
+
+    public SaisieVenteFactureSQLComponent(int defaultNum) {
         super(Configuration.getInstance().getDirectory().getElement("SAISIE_VENTE_FACTURE"));
+        this.defaultNum = this.tableNum.getRow(defaultNum);
+        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        this.displayDpt = prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false);
+    }
+
+    public SaisieVenteFactureSQLComponent() {
+        this(2);
 
     }
 
 
     private int previousClient = -1;
+    private ElementComboBox comboNumAuto = null;
 
     public void addViews() {
         this.setLayout(new GridBagLayout());
+
+        if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
+            this.addView(new JCheckBox(), "CREATE_VIRTUAL_STOCK");
+        }
         final GridBagConstraints c = new DefaultGridBagConstraints();
+
+        if (getTable().contains("ID_NUMEROTATION_AUTO")) {
+            this.comboNumAuto = new ElementComboBox();
+            this.addView(this.comboNumAuto, "ID_NUMEROTATION_AUTO");
+        }
 
         this.checkPrevisionnelle = new JCheckBox();
         this.checkComplement = new JCheckBox();
@@ -245,7 +270,6 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         c.gridx++;
         c.weightx = 1;
         c.fill = GridBagConstraints.NONE;
-        final JDate dateSaisie = new JDate(true);
 
         // listener permettant la mise à jour du numéro de facture en fonction de la date
         // sélectionnée
@@ -255,7 +279,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
             public void propertyChange(PropertyChangeEvent evt) {
                 if (!isFilling() && dateSaisie.getValue() != null) {
 
-                    final String nextNumero = NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, dateSaisie.getValue());
+                    final String nextNumero = NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, dateSaisie.getValue(), defaultNum);
 
                     if (textNumeroUnique.getText().trim().length() > 0 && !nextNumero.equalsIgnoreCase(textNumeroUnique.getText())) {
 
@@ -267,9 +291,8 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                     }
 
                     textNumeroUnique.setText(nextNumero);
-
+                    tableFacture.setDateDevise(dateSaisie.getValue());
                 }
-
             }
         });
         this.add(dateSaisie, c);
@@ -320,10 +343,48 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         this.comboClient = new ElementComboBox();
 
         this.add(this.comboClient, c);
+        this.addRequiredSQLObject(this.comboClient, "ID_CLIENT");
+
+        if (this.displayDpt) {
+            c.gridx++;
+            c.gridwidth = 1;
+            final JLabel labelDpt = new JLabel(getLabelFor("ID_CLIENT_DEPARTEMENT"));
+            labelDpt.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelDpt, c);
+
+            c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.weighty = 0;
+            c.fill = GridBagConstraints.NONE;
+            this.add(this.comboDpt, c);
+            DefaultGridBagConstraints.lockMinimumSize(this.comboDpt);
+            addSQLObject(this.comboDpt, "ID_CLIENT_DEPARTEMENT");
+
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                        final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                        comboDpt.getRequest().setWhere(new Where(comboDpt.getRequest().getPrimaryTable().getField("ID_CLIENT"), "=", rowClient.getID()));
+                    } else {
+                        comboDpt.getRequest().setWhere(null);
+                    }
+                }
+            });
+
+        }
 
         if (getTable().contains("ID_ECHEANCIER_CCI")) {
             // Echeancier
-            c.gridx++;
+            c.gridy++;
+            c.gridx = 0;
             c.weightx = 0;
             c.fill = GridBagConstraints.HORIZONTAL;
             this.add(new JLabel(getLabelFor("ID_ECHEANCIER_CCI"), SwingConstants.RIGHT), c);
@@ -360,23 +421,76 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
         this.comboClient.addValueListener(this.changeClientListener);
 
-        this.comboAdresse = new ElementComboBox();
-        this.comboAdresse.setAddIconVisible(false);
-        this.comboAdresse.setListIconVisible(false);
-            JLabel labelAdresse = new JLabel(getLabelFor("ID_ADRESSE"), SwingConstants.RIGHT);
-            c.gridy++;
-            c.gridx = 0;
+        final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+        final org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI addressUI = new org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI();
+
+            addressUI.addToUI(this, c);
+
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                        addressUI
+                                .getComboAdrF()
+                                .getRequest()
+                                .setWhere(
+                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI
+                                .getComboAdrL()
+                                .getRequest()
+                                .setWhere(
+                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                    } else {
+                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                    }
+                }
+            });
+        // Contact
+        this.contact = new ElementComboBox();
+
+        JLabel labelContact = new JLabel(getLabelFor("ID_CONTACT"));
+        c.gridy++;
+        c.gridx = 0;
+        c.gridwidth = 1;
+        c.weightx = 0;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        labelContact.setHorizontalAlignment(SwingConstants.RIGHT);
+        this.add(labelContact, c);
+
+        c.gridx++;
+        c.gridwidth = 1;
+        c.weightx = 1;
+        this.add(this.contact, c);
+        SQLElement contactElement = getElement().getForeignElement("ID_CONTACT");
+        this.contact.init(contactElement, contactElement.getComboRequest(true));
+        this.contact.getRequest().setWhere(Where.FALSE);
+        this.contact.getAddComp().setDefaults(this.defaultContactRowValues);
+        this.addSQLObject(this.contact, "ID_CONTACT");
+        // }
+
+        if (getTable().contains("DATE_LIVRAISON")) {
+            JLabel labelDateLiv = new JLabel("Livraison le");
+            c.gridx++;
             c.gridwidth = 1;
             c.weightx = 0;
             c.fill = GridBagConstraints.HORIZONTAL;
-            labelAdresse.setHorizontalAlignment(SwingConstants.RIGHT);
-            this.add(labelAdresse, c);
+            labelDateLiv.setHorizontalAlignment(SwingConstants.RIGHT);
+            this.add(labelDateLiv, c);
 
             c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
             c.fill = GridBagConstraints.NONE;
-            c.gridwidth = GridBagConstraints.REMAINDER;
-            c.weightx = 1;
-            this.add(this.comboAdresse, c);
+            JDate dateLiv = new JDate();
+            this.add(dateLiv, c);
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.addSQLObject(dateLiv, "DATE_LIVRAISON");
+        }
 
         // Acompte
         this.checkAcompte = new JCheckBox(getLabelFor("ACOMPTE"));
@@ -416,7 +530,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
         // FIXME A checker si utile pour Preventec ou KD
         setCompteServiceVisible(false);
-        // setCompteServiceVisible(!(bServ != null && !bServ.booleanValue()));
+        setCompteServiceVisible(!(bServ != null && !bServ.booleanValue()));
 
 
         final JPanel pAcompte = new JPanel();
@@ -452,7 +566,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
             c.weighty = 0;
             c.gridwidth = 1;
             c.fill = GridBagConstraints.HORIZONTAL;
-            this.add(new JLabel("Tarif à appliquer", SwingConstants.RIGHT), c);
+            this.add(new JLabel(getLabelFor("ID_TARIF"), SwingConstants.RIGHT), c);
             c.gridx++;
             c.gridwidth = GridBagConstraints.REMAINDER;
             c.fill = GridBagConstraints.NONE;
@@ -465,7 +579,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                 @Override
                 public void propertyChange(PropertyChangeEvent evt) {
                     SQLRow selectedRow = boxTarif.getRequest().getPrimaryTable().getRow(boxTarif.getWantedID());
-                    tableFacture.setTarif(selectedRow, false);
+                    tableFacture.setTarif(selectedRow, !isFilling());
                 }
             });
         }
@@ -631,8 +745,6 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         this.addSQLObject(this.textAvoirTTC, "T_AVOIR_TTC");
 
         this.addRequiredSQLObject(dateSaisie, "DATE");
-        this.addRequiredSQLObject(this.comboClient, "ID_CLIENT");
-            this.addSQLObject(this.comboAdresse, "ID_ADRESSE");
         this.addRequiredSQLObject(this.textNumeroUnique, "NUMERO");
         this.addSQLObject(infos, "INFOS");
         this.addSQLObject(this.checkPrevisionnelle, "PREVISIONNELLE");
@@ -660,7 +772,6 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
         DefaultGridBagConstraints.lockMinimumSize(this.comboClient);
         DefaultGridBagConstraints.lockMinimumSize(this.comboCommercial);
-        DefaultGridBagConstraints.lockMinimumSize(this.comboAdresse);
 
         // Listeners
 
@@ -693,34 +804,26 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
             public void propertyChange(PropertyChangeEvent evt) {
 
-                if (SaisieVenteFactureSQLComponent.this.comboClient.getValue() != null) {
+                if (SaisieVenteFactureSQLComponent.this.comboClient.getSelectedRow() != null) {
                     final SQLRow row = SaisieVenteFactureSQLComponent.this.comboClient.getSelectedRow();
                     final int id = row == null ? SQLRow.NONEXISTANT_ID : row.getID();
                         SaisieVenteFactureSQLComponent.this.defaultContactRowValues.putForeignID("ID_CLIENT", row);
+                        if (compteSelService != null && !row.isForeignEmpty("ID_COMPTE_PCE_SERVICE")) {
+                            compteSelService.setValue(row.getForeignID("ID_COMPTE_PCE_SERVICE"));
+                        }
+
+                        if (row.getTable().contains("ID_COMPTE_PCE_PRODUIT") && !row.isForeignEmpty("ID_COMPTE_PCE_PRODUIT")) {
+                            totalTTC.setDefaultCompteProduit(row.getForeign("ID_COMPTE_PCE_PRODUIT"));
+                        }
                     if (row != null) {
                         if (SaisieVenteFactureSQLComponent.this.contact != null) {
                             Where w = new Where(SaisieVenteFactureSQLComponent.this.eltContact.getTable().getField("ID_CLIENT"), "=", SQLRow.NONEXISTANT_ID);
                                 w = w.or(new Where(SaisieVenteFactureSQLComponent.this.eltContact.getTable().getField("ID_CLIENT"), "=", id));
                             SaisieVenteFactureSQLComponent.this.contact.getRequest().setWhere(w);
                         }
-                            if (SaisieVenteFactureSQLComponent.this.comboAdresse != null) {
-
-                                Where w = new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row.getInt("ID_ADRESSE"));
-
-                                w = w.or(new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row.getInt("ID_ADRESSE_L")));
-                                w = w.or(new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row.getInt("ID_ADRESSE_F")));
-
-                                SQLRow rowCli = row;
-
-                                w = w.or(new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getField("ID_CLIENT"), "=", rowCli.getID()));
-
-                                SaisieVenteFactureSQLComponent.this.comboAdresse.getRequest().setWhere(w);
-                            }
 
                     } else {
-                            if (SaisieVenteFactureSQLComponent.this.comboAdresse != null) {
-                                SaisieVenteFactureSQLComponent.this.comboAdresse.getRequest().setWhere(null);
-                            }
+
                     }
                     SaisieVenteFactureSQLComponent.this.previousClient = id;
                 }
@@ -773,11 +876,8 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                         SaisieVenteFactureSQLComponent.this.defaultContactRowValues.putForeignID("ID_CLIENT", row);
                     if (SaisieVenteFactureSQLComponent.this.client.getTable().contains("ID_TARIF")) {
                         SQLRowAccessor foreignRow = row.getForeignRow("ID_TARIF");
-                        if (foreignRow != null && !foreignRow.isUndefined() && (boxTarif.getSelectedRow() == null || boxTarif.getSelectedId() != foreignRow.getID())
-                                && JOptionPane.showConfirmDialog(null, "Appliquer les tarifs associés au client?") == JOptionPane.YES_OPTION) {
+                        if (foreignRow != null && !foreignRow.isUndefined() && (boxTarif.getSelectedRow() == null || boxTarif.getSelectedId() != foreignRow.getID())) {
                             boxTarif.setValue(foreignRow.getID());
-                            // SaisieVenteFactureSQLComponent.this.tableFacture.setTarif(foreignRow,
-                            // true);
                         } else {
                             boxTarif.setValue(foreignRow);
                         }
@@ -918,10 +1018,6 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         if (compteSel != null) {
             this.compteSel.rmValueListener(this.changeCompteListener);
         }
-        if (getMode() != Mode.INSERTION) {
-            if (this.comboClient != null)
-                this.comboClient.rmValueListener(this.listenerModeReglDefaut);
-        }
 
         this.rowSelected = r;
         if (r != null) {
@@ -990,9 +1086,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         }
 
         if (this.comboClient != null) {
-            if (getMode() != Mode.INSERTION) {
-                this.comboClient.addValueListener(this.listenerModeReglDefaut);
-            }
+
             this.comboClient.addValueListener(this.changeClientListener);
         }
         if (this.compteSel != null) {
@@ -1030,14 +1124,16 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                     idSaisieVF = super.insert(order);
                     rowFacture = getTable().getRow(idSaisieVF);
                     // incrémentation du numéro auto
-                    if (NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, rowFacture.getDate("DATE").getTime()).equalsIgnoreCase(this.textNumeroUnique.getText().trim())) {
-                        SQLRowValues rowVals = new SQLRowValues(this.tableNum);
+                    final SQLRow rowNum = comboNumAuto == null ? this.tableNum.getRow(2) : comboNumAuto.getSelectedRow();
+                    if (NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, rowFacture.getDate("DATE").getTime(), rowNum).equalsIgnoreCase(
+                            this.textNumeroUnique.getText().trim())) {
+                        SQLRowValues rowVals = rowNum.createEmptyUpdateRow();
 
                         String labelNumberFor = NumerotationAutoSQLElement.getLabelNumberFor(SaisieVenteFactureSQLElement.class);
-                        int val = this.tableNum.getRow(2).getInt(labelNumberFor);
+                        int val = rowNum.getInt(labelNumberFor);
                         val++;
                         rowVals.put(labelNumberFor, Integer.valueOf(val));
-                        rowVals.update(2);
+                        rowVals.update();
                     }
                 } else {
                     if (JOptionPane.showConfirmDialog(this, "Attention en modifiant cette facture, vous supprimerez les chéques et les échéances associés. Continuer?", "Modification de facture",
@@ -1243,7 +1339,11 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
             SQLRow row = fact.getTable().getRow(idFacture);
             SQLRowValues rowVals = new SQLRowValues(fact.getTable());
             rowVals.put("ID_CLIENT", row.getInt("ID_CLIENT"));
-            rowVals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new Date()));
+            if (getTable().contains("ID_NUMEROTATION_AUTO")) {
+                rowVals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new Date(), row.getForeign("ID_NUMEROTATION_AUTO")));
+            } else {
+                rowVals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new Date()));
+            }
             rowVals.put("NOM", row.getObject("NOM"));
             this.select(rowVals);
         }
@@ -1434,7 +1534,12 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
         // User
         final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
-        vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new Date()));
+        if (getTable().contains("ID_NUMEROTATION_AUTO")) {
+            vals.put("ID_NUMEROTATION_AUTO", this.defaultNum.getID());
+            vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new Date(), vals.getForeign("ID_NUMEROTATION_AUTO")));
+        } else {
+            vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new Date()));
+        }
         int idCompteVenteProduit = rowPrefsCompte.getInt("ID_COMPTE_PCE_VENTE_PRODUIT");
         if (idCompteVenteProduit <= 1) {
             try {
@@ -1448,7 +1553,9 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         if (this.checkCT != null) {
             vals.put("CONTROLE_TECHNIQUE", this.checkCT.isSelected());
         }
-
+        if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
+            vals.put("CREATE_VIRTUAL_STOCK", Boolean.TRUE);
+        }
         int idCompteVenteService = rowPrefsCompte.getInt("ID_COMPTE_PCE_VENTE_SERVICE");
         if (idCompteVenteService <= 1) {
             try {
@@ -1469,7 +1576,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     public void setDefaults() {
         this.resetValue();
 
-        this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new java.util.Date()));
+        this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, new java.util.Date(), defaultNum));
         this.tableFacture.getModel().clearRows();
     }
 
@@ -1539,7 +1646,8 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                 public String getLabel(SQLRowAccessor rowOrigin, SQLRowAccessor rowElt) {
                     return getLibelleStock(rowOrigin, rowElt);
                 }
-            }, row, row.getReferentRows(getTable().getTable("SAISIE_VENTE_FACTURE_ELEMENT")), Type.REAL_DELIVER);
+            }, row, row.getReferentRows(getTable().getTable("SAISIE_VENTE_FACTURE_ELEMENT")),
+                    getTable().contains("CREATE_VIRTUAL_STOCK") && row.getBoolean("CREATE_VIRTUAL_STOCK") ? TypeStockUpdate.REAL_VIRTUAL_DELIVER : TypeStockUpdate.REAL_DELIVER);
 
             stockUpdater.update();
 
@@ -1549,6 +1657,11 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     @Override
     protected RowValuesTable getRowValuesTable() {
         return this.tableFacture.getRowValuesTable();
+    }
+
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor r) {
+        this.tableFacture.setDateDevise(this.dateSaisie.getValue());
     }
 
 }

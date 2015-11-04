@@ -22,7 +22,7 @@ public class User {
 
     public User(int id, String name) {
         this.id = id;
-        this.name = name;
+        this.name = name.trim();
         this.userRights = new UserRights(this.getId());
     }
 
@@ -44,11 +44,11 @@ public class User {
     }
 
     public void setFirstName(String string) {
-        this.firstName = string;
+        this.firstName = string.trim();
     }
 
     public void setNickName(String string) {
-        this.nickName = string;
+        this.nickName = string.trim();
     }
 
     public String getFirstName() {

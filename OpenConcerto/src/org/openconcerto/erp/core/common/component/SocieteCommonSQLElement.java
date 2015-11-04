@@ -13,6 +13,22 @@
  
  package org.openconcerto.erp.core.common.component;
 
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+
+import javax.swing.BorderFactory;
+import javax.swing.JComboBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.ui.PanelFrame;
 import org.openconcerto.erp.panel.ChargementCreationSocietePanel;
@@ -33,23 +49,8 @@ import org.openconcerto.sql.sqlobject.SQLTextCombo;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.TitledSeparator;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.CollectionMap;
-
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-
-import javax.swing.BorderFactory;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
 
 /**
  * Sociétés existantes avec le nom de la base associée
@@ -495,8 +496,7 @@ public class SocieteCommonSQLElement extends ConfSQLElement {
             public void disableEdition() {
                 this.combo.setVisible(false);
                 this.labelPlan.setVisible(false);
-                this.eltExercice.setEditable(false);
-
+                this.eltExercice.setEditable(InteractionMode.DISABLED);
                 this.sepPlan.setVisible(false);
             }
         };

@@ -13,6 +13,7 @@
  
  package org.openconcerto.sql.model;
 
+import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.utils.Tuple2;
 
 import java.util.List;
@@ -22,7 +23,7 @@ public class SQLSelectJoin implements SQLItem {
     private static final Tuple2<FieldRef, TableRef> NULL_TUPLE = new Tuple2<FieldRef, TableRef>(null, null);
 
     // tries to parse t.ID_LOCAL = l.ID
-    static private Tuple2<FieldRef, TableRef> parse(final Where w) {
+    static Tuple2<FieldRef, TableRef> parse(final Where w) {
         final List<FieldRef> fields = w.getFields();
         if (fields.size() != 2)
             return NULL_TUPLE;
@@ -37,7 +38,7 @@ public class SQLSelectJoin implements SQLItem {
         } else {
             return NULL_TUPLE;
         }
-        if (!ff.getField().getTable().getForeignKeys().contains(ff.getField()))
+        if (!pk.getTableRef().getTable().equals(ff.getField().getForeignTable()))
             return NULL_TUPLE;
 
         return Tuple2.create(ff, pk.getTableRef());
@@ -49,37 +50,32 @@ public class SQLSelectJoin implements SQLItem {
     private final TableRef t;
     /** the where, e.g. rec.ID_LOCAL = circuit.ID_LOCAL */
     private final Where joinW;
-    /** the foreign field, e.g. obs.ID_ARTICLE or recept.ID_OBSERVATION */
-    private final FieldRef f;
-    /** the foreign table, e.g. ARTICLE art or OBSERVATION obs */
-    private final TableRef foreignTable;
+    /** the optional step from an existing table in the select to the joined table */
+    private final Step step;
+    /** the existing table if step isn't null */
+    private final TableRef existingTable;
+    /** An additional where */
     private Where where;
 
-    SQLSelectJoin(final SQLSelect parent, String joinType, TableRef t, FieldRef ff, TableRef foreignTable) {
-        this(parent, joinType, t, new Where(ff, "=", foreignTable.getKey()), ff, foreignTable);
+    SQLSelectJoin(final SQLSelect parent, final String joinType, final TableRef existingTable, final Step s, final TableRef joinedTable) {
+        this(parent, joinType, joinedTable, s.getFrom().getDBSystemRoot().getGraph().getWhereClause(existingTable, joinedTable, s), s, existingTable);
     }
 
-    SQLSelectJoin(final SQLSelect parent, String joinType, TableRef t, Where w) {
-        this(parent, joinType, t, w, parse(w));
-    }
-
-    private SQLSelectJoin(final SQLSelect parent, String joinType, TableRef t, Where w, final Tuple2<FieldRef, TableRef> info) {
-        this(parent, joinType, t, w, info.get0(), info.get1());
-    }
-
-    private SQLSelectJoin(final SQLSelect parent, String joinType, TableRef t, Where w, final FieldRef ff, final TableRef foreignTable) {
+    SQLSelectJoin(final SQLSelect parent, final String joinType, final TableRef joinedTable, final Where w, final Step step, final TableRef existingTable) {
         super();
         this.parent = parent;
         this.joinType = joinType;
         this.joinW = w;
+        this.t = joinedTable;
 
-        this.f = ff;
-        this.t = t;
-        this.foreignTable = foreignTable;
+        this.step = step;
+        this.existingTable = existingTable;
+
         this.where = null;
 
         // checked by SQLSelect or provided by parse(Where)
-        assert ff == null || ff.getField().getDBSystemRoot().getGraph().getForeignTable(ff.getField()) == foreignTable.getTable();
+        assert (step == null) == (existingTable == null);
+        assert step == null || step.getFrom() == existingTable.getTable() && step.getTo() == joinedTable.getTable();
     }
 
     /**
@@ -107,16 +103,21 @@ public class SQLSelectJoin implements SQLItem {
     }
 
     /**
-     * The foreign field if the join is a simple t1.fk1 = t2.pk.
+     * The step if the join is a simple t1.fk1 = t2.pk.
      * 
-     * @return the foreign field or <code>null</code>, e.g. t1.fk1.
+     * @return the step or <code>null</code>, e.g. t1.fk1.
      */
-    public final FieldRef getForeignField() {
-        return this.f;
+    public final Step getStep() {
+        return this.step;
     }
 
-    public final boolean hasForeignField() {
-        return this.f != null;
+    /**
+     * The alias of the source of the step.
+     * 
+     * @return the source of the {@link #getStep()}, <code>null</code> if there's no step.
+     */
+    public final TableRef getExistingTable() {
+        return this.existingTable;
     }
 
     public final String getAlias() {
@@ -125,16 +126,6 @@ public class SQLSelectJoin implements SQLItem {
 
     public final TableRef getJoinedTable() {
         return this.t;
-    }
-
-    /**
-     * If there's a foreign field, this returns its foreign table.
-     * 
-     * @return <code>null</code> if {@link #getForeignField()} is <code>null</code>, otherwise its
-     *         target, e.g. t2.
-     */
-    public final TableRef getForeignTable() {
-        return this.foreignTable;
     }
 
     @Override

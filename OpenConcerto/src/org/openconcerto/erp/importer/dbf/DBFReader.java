@@ -149,6 +149,9 @@ public class DBFReader {
 
         try {
             stream.readFully(nextRecord);
+            while (nextRecord[0] == 0X2A) {
+                stream.readFully(nextRecord);
+            }
         } catch (EOFException eofexception) {
             nextRecord = null;
         }

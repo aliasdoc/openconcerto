@@ -84,7 +84,7 @@ public abstract class RowValuesMultiLineEditTable extends RowValuesTable {
         } else {
             throw new IllegalArgumentException("La table " + rowVals.getTable().getName() + " n'est pas référencée par la table " + this.getRowValuesTableModel().getSQLElement().getTable());
         }
-        insertFrom(this.foreignField, rowVals);
+        insertFrom(rowVals);
     }
 
     public SQLRowValues getRowValuesRoot() {

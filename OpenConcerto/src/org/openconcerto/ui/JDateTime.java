@@ -19,6 +19,7 @@ import org.openconcerto.utils.checks.ValidState;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
@@ -62,14 +63,14 @@ public final class JDateTime extends JPanel implements ValueWrapper<Date> {
      * 
      * @param fillWithCurrentDate <code>true</code> if this should be filled with the current date,
      *        else empty.
-     * @param fillWithCurrentTime <code>true</code> if this should be filled with the current hour,
+     * @param fillWithCurrentHour <code>true</code> if this should be filled with the current hour,
      *        else empty.
      */
-    public JDateTime(final boolean fillWithCurrentDate, final boolean fillWithCurrentTime) {
+    public JDateTime(final boolean fillWithCurrentDate, final boolean fillWithCurrentHour) {
         super();
         this.setOpaque(false);
         this.date = new JDate(fillWithCurrentDate);
-        this.time = new JTime(fillWithCurrentTime);
+        this.time = new JTime(fillWithCurrentHour);
         this.supp = new PropertyChangeSupport(this);
 
         final PropertyChangeListener l = new PropertyChangeListener() {
@@ -83,14 +84,15 @@ public final class JDateTime extends JPanel implements ValueWrapper<Date> {
 
         this.setLayout(new GridBagLayout());
         final GridBagConstraints c = new GridBagConstraints();
+        c.anchor = GridBagConstraints.WEST;
         c.gridx = 0;
         c.gridy = 0;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.weightx = 0.8;
+        c.fill = GridBagConstraints.NONE;
         c.weighty = 0;
         this.add(this.date, c);
         c.gridx++;
-        c.weightx = 0.2;
+        c.weightx = 1;
+        c.insets = new Insets(0, 4, 0, 0);
         this.add(this.time, c);
 
         this.resetValue();

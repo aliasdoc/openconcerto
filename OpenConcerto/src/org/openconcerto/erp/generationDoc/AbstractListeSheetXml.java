@@ -13,6 +13,8 @@
  
  package org.openconcerto.erp.generationDoc;
 
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.jopendocument.link.Component;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.utils.StringUtils;
 
@@ -67,7 +69,13 @@ public abstract class AbstractListeSheetXml extends SheetXml {
                     if (styleAllSheetValues != null) {
                         styleAllSheetValues.clear();
                     }
-
+                    if (isRefreshFormulasRequired()) {
+                        final Component doc = ComptaPropsConfiguration.getOOConnexion().loadDocument(generatedOpenDocumentFile, true);
+                        // Remove from code, better use the pref in LO
+                        // doc.refreshFormulas();
+                        doc.save();
+                        doc.close();
+                    }
                     return AbstractListeSheetXml.this;
                 } catch (Exception e) {
                     DEFAULT_HANDLER.uncaughtException(null, e);

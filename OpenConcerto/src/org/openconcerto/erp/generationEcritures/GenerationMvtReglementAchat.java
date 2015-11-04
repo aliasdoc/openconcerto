@@ -45,8 +45,9 @@ public final class GenerationMvtReglementAchat extends GenerationEcritures imple
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
     private int idPere = 1; // Id du mouvement pere
 
-    public GenerationMvtReglementAchat(int idSaisieAchat, int idMvt) {
-        this.idSaisieAchat = idSaisieAchat;
+    public GenerationMvtReglementAchat(SQLRow rowAchat, int idMvt) {
+        setRowAnalytiqueSource(rowAchat);
+        this.idSaisieAchat = rowAchat.getID();
         this.idPere = idMvt;
         new Thread(GenerationMvtReglementAchat.this).start();
     }

@@ -37,6 +37,7 @@ import org.openconcerto.sql.view.list.SQLTableModelColumnPath;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.table.PercentTableCellRenderer;
+import org.openconcerto.ui.table.TimestampTableCellRenderer;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
@@ -44,13 +45,17 @@ import org.openconcerto.utils.SwingWorker2;
 import org.openconcerto.utils.Tuple2;
 import org.openconcerto.utils.cc.ITransformer;
 
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -176,7 +181,29 @@ public class ListeDesDevisPanel extends JPanel {
     }
 
     protected void setRenderer(SQLTableModelSourceOnline source) {
+        final SQLTableModelColumn column = source.getColumn(this.eltDevis.getTable().getField("DUNNING_DATE"));
+        if (column != null) {
+            column.setRenderer(new TimestampTableCellRenderer(false, false) {
 
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    if (value != null) {
+                        Calendar calToDay = Calendar.getInstance();
+                        Date d = (Date) value;
+                        Calendar cal = Calendar.getInstance();
+                        cal.setTime(d);
+                        if (cal.get(Calendar.DAY_OF_MONTH) == calToDay.get(Calendar.DAY_OF_MONTH) && cal.get(Calendar.MONTH) == calToDay.get(Calendar.MONTH)
+                                && cal.get(Calendar.YEAR) == calToDay.get(Calendar.YEAR)) {
+                            c.setBackground(Color.green);
+                        } else if (cal.before(calToDay)) {
+                            c.setBackground(Color.red);
+                        }
+                    }
+                    return c;
+                }
+            });
+        }
     }
 
     private BigDecimal getAvancementCommande(SQLRowAccessor r) {
@@ -353,8 +380,7 @@ public class ListeDesDevisPanel extends JPanel {
                 }
             }, IListTotalPanel.Type.MOYENNE_MARGE));
             total = new IListTotalPanel(pane.getListe(), fields, null, "Total Global");
-        } else if (this.eltDevis.getTable().contains("T_HA")) {
-
+        } else if (this.eltDevis.getTable().getFieldsName().contains("T_HA") && pane.getListe().getSource().getColumns(this.eltDevis.getTable().getField("T_HA")) != null) {
             total = new IListTotalPanel(pane.getListe(), Arrays.asList(this.eltDevis.getTable().getField("T_HA"), this.eltDevis.getTable().getField("T_HT")));
         } else {
             total = new IListTotalPanel(pane.getListe(), Arrays.asList(this.eltDevis.getTable().getField("T_HT")));

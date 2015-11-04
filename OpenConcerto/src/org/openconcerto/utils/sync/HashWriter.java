@@ -19,10 +19,11 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.security.MessageDigest;
 
 public class HashWriter {
-    public static int blockSize = 1024;
+    public static final int BLOCK_SIZE = 1024;
     private File in;
 
     public HashWriter(File inputFile) {
@@ -30,19 +31,18 @@ public class HashWriter {
     }
 
     public void saveHash(File outputFile) {
+        BufferedInputStream fb = null;
         try {
             if (!outputFile.exists()) {
                 new File(outputFile.getParent()).mkdirs();
             }
-            DataOutputStream bOut = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(outputFile)));
+            final DataOutputStream bOut = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(outputFile)));
             bOut.writeInt((int) this.in.length());
-            System.out.println("FileSize:" + this.in.length());
-            MessageDigest hashSum = MessageDigest.getInstance("SHA-256");
-            MessageDigest md5 = MessageDigest.getInstance("MD5");
-            BufferedInputStream fb = new BufferedInputStream(new FileInputStream(in));
-            RollingChecksum32 r32 = new RollingChecksum32();
-            byte[] buffer = new byte[blockSize];
-
+            final MessageDigest hashSum = MessageDigest.getInstance("SHA-256");
+            final MessageDigest md5 = MessageDigest.getInstance("MD5");
+            fb = new BufferedInputStream(new FileInputStream(in));
+            final RollingChecksum32 r32 = new RollingChecksum32();
+            final byte[] buffer = new byte[BLOCK_SIZE];
             int readSize = fb.read(buffer);
             while (readSize > 0) {
                 // Update
@@ -52,15 +52,10 @@ public class HashWriter {
                 hashSum.update(buffer, 0, readSize);
                 // read
                 readSize = fb.read(buffer);
-                // System.out.print(r32.getValue() + " : ");
                 final byte[] engineDigest = md5.digest();
-
-                // System.out.println(Base64.encodeBytes(engineDigest));
                 bOut.writeInt(r32.getValue());
                 bOut.write(engineDigest);
-
             }
-
             byte[] fileHash = new byte[hashSum.getDigestLength()];
             fileHash = hashSum.digest();
             bOut.write(fileHash);
@@ -68,15 +63,21 @@ public class HashWriter {
 
         } catch (Exception e) {
             e.printStackTrace();
-
+        } finally {
+            if (fb != null) {
+                try {
+                    fb.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
     public static byte[] getHash(File f) throws Exception {
-        MessageDigest hashSum = MessageDigest.getInstance("SHA-256");
-
+        final MessageDigest hashSum = MessageDigest.getInstance("SHA-256");
         final BufferedInputStream fb = new BufferedInputStream(new FileInputStream(f));
-        byte[] buffer = new byte[blockSize];
+        final byte[] buffer = new byte[BLOCK_SIZE];
         int readSize = fb.read(buffer);
         while (readSize > 0) {
             // Update

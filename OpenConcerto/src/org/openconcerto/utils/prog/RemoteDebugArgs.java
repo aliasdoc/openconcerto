@@ -28,16 +28,25 @@ public class RemoteDebugArgs {
      * @param args not used.
      */
     public static void main(String[] args) {
-        final String debugArgs = Boolean.getBoolean("remoteDebug") ? getArgs() : "";
+        final String debugArgs = Boolean.getBoolean("remoteDebug") ? getArgs(System.getProperty("remoteDebugAddr")) : "";
 
         // do not output newline to avoid problem on cygwin (\r)
         System.out.print(debugArgs);
     }
 
-    public static String getArgs() {
-        final Date now = new Date();
-        final String time = DBG_TIME_FORMAT.format(now);
-        final String debugPort = time.substring(0, time.length() - 1);
-        return "-agentlib:jdwp=transport=dt_socket,address=" + debugPort + ",server=y,suspend=n";
+    public static String getArgs(String prop) {
+        final String debugAddr;
+        if (prop == null || prop.trim().isEmpty()) {
+            final Date now = new Date();
+            String time = DBG_TIME_FORMAT.format(now);
+            if (time.startsWith("00"))
+                time = "24" + time.substring(2);
+            else if (time.startsWith("01"))
+                time = "25" + time.substring(2);
+            debugAddr = time.substring(0, time.length() - 1);
+        } else {
+            debugAddr = prop.trim();
+        }
+        return "-agentlib:jdwp=transport=dt_socket,address=" + debugAddr + ",server=y,suspend=n";
     }
 }

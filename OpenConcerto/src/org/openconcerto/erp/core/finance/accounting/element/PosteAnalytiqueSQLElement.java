@@ -16,6 +16,7 @@
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 
 import java.awt.GridBagConstraints;
@@ -23,6 +24,7 @@ import java.awt.GridBagLayout;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
 
@@ -34,6 +36,7 @@ public class PosteAnalytiqueSQLElement extends ComptaSQLConfElement {
 
     protected List<String> getListFields() {
         final List<String> list = new ArrayList<String>(2);
+        list.add("DEFAULT");
         list.add("NOM");
         list.add("ID_AXE_ANALYTIQUE");
         return list;
@@ -59,6 +62,24 @@ public class PosteAnalytiqueSQLElement extends ComptaSQLConfElement {
                 c.weightx = 1;
                 this.add(obj, c);
                 this.addRequiredSQLObject(obj, "NOM");
+
+                c.gridx++;
+                c.weightx = 0;
+                this.add(new JLabel(getLabelFor("DEFAULT")), c);
+                c.gridx++;
+
+                JCheckBox box = new JCheckBox("DEFAULT");
+                c.weightx = 1;
+                this.add(box, c);
+                this.addRequiredSQLObject(box, "DEFAULT");
+
+                c.gridx = 0;
+                c.gridy++;
+                this.add(new JLabel(getLabelFor("ID_AXE_ANALYTIQUE")), c);
+                c.gridx++;
+                ElementComboBox boxAxe = new ElementComboBox();
+                this.add(boxAxe, c);
+                this.addView(boxAxe, "ID_AXE_ANALYTIQUE", REQ);
             }
         };
     }

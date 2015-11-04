@@ -13,14 +13,14 @@
  
  package org.openconcerto.erp.injector;
 
-import java.math.BigDecimal;
-import java.util.Collection;
-
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
+
+import java.math.BigDecimal;
+import java.util.Collection;
 
 public class CommandeBlSQLInjector extends SQLInjector {
     public CommandeBlSQLInjector(final DBRoot root) {
@@ -31,6 +31,26 @@ public class CommandeBlSQLInjector extends SQLInjector {
         map(tableCmd.getField("ID"), tableBl.getField("ID_COMMANDE_CLIENT"));
         if (tableCmd.getTable().contains("ID_POLE_PRODUIT") && tableBl.contains("ID_POLE_PRODUIT")) {
             map(tableCmd.getField("ID_POLE_PRODUIT"), tableBl.getField("ID_POLE_PRODUIT"));
+        }
+        if (getSource().getTable().contains("ID_CONTACT")) {
+            map(getSource().getField("ID_CONTACT"), getDestination().getField("ID_CONTACT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
+        }
+
+        if (tableBl.contains("CREATE_VIRTUAL_STOCK")) {
+            mapDefaultValues(tableBl.getField("CREATE_VIRTUAL_STOCK"), Boolean.FALSE);
+        }
+
+        if (tableBl.contains("ID_TAXE_PORT")) {
+            map(tableCmd.getField("ID_TAXE_PORT"), tableBl.getField("ID_TAXE_PORT"));
+        }
+        if (tableBl.contains("PORT_HT")) {
+            map(tableCmd.getField("PORT_HT"), tableBl.getField("PORT_HT"));
+        }
+        if (tableBl.contains("REMISE_HT")) {
+            map(tableCmd.getField("REMISE_HT"), tableBl.getField("REMISE_HT"));
         }
     }
 

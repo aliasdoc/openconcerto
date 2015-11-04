@@ -21,6 +21,7 @@ import org.openconcerto.ql.LabelCreator;
 import org.openconcerto.ql.QLPrinter;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.request.ListSQLRequest;
@@ -34,6 +35,7 @@ import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.AbstractAction;
 
@@ -86,11 +88,16 @@ public class ClientNormalSQLElement extends ComptaSQLConfElement {
         getRowActions().add(action);
     }
 
-    protected void sendMail(List<SQLRowAccessor> l) {
+    protected void sendMail(List<SQLRowValues> l) {
 
         String mail = "";
             for (SQLRowAccessor rowCli : l) {
                 String string = rowCli.getString("MAIL");
+
+                if (string == null) {
+                    // Refetch au cas où la colonne n'est pas présente dans la liste
+                    string = rowCli.asRow().getString("MAIL");
+                }
                 if (string != null && string.trim().length() > 0) {
                     mail += string + ";";
                 }
@@ -137,6 +144,7 @@ public class ClientNormalSQLElement extends ComptaSQLConfElement {
 
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
+        l.add("GROUPE");
         l.add("NOM");
         if (getTable().getFieldsName().contains("LOCALISATION")) {
             l.add("LOCALISATION");
@@ -149,7 +157,13 @@ public class ClientNormalSQLElement extends ComptaSQLConfElement {
     protected List<String> getPrivateFields() {
         final List<String> l = new ArrayList<String>();
         l.add("ID_ADRESSE");
-        l.add("ID_ADRESSE_L");
+        Set<SQLField> fields = getTable().getForeignKeys("ADRESSE");
+        for (SQLField sqlField : fields) {
+            if (sqlField.getName().startsWith("ID_ADRESSE_L")) {
+
+                l.add(sqlField.getName());
+            }
+        }
         l.add("ID_ADRESSE_F");
         l.add("ID_MODE_REGLEMENT");
 

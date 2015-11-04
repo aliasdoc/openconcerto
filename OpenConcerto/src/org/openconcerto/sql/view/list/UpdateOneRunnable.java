@@ -14,8 +14,7 @@
  package org.openconcerto.sql.view.list;
 
 import org.openconcerto.sql.model.SQLTableEvent;
-import org.openconcerto.sql.model.graph.Path;
-import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.Value;
 
 import java.util.Collection;
 
@@ -30,19 +29,10 @@ final class UpdateOneRunnable extends AbstractUpdateOneRunnable {
     @Override
     public void run() {
         if (this.getTable() == this.getReq().getParent().getPrimaryTable()) {
-            final ListSQLLine line = this.getReq().get(this.getID());
-            // handle deleted rows (i.e. line == null) by using this.getID(), must be done before
-            // finding lines
-            if (line == null)
-                this.getReq().fireLineChanged(this.getID(), line, null);
-            final ListMap<Path, ListSQLLine> affectedPaths = this.getAffectedPaths();
-            // the line should be in the list (since SQLTableModelLinesSource.get()
-            // returned it), so if not yet part of the list add it.
-            if (line != null && affectedPaths.getNonNull(Path.get(getTable())).isEmpty())
-                line.clearCache();
-            // then, update affectedPaths (it's not because the changed table is the primary
-            // table, that it's not also referenced, e.g. CIRCUIT.ORIGINE)
-            updateLines(affectedPaths);
+            final Value<ListSQLLine> val = this.getReq().get(this.getID());
+            if (!val.hasValue())
+                return;
+            updateLines(this.getAffectedPaths(), val);
         } else {
             // eg CONTACT[3] has changed
             updateLines(this.getAffectedPaths());

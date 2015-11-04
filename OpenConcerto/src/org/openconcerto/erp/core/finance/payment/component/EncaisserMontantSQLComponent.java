@@ -37,7 +37,7 @@ import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.RowValuesTableModel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
-import org.openconcerto.ui.TitledSeparator;
+import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.warning.JLabelWarning;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.GestionDevise;
@@ -65,7 +65,7 @@ public class EncaisserMontantSQLComponent extends BaseSQLComponent {
     private EncaisseMontantTable table = new EncaisseMontantTable();
 
     private JTextField nom = new JTextField();
-    private DeviseField montant = new DeviseField(6);
+    private DeviseField montant = new DeviseField(10);
     private JLabel labelWarning = new JLabelWarning("Le montant est trop élevé!");
 
     private JDate date;
@@ -82,7 +82,7 @@ public class EncaisserMontantSQLComponent extends BaseSQLComponent {
 
         c.gridwidth = GridBagConstraints.REMAINDER;
         c.weightx = 1;
-        this.add(new TitledSeparator("Echéances"), c);
+        this.add(new JLabelBold("Echéances"), c);
         c.gridy++;
         c.weighty = 1;
         c.fill = GridBagConstraints.BOTH;
@@ -98,11 +98,11 @@ public class EncaisserMontantSQLComponent extends BaseSQLComponent {
         c.gridx = 0;
         c.gridy++;
         c.weightx = 0;
-        this.add(new JLabel(getLabelFor("ID_CLIENT")), c);
+        this.add(new JLabel(getLabelFor("ID_CLIENT"), SwingConstants.RIGHT), c);
 
         c.gridx++;
         c.weightx = 1;
-        c.gridwidth = 3;
+        c.gridwidth = 1;
         this.add(comboClient, c);
         c.gridwidth = 1;
 
@@ -113,14 +113,14 @@ public class EncaisserMontantSQLComponent extends BaseSQLComponent {
         c.gridwidth = 1;
         this.add(new JLabel("Date"), c);
         // c.gridx++;
-        c.weightx = 1;
+        c.weightx = 0;
         this.add(this.date, c);
 
         this.addSQLObject(comboClient, "ID_CLIENT");
         // Nom
         c.gridy++;
         c.gridx = 0;
-        final JLabel label = new JLabel(getLabelFor("NOM"));
+        final JLabel label = new JLabel(getLabelFor("NOM"), SwingConstants.RIGHT);
         c.weightx = 0;
         this.add(label, c);
         c.gridx++;
@@ -133,10 +133,10 @@ public class EncaisserMontantSQLComponent extends BaseSQLComponent {
         c.gridy++;
         c.gridx = 0;
         c.weightx = 0;
-        this.add(new JLabel("Montant encaissé"), c);
+        this.add(new JLabel("Montant encaissé", SwingConstants.RIGHT), c);
 
         c.gridx++;
-        c.gridwidth = 1;
+        c.gridwidth = 3;
         c.fill = GridBagConstraints.NONE;
         this.add(this.montant, c);
 
@@ -154,7 +154,7 @@ public class EncaisserMontantSQLComponent extends BaseSQLComponent {
         c.gridx = 0;
         c.gridy++;
         c.weightx = 1;
-        final TitledSeparator sep = new TitledSeparator("Mode de règlement");
+        final JLabelBold sep = new JLabelBold("Mode de règlement");
         c.insets = new Insets(10, 2, 1, 2);
         this.add(sep, c);
         c.insets = new Insets(2, 2, 1, 2);

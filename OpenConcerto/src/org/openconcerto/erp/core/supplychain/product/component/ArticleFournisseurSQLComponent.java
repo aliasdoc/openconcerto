@@ -17,6 +17,7 @@ import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.ui.CodeFournisseurItemTable;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
+import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.sales.product.element.UniteVenteArticleSQLElement;
@@ -53,6 +54,7 @@ import java.beans.PropertyChangeListener;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
+import java.util.Date;
 import java.util.List;
 
 import javax.swing.JButton;
@@ -467,10 +469,9 @@ public class ArticleFournisseurSQLComponent extends BaseSQLComponent {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setOpaque(false);
         GridBagConstraints c = new DefaultGridBagConstraints();
-        DefaultProps props = DefaultNXProps.getInstance();
-        String stockMin = props.getStringProperty("ArticleStockMin");
-        Boolean bStockMin = !stockMin.equalsIgnoreCase("false");
-        boolean gestionStockMin = (bStockMin == null || bStockMin.booleanValue());
+
+        SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
+        boolean gestionStockMin = prefs.getBoolean("ArticleStockMin", true);
         c.gridx = 0;
         c.gridy++;
 
@@ -712,9 +713,11 @@ public class ArticleFournisseurSQLComponent extends BaseSQLComponent {
                     if (ha == null) {
                         ha = BigDecimal.ZERO;
                     }
-                    final BigDecimal taux = (BigDecimal) boxDevise.getSelectedRow().getObject("TAUX");
-                    textPAHT.setText(taux.multiply(ha, DecimalUtils.HIGH_PRECISION).setScale(getTable().getField("PA_DEVISE").getType().getDecimalDigits(), RoundingMode.HALF_UP).toString());
 
+                    final String devCode = boxDevise.getSelectedRow().getString("CODE");
+                    CurrencyConverter c = new CurrencyConverter();
+                    textPAHT.setText(c.convert(ha, devCode, c.getCompanyCurrencyCode(), new Date(), true).setScale(getTable().getField("PA_DEVISE").getType().getDecimalDigits(), RoundingMode.HALF_UP)
+                            .toString());
                 }
             }
         });

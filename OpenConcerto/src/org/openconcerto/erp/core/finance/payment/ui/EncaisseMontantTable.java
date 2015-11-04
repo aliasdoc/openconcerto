@@ -17,7 +17,6 @@ import org.openconcerto.erp.core.common.ui.DeviseCellEditor;
 import org.openconcerto.erp.core.common.ui.DeviseNiceTableCellRenderer;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.view.list.KeyTableCellRenderer;
 import org.openconcerto.sql.view.list.RowValuesTable;
 import org.openconcerto.sql.view.list.RowValuesTableModel;
@@ -42,7 +41,7 @@ public class EncaisseMontantTable extends JPanel {
     protected RowValuesTable table;
     protected SQLTableElement montant;
     protected RowValuesTableModel model;
-    SQLRowValues defaultRowVals;
+
     SQLTableElement montantRegle;
     SQLTableElement montantARegler;
 
@@ -143,7 +142,4 @@ public class EncaisseMontantTable extends JPanel {
         this.table.repaint();
     }
 
-    public SQLRowValues getDefaultRowValues() {
-        return this.defaultRowVals;
-    }
 }

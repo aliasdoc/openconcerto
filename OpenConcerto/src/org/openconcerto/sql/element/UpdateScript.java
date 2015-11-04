@@ -13,6 +13,7 @@
  
  package org.openconcerto.sql.element;
 
+import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
@@ -52,11 +53,12 @@ public final class UpdateScript {
         return this.getClass().getSimpleName() + " " + this.getUpdateRow() + " toArchive: " + this.toArchive;
     }
 
-    public final void exec() throws SQLException {
-        this.getUpdateRow().commit();
+    public final SQLRow exec() throws SQLException {
+        final SQLRow res = this.getUpdateRow().commit();
         for (final SQLElement elem : this.toArchive.keySet()) {
             for (final SQLRowAccessor v : this.toArchive.getNonNull(elem))
                 elem.archive(v.getID());
         }
+        return res;
     }
 }

@@ -13,36 +13,6 @@
  
  package org.openconcerto.sql;
 
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.element.SQLElementDirectory;
-import org.openconcerto.sql.element.SQLElementDirectory.DirectoryListener;
-import org.openconcerto.sql.model.DBRoot;
-import org.openconcerto.sql.model.DBStructureItem;
-import org.openconcerto.sql.model.DBSystemRoot;
-import org.openconcerto.sql.model.FieldMapper;
-import org.openconcerto.sql.model.HierarchyLevel;
-import org.openconcerto.sql.model.SQLBase;
-import org.openconcerto.sql.model.SQLDataSource;
-import org.openconcerto.sql.model.SQLFilter;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLServer;
-import org.openconcerto.sql.model.SQLSystem;
-import org.openconcerto.sql.request.SQLFieldTranslator;
-import org.openconcerto.sql.users.rights.UserRightsManager;
-import org.openconcerto.utils.CollectionMap;
-import org.openconcerto.utils.CollectionUtils;
-import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.FileUtils;
-import org.openconcerto.utils.LogUtils;
-import org.openconcerto.utils.MultipleOutputStream;
-import org.openconcerto.utils.NetUtils;
-import org.openconcerto.utils.ProductInfo;
-import org.openconcerto.utils.RTInterruptedException;
-import org.openconcerto.utils.StreamUtils;
-import org.openconcerto.utils.Value;
-import org.openconcerto.utils.cc.IClosure;
-import org.openconcerto.utils.i18n.TranslationManager;
-
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -79,13 +49,42 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
-import net.jcip.annotations.GuardedBy;
-import net.jcip.annotations.ThreadSafe;
-
 import org.apache.commons.collections.Predicate;
 
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
+
+import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementDirectory;
+import org.openconcerto.sql.element.SQLElementDirectory.DirectoryListener;
+import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.sql.model.DBStructureItem;
+import org.openconcerto.sql.model.DBSystemRoot;
+import org.openconcerto.sql.model.FieldMapper;
+import org.openconcerto.sql.model.HierarchyLevel;
+import org.openconcerto.sql.model.SQLBase;
+import org.openconcerto.sql.model.SQLDataSource;
+import org.openconcerto.sql.model.SQLFilter;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLServer;
+import org.openconcerto.sql.model.SQLSystem;
+import org.openconcerto.sql.request.SQLFieldTranslator;
+import org.openconcerto.sql.users.rights.UserRightsManager;
+import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.FileUtils;
+import org.openconcerto.utils.LogUtils;
+import org.openconcerto.utils.MultipleOutputStream;
+import org.openconcerto.utils.NetUtils;
+import org.openconcerto.utils.ProductInfo;
+import org.openconcerto.utils.RTInterruptedException;
+import org.openconcerto.utils.StreamUtils;
+import org.openconcerto.utils.Value;
+import org.openconcerto.utils.cc.IClosure;
+import org.openconcerto.utils.i18n.TranslationManager;
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
 
 /**
  * A configuration which takes its values primarily from Properties. You should also subclass its
@@ -160,6 +159,7 @@ public class PropsConfiguration extends Configuration {
     }
 
     public static final Properties DEFAULTS;
+
     static {
         DEFAULTS = new Properties();
         final File wd = new File(System.getProperty("user.dir"));
@@ -848,7 +848,7 @@ public class PropsConfiguration extends Configuration {
                     }
                 }).start();
             } catch (final Exception e) {
-                ExceptionHandler.handle("Redirection des sorties standards impossible", e);
+                throw new IllegalStateException("Redirection des sorties standards impossible", e);
             }
         } else {
             System.out.println("Standard streams not redirected to file");
@@ -869,7 +869,7 @@ public class PropsConfiguration extends Configuration {
             fh.setFormatter(new SimpleFormatter());
             Logger.getLogger("").addHandler(fh);
         } catch (final Exception e) {
-            ExceptionHandler.handle("Enregistrement du Logger désactivé", e);
+            throw new IllegalStateException("Enregistrement du Logger désactivé", e);
         }
 
         this.setLoggersLevel();
@@ -1208,7 +1208,7 @@ public class PropsConfiguration extends Configuration {
         return fieldMapper;
     }
 
-    protected void setFieldMapper(FieldMapper fieldMapper) {
+    public void setFieldMapper(FieldMapper fieldMapper) {
         this.fieldMapper = fieldMapper;
     }
 }

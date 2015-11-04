@@ -37,11 +37,11 @@ public class ReglementVenteObject {
         this.lib = rowFacture.getString("NOM");
         this.dFacture = (Date) rowFacture.getObject("DATE");
 
-        this.dReglement = (Date) rowReglement.getObject("DATE");
         if (rowReglement == null) {
             this.modeRegl = rowFacture.getForeign("ID_MODE_REGLEMENT").getForeign("ID_TYPE_REGLEMENT").getString("NOM");
             this.montant = Long.valueOf(rowFacture.getObject("T_TTC").toString());
         } else {
+            this.dReglement = (Date) rowReglement.getObject("DATE");
             this.modeRegl = rowReglement.getForeign("ID_MODE_REGLEMENT").getForeign("ID_TYPE_REGLEMENT").getString("NOM");
             this.montant = Long.valueOf(rowFacture.getObject("T_TTC").toString());
         }

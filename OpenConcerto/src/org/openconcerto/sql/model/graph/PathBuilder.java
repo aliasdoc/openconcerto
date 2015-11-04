@@ -54,7 +54,7 @@ public class PathBuilder extends AbstractPath<PathBuilder> {
         this.tables = new ArrayList<SQLTable>(p.getTables());
         // ok since Step is immutable
         this.fields = new ArrayList<Step>(p.getSteps());
-        this.singleFields = new ArrayList<SQLField>(p.getSingleSteps());
+        this.singleFields = new ArrayList<SQLField>(p.getSingleFields());
     }
 
     public final Path build() {
@@ -67,16 +67,16 @@ public class PathBuilder extends AbstractPath<PathBuilder> {
     }
 
     @Override
-    protected final PathBuilder _append(final Path p) {    
+    protected final PathBuilder _append(final Path p) {
         this.fields.addAll(p.getSteps());
-        this.singleFields.addAll(p.getSingleSteps());
+        this.singleFields.addAll(p.getSingleFields());
         this.tables.addAll(p.getTables().subList(1, p.getTables().size()));
         return this;
     }
 
     @Override
-    final PathBuilder add(Step step) {
-        assert step.getFrom() == this.getLast() : "broken path";
+    public final PathBuilder add(Step step) {
+        check(step.getFrom());
         this.fields.add(step);
         this.singleFields.add(step.getSingleField());
         this.tables.add(step.getTo());

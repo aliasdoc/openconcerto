@@ -23,10 +23,11 @@ import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.supplychain.order.ui.CommandeItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
-import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.Type;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
 import org.openconcerto.erp.preferences.DefaultNXProps;
+import org.openconcerto.erp.utils.TM;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.DefaultElementSQLObject;
 import org.openconcerto.sql.element.SQLElement;
@@ -91,6 +92,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
     private DefaultElementSQLObject compAdr;
     final JPanel panelAdrSpec = new JPanel(new GridBagLayout());
     protected ElementComboBox boxAdr;
+    private JDate dateCommande = new JDate(true);
 
     public CommandeSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("COMMANDE"));
@@ -124,10 +126,19 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         c.fill = GridBagConstraints.HORIZONTAL;
         this.add(labelDate, c);
 
-        JDate dateCommande = new JDate(true);
         c.gridx++;
         c.fill = GridBagConstraints.NONE;
         this.add(dateCommande, c);
+
+        this.dateCommande.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (!isFilling() && dateCommande.getValue() != null) {
+                    table.setDateDevise(dateCommande.getValue());
+                }
+            }
+        });
 
         // Fournisseur
         c.gridx = 0;
@@ -136,7 +147,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         c.fill = GridBagConstraints.HORIZONTAL;
         this.add(new JLabel(getLabelFor("ID_FOURNISSEUR"), SwingConstants.RIGHT), c);
 
-        c.gridx = GridBagConstraints.RELATIVE;
+        c.gridx++;
         c.gridwidth = 1;
         c.weightx = 1;
         c.weighty = 0;
@@ -146,7 +157,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         if (!getTable().getFieldsName().contains("LIVRER")) {
             // Commande en cours
             JCheckBox boxEnCours = new JCheckBox(getLabelFor("EN_COURS"));
-            c.gridx = 2;
+            c.gridx += 2;
             c.weightx = 0;
             c.fill = GridBagConstraints.HORIZONTAL;
             c.gridwidth = GridBagConstraints.REMAINDER;
@@ -291,7 +302,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
                 c.gridy++;
                 c.gridx = 0;
-                this.add(new JLabel("Livraison"), c);
+                this.add(new JLabel(TM.tr("address.type.delivery"), SwingConstants.RIGHT), c);
                 c.gridx++;
                 c.gridwidth = GridBagConstraints.REMAINDER;
                 this.add(boxLivrClient, c);
@@ -309,7 +320,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                 cAdr.gridy++;
                 cAdr.weightx = 0;
                 cAdr.gridx = 0;
-                panelAdrSpec.add(new JLabel("Adresse", SwingConstants.RIGHT), cAdr);
+                panelAdrSpec.add(new JLabel(TM.tr("address"), SwingConstants.RIGHT), cAdr);
                 final SQLRequestComboBox boxAdr = new SQLRequestComboBox(true);
                 boxAdr.uiInit(Configuration.getInstance().getDirectory().getElement(getTable().getTable("ADRESSE")).getComboRequest(true));
                 boxClient.addModelListener("wantedID", new PropertyChangeListener() {
@@ -412,6 +423,20 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             c.fill = GridBagConstraints.NONE;
             this.add(boxDevise, c);
             this.addView(boxDevise, "ID_DEVISE");
+
+            fourn.addValueListener(new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent arg0) {
+                    // TODO Raccord de méthode auto-généré
+                    if (fourn.getSelectedRow() != null) {
+                        boxDevise.setValue(fourn.getSelectedRow().getForeignID("ID_DEVISE"));
+                    } else {
+                        boxDevise.setValue((SQLRowAccessor) null);
+                    }
+                }
+            });
+
         }
 
         // Reference
@@ -838,7 +863,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             public String getLabel(SQLRowAccessor rowOrigin, SQLRowAccessor rowElt) {
                 return getLibelleStock(rowOrigin, rowElt);
             }
-        }, row, row.getReferentRows(getTable().getTable("COMMANDE_ELEMENT")), Type.VIRTUAL_RECEPT);
+        }, row, row.getReferentRows(getTable().getTable("COMMANDE_ELEMENT")), TypeStockUpdate.VIRTUAL_RECEPT);
 
         stockUpdater.update();
     }
@@ -950,4 +975,11 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         loadItem(this.table, facture, idFact, factureElt);
     }
 
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor rSource) {
+        if (this.dateCommande.getValue() != null) {
+            this.table.setDateDevise(this.dateCommande.getValue());
+        }
+
+    }
 }

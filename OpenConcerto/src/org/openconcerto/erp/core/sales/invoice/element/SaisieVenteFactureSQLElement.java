@@ -146,14 +146,14 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
         List<RowAction> l = new ArrayList<RowAction>(5);
             PredicateRowAction actionBL = new PredicateRowAction(new AbstractAction() {
                 public void actionPerformed(ActionEvent e) {
-                    TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).copySelectedRows(), "BON_DE_LIVRAISON");
+                    TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).getSelectedRows(), "BON_DE_LIVRAISON");
                 }
             }, false, "sales.invoice.create.delivery");
             actionBL.setPredicate(IListeEvent.getSingleSelectionPredicate());
             l.add(actionBL);
         PredicateRowAction actionAvoir = new PredicateRowAction(new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).copySelectedRows(), "AVOIR_CLIENT");
+                TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).getSelectedRows(), "AVOIR_CLIENT");
             }
         }, false, "sales.invoice.create.credit");
         actionAvoir.setPredicate(IListeEvent.getSingleSelectionPredicate());
@@ -169,7 +169,7 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
             }
         }, false, "sales.invoice.clone") {
             public boolean enabledFor(IListeEvent evt) {
-                List<SQLRowAccessor> l = evt.getSelectedRows();
+                List<? extends SQLRowAccessor> l = evt.getSelectedRows();
                 if (l != null && l.size() == 1) {
                     SQLRowAccessor r = l.get(0);
                     return !r.getBoolean("PARTIAL") && !r.getBoolean("SOLDE");

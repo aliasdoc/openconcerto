@@ -112,7 +112,7 @@ public class ReceiptCode {
         final File rootDir = getRootDir(false);
         final List<File> dirs = FileUtils.list(rootDir, DIR_DEPTH, FileUtils.DIR_FILTER);
         // don't archive today otherwise number will be wrong (see Ticket.initNumber())
-        final File todayDir = getDayDir(Ticket.getCalendar(), false);
+        final File todayDir = getDayDir(Calendar.getInstance(), false);
         for (final File dir : dirs) {
             // if all receipts are deleted or imported : archive
             if (!todayDir.equals(dir) && dir.listFiles(createFF("", false, false)).length == 0) {
@@ -180,7 +180,7 @@ public class ReceiptCode {
         code = b.toString();
         // Code: 010504201100002
         this.code = code;
-        this.setCalendar(Ticket.getCalendar());
+        this.setCalendar(Calendar.getInstance());
 
         // Code: 0105041300002
         // n°caisse sur 2 caracteres

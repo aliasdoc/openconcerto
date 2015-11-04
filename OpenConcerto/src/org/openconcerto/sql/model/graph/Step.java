@@ -123,6 +123,22 @@ public class Step {
         return new Step(start, directions, end);
     }
 
+    /**
+     * Create a new step crossing <code>fField</code>.
+     * 
+     * @param fField
+     * @param direction how to cross <code>fField</code>, cannot be {@link Direction#ANY}.
+     * @return a new step.
+     * @throws IllegalArgumentException if <code>direction</code> is <code>ANY</code> or if
+     *         <code>fField</code> is not a foreign field.
+     */
+    public static final Step create(final SQLField fField, final Direction direction) throws IllegalArgumentException {
+        final Link l = fField.getDBSystemRoot().getGraph().getForeignLink(fField);
+        if (l == null)
+            throw new IllegalArgumentException(fField + " is not a foreign field.");
+        return create(Collections.singletonMap(l, direction));
+    }
+
     private static final List2<SQLTable> getStartEnd(final Link l, final Direction dir) {
         if (dir == Direction.ANY)
             throw new IllegalArgumentException("Unspecified direction");
@@ -157,7 +173,7 @@ public class Step {
 
     private final SQLTable from;
     private final SQLTable to;
-    private final Map<Link, Direction> fields;
+    private final Map<Link, Direction> links;
     // after profiling: doing getStep().iterator().next() costs a lot
     // if there's only one link and it has a single field
     private final SQLField singleField;
@@ -176,7 +192,7 @@ public class Step {
         assert fields instanceof AbstractMap : "Fields might not be thread-safe";
         this.from = start;
         this.to = end;
-        this.fields = Collections.unmodifiableMap(fields);
+        this.links = Collections.unmodifiableMap(fields);
         this.singleField = singleField;
         if (singleField == null) {
             this.singleFields = null;
@@ -196,12 +212,12 @@ public class Step {
     }
 
     public Step(Step p) {
-        this(p.from, p.fields, p.to);
+        this(p.from, p.links, p.to);
     }
 
     public final Step reverse() {
-        final Map<Link, Direction> reverseFields = new HashMap<Link, Direction>(this.fields.size());
-        for (final Entry<Link, Direction> e : this.fields.entrySet()) {
+        final Map<Link, Direction> reverseFields = new HashMap<Link, Direction>(this.links.size());
+        for (final Entry<Link, Direction> e : this.links.entrySet()) {
             reverseFields.put(e.getKey(), e.getValue().reverse());
         }
         final Step res = new Step(this.to, reverseFields, this.singleField, this.from);
@@ -222,26 +238,61 @@ public class Step {
     }
 
     public final Set<Link> getLinks() {
-        return this.fields.keySet();
+        return this.links.keySet();
     }
 
+    /**
+     * The {@link Link#getSingleField() single field} of each of our links.
+     * 
+     * @return the single field of each link, or <code>null</code> if at least one link has more
+     *         than one field.
+     */
     public synchronized final Set<SQLField> getFields() {
         if (!this.singleFieldsComputed) {
-            this.singleFields = Link.getSingleFields(this.fields.keySet());
+            this.singleFields = Link.getSingleFields(this.links.keySet());
             this.singleFieldsComputed = true;
         }
         return this.singleFields;
     }
 
+    /**
+     * The one and only field of this step.
+     * 
+     * @return the single field of our single link, <code>null</code> if there's more than one link
+     *         or if it has more than one field.
+     */
     public final SQLField getSingleField() {
         return this.singleField;
     }
 
-    public final Set<Step> getSingleSteps() {
+    /**
+     * Whether there's only one link.
+     * 
+     * @return <code>true</code> if there's only one link, <code>false</code> otherwise.
+     */
+    public boolean isSingleLink() {
+        return this.links.size() == 1;
+    }
+
+    /**
+     * The one and only link of this step.
+     * 
+     * @return the single link, <code>null</code> if there's more than one link.
+     */
+    public final Link getSingleLink() {
+        return CollectionUtils.getSole(this.getLinks());
+    }
+
+    /**
+     * Return one step per link.
+     * 
+     * @return a set of steps which are {@link #isSingleLink() single link}.
+     */
+    public final Set<Step> getSingleLinkSteps() {
         if (this.singleField != null)
             return Collections.singleton(this);
-        final Set<Step> res = new HashSet<Step>(this.fields.size());
-        for (final Entry<Link, Direction> e : this.fields.entrySet()) {
+        final Set<Step> res = new HashSet<Step>(this.links.size());
+        for (final Entry<Link, Direction> e : this.links.entrySet()) {
             res.add(new Step(this.getFrom(), e.getKey(), e.getValue(), this.getTo()));
         }
         return res;
@@ -266,7 +317,7 @@ public class Step {
      *         ID_CONTACT_CHEF and ID_CONTACT_BUREAU), <code>REFERENT</code> otherwise.
      */
     public final Direction getDirection(final Link f) {
-        return this.fields.get(f);
+        return this.links.get(f);
     }
 
     /**
@@ -288,12 +339,43 @@ public class Step {
      * @see #getDirection(Link)
      */
     public final Direction getDirection() {
-        final Direction soleDir = CollectionUtils.getSole(new HashSet<Direction>(this.fields.values()));
+        final Direction soleDir = CollectionUtils.getSole(new HashSet<Direction>(this.links.values()));
         return soleDir == null ? Direction.ANY : soleDir;
     }
 
+    @Override
     public String toString() {
-        return this.getClass().getSimpleName() + " from: " + this.getFrom() + " to: " + this.getTo() + "\n" + this.fields;
+        final StringBuilder sb = new StringBuilder(64);
+        sb.append(this.getClass().getSimpleName());
+        sb.append(" from: ");
+        sb.append(this.getFrom());
+        sb.append(" through: ");
+        linksToString(sb);
+        sb.append(" to: ");
+        sb.append(this.getTo());
+        return sb.toString();
+    }
+
+    public StringBuilder linksToString(final StringBuilder sb) {
+        assert this.links.size() > 0;
+        final String sep = " ; ";
+        final boolean moreThan1 = this.links.size() > 1;
+        if (moreThan1)
+            sb.append("{ ");
+        for (final Entry<Link, Direction> e : this.links.entrySet()) {
+            final Direction dir = e.getValue();
+            assert dir != Direction.ANY;
+            final boolean foreign = dir == Direction.FOREIGN;
+            sb.append(foreign ? "--" : "<--");
+            sb.append(e.getKey().getCols());
+            sb.append(foreign ? "-->" : "--");
+            sb.append(sep);
+        }
+        // remove last separator (OK since fields cannot be empty)
+        sb.setLength(sb.length() - sep.length());
+        if (moreThan1)
+            sb.append(" }");
+        return sb;
     }
 
     @Override
@@ -302,7 +384,7 @@ public class Step {
             final Step o = (Step) obj;
             // no need to compare to, starting from the same point with the same fields lead to the
             // same table
-            return this.from.equals(o.from) && this.fields.equals(o.fields);
+            return this.from.equals(o.from) && this.links.equals(o.links);
         } else
             return false;
     }
@@ -314,6 +396,6 @@ public class Step {
      */
     @Override
     public int hashCode() {
-        return this.fields.hashCode();
+        return this.links.hashCode();
     }
 }

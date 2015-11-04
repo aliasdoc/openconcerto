@@ -114,7 +114,7 @@ class SQLSyntaxPG extends SQLSyntax {
 
     @Override
     public boolean isAuto(SQLField f) {
-        return f.getType().getTypeName().equalsIgnoreCase("serial");
+        return "YES".equals(f.getMetadata("IS_AUTOINCREMENT"));
     }
 
     public String getAuto() {

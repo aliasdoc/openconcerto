@@ -316,7 +316,7 @@ public abstract class VMLauncher {
         command.add(java);
 
         if (this.enableRemoteDebug(props)) {
-            command.add(RemoteDebugArgs.getArgs());
+            command.add(RemoteDebugArgs.getArgs(props.getProperty("remoteDebugAddr")));
         }
         command.addAll(this.getVMArguments());
 

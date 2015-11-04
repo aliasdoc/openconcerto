@@ -18,11 +18,13 @@ package org.openconcerto.ui.component;
 
 import static org.openconcerto.ui.component.ComboLockedMode.LOCKED;
 import static org.openconcerto.ui.component.ComboLockedMode.UNLOCKED;
+import org.openconcerto.ui.component.InteractionMode.InteractionComponent;
 import org.openconcerto.ui.component.combo.ISearchableComboPopup;
 import org.openconcerto.ui.component.text.TextComponent;
 import org.openconcerto.ui.valuewrapper.ValueChangeSupport;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
 import org.openconcerto.utils.CompareUtils;
+import org.openconcerto.utils.IFutureTask;
 import org.openconcerto.utils.SwingWorker2;
 import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
@@ -43,6 +45,8 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.regex.Pattern;
 
 import javax.swing.ComboBoxEditor;
@@ -66,7 +70,7 @@ import net.jcip.annotations.GuardedBy;
  * 
  * @author Sylvain CUAZ
  */
-public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextComponent {
+public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextComponent, InteractionComponent {
 
     /**
      * System property, if <code>true</code> buttons children will not be focusable (allowing
@@ -93,7 +97,8 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
     // only valid while cache is loading
     private String objToSelect;
     @GuardedBy("EDT")
-    private boolean modeToSet;
+    private InteractionMode modeToSet;
+    private InteractionMode interactionBridge;
     protected boolean modifyingDoc;
 
     private ITextComboCache cache;
@@ -134,8 +139,7 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
         this.setMinimumSize(new Dimension(80, 22));
         // Test de Preferred Size pour ne pas exploser les GridBagLayouts
         this.setPreferredSize(new Dimension(120, 22));
-        // argument is ignored
-        this.setEditable(true);
+        this.setInteractionMode(InteractionMode.READ_WRITE);
 
         // ATTN marche car locked est final, sinon il faudrait pouvoir enlever/ajouter les listeners
         if (this.isLocked()) {
@@ -210,6 +214,7 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
         this.resetValue();
     }
 
+    @Override
     public void configureEditor(ComboBoxEditor anEditor, Object anItem) {
         // quand on quitte une combo, elle fait setSelectedItem(), qui appelle editor.setItem()
         // qui fait editor.getComponent().setText(), quit fait un removeAll() suivi d'un addAll()
@@ -232,15 +237,15 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
         return this.cache != null;
     }
 
-    public final void initCache(String... values) {
-        this.initCache(Arrays.asList(values));
+    public final Future<? extends ITextCombo> initCache(String... values) {
+        return this.initCache(Arrays.asList(values));
     }
 
-    public final void initCache(List<String> values) {
-        this.initCache(new ImmutableITextComboCache(values));
+    public final Future<? extends ITextCombo> initCache(List<String> values) {
+        return this.initCache(new ImmutableITextComboCache(values));
     }
 
-    public final void initCache(ITextComboCache cache) {
+    public final Future<? extends ITextCombo> initCache(ITextComboCache cache) {
         if (cache == null)
             throw new NullPointerException("null cache");
         if (this.hasCache())
@@ -282,7 +287,7 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
             }
         }).listen();
 
-        this.loadCache(false);
+        final Future<? extends ITextCombo> future = this.loadCache(false);
 
         // ATTN marche car locked est final
         if (!this.isLocked()) {
@@ -314,6 +319,7 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
             };
             addCompletionListeners(this.getTextComp());
         }
+        return future;
     }
 
     protected final void addCompletionListeners(final JTextComponent textComp) {
@@ -373,32 +379,66 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
         return (ListComboBoxModel) this.getModel();
     }
 
-    public void setEditable(boolean b) {
-        // ne pas faire setEditable(false), sinon plus de textField
-        super.setEditable(!isLocked());
+    @Override
+    public InteractionMode getInteractionMode() {
+        return this.interactionBridge;
     }
 
     @Override
-    public void setEnabled(boolean b) {
+    public void setInteractionMode(InteractionMode mode) {
         assert SwingUtilities.isEventDispatchThread();
-        if (this.cacheLoading)
-            this.modeToSet = b;
-        else {
-            super.setEnabled(b);
+        if (this.cacheLoading) {
+            this.modeToSet = mode;
+        } else if (mode != this.interactionBridge) {
+            this.interactionBridge = mode;
+            // to support R/O we disable the combo and put and non editable text field
+            super.setEnabled(mode.isEditable());
+            final boolean superEditable = !isLocked() || mode == InteractionMode.READ_ONLY;
+            super.setEditable(superEditable);
+            if (superEditable) {
+                final JTextComponent comp = getTextComp(this.getEditor());
+                mode.applyTo(comp);
+            } else {
+                assert getTextComp(this.getEditor()) == null || !getTextComp(this.getEditor()).isDisplayable();
+            }
         }
+    }
+
+    @Override
+    public void setEditable(boolean b) {
+        // cannot overload setEditable() to behave like JTextComponent : since we cannot overload
+        // isEditable() this would translate to an incoherence between setEditable() and
+        // isEditable()
+        super.setEditable(b);
+    }
+
+    // cannot overload isEditable() to behave like JTextComponent since the look and feels don't
+    // support it
+
+    @Override
+    public void setEnabled(boolean b) {
+        this.setInteractionMode(b ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
     }
 
     // *** cache
 
-    // charge les elements de completion si besoin
-    public synchronized final void loadCache(final boolean force) {
+    /**
+     * Load the cache passed to {@link #initCache(ITextComboCache)} into this.
+     * 
+     * @param force <code>true</code> if the cache should be refreshed.
+     * @return a future returning <code>this</code> after this is filled by the cache or
+     *         <code>null</code> if this already being filled. NOTE : do not block on this future in
+     *         the EDT, as it needs to finish in the EDT. So this would cause a deadlock.
+     */
+    public synchronized final Future<? extends ITextCombo> loadCache(final boolean force) {
         assert SwingUtilities.isEventDispatchThread();
         if (!this.cacheLoading) {
-            this.modeToSet = this.isEnabled();
+            this.modeToSet = this.getInteractionMode();
             this.setEnabled(false);
             // value cannot be changed by user since this UI is disabled
             this.objToSelect = this.getValue();
             this.cacheLoading = true;
+            final FutureTask<? extends ITextCombo> noop = IFutureTask.createNoOp(this);
             final SwingWorker2<List<String>, Object> sw = new SwingWorker2<List<String>, Object>() {
                 @Override
                 protected List<String> doInBackground() throws Exception {
@@ -425,11 +465,18 @@ public class ITextCombo extends JComboBox implements ValueWrapper<String>, TextC
                     if (isLocked() && getModel().getSize() == 0)
                         throw new IllegalStateException(ITextCombo.this + " locked but no items.");
                     // restaurer l'état
-                    setEnabled(ITextCombo.this.modeToSet);
+                    setInteractionMode(ITextCombo.this.modeToSet);
                     setValue(ITextCombo.this.objToSelect);
+                    // we can't notify our caller at the time invokeLater() is called by the
+                    // background thread since there's always a delay after setState() : see
+                    // DoSubmitAccumulativeRunnable
+                    noop.run();
                 }
             };
             sw.execute();
+            return noop;
+        } else {
+            return null;
         }
     }
 

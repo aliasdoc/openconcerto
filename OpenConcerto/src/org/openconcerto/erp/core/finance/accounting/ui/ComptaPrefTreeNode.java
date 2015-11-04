@@ -26,6 +26,7 @@ import org.openconcerto.erp.preferences.GenerationDocumentComptaPreferencePanel;
 import org.openconcerto.erp.preferences.GenerationDocumentGestCommPreferencePanel;
 import org.openconcerto.erp.preferences.GenerationDocumentPayePreferencePanel;
 import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
 import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.erp.preferences.GestionPieceCommercialePanel;
 import org.openconcerto.erp.preferences.ImpressionGestCommPreferencePanel;
@@ -113,6 +114,7 @@ public class ComptaPrefTreeNode extends DefaultMutableTreeNode {
 
         nsGlobale.add(new PrefTreeNode(GestionArticleGlobalPreferencePanel.class, "Gestion des articles", new String[] { "articles", "stock" }));
         nsGlobale.add(new PrefTreeNode(GenerationDocGlobalPreferencePanel.class, "Génération des Documents", new String[] { "documents" }));
+        nsGlobale.add(new PrefTreeNode(GestionClientPreferencePanel.class, "Gestion des clients", new String[] { "client", "service" }));
         nsGlobale.add(new PrefTreeNode(GestionCommercialeGlobalPreferencePanel.class, "Gestion des piéces commericales", new String[] { "transfert", "numéro" }));
 
         // Impression

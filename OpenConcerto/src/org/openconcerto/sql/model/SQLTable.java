@@ -20,6 +20,8 @@ import org.openconcerto.sql.model.SQLTableEvent.Mode;
 import org.openconcerto.sql.model.graph.DatabaseGraph;
 import org.openconcerto.sql.model.graph.Link;
 import org.openconcerto.sql.model.graph.Link.Rule;
+import org.openconcerto.sql.model.graph.SQLKey;
+import org.openconcerto.sql.model.graph.SQLKey.Type;
 import org.openconcerto.sql.model.graph.TablesMap;
 import org.openconcerto.sql.request.UpdateBuilder;
 import org.openconcerto.sql.utils.ChangeTable;
@@ -60,6 +62,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.Immutable;
 
 import org.apache.commons.dbutils.ResultSetHandler;
 import org.jdom2.Element;
@@ -300,6 +303,8 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     @GuardedBy("this")
     private Set<SQLField> keys;
     @GuardedBy("this")
+    private Map<String, FieldGroup> fieldsGroups;
+    @GuardedBy("this")
     private final Map<String, Trigger> triggers;
     // null means it couldn't be retrieved
     @GuardedBy("this")
@@ -346,6 +351,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         this.primaryKey = null;
         this.primaryKeyOK = true;
         this.keys = null;
+        this.fieldsGroups = null;
         this.triggers = new HashMap<String, Trigger>();
         // by default non-null, ie ok, only set to null on error
         this.constraints = new HashSet<Constraint>();
@@ -612,6 +618,9 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                 this.primaryKey = primaryKeys.size() == 1 ? this.getField(primaryKeys.get(0)) : null;
                 this.primaryKeyOK = primaryKeys.size() <= 1;
 
+                this.keys = null;
+                this.fieldsGroups = null;
+
                 // don't fetch the ID now as it could be too early (e.g. we just created the table
                 // but haven't inserted the undefined row)
                 this.undefinedID = undef;
@@ -786,6 +795,89 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         return this.keys;
     }
 
+    @Immutable
+    static public final class FieldGroup {
+        private final String field;
+        private final SQLKey key;
+
+        private FieldGroup(final SQLKey key, final String field) {
+            assert (key == null) != (field == null);
+            this.key = key;
+            this.field = key == null ? field : CollectionUtils.getSole(key.getFields());
+        }
+
+        /**
+         * The key type for this group.
+         * 
+         * @return the key type, <code>null</code> for a simple field.
+         */
+        public final Type getKeyType() {
+            if (this.key == null)
+                return null;
+            return this.key.getType();
+        }
+
+        /**
+         * The key for this group.
+         * 
+         * @return the key, <code>null</code> for a simple field.
+         */
+        public final SQLKey getKey() {
+            return this.key;
+        }
+
+        /**
+         * The one and only field of this group.
+         * 
+         * @return the only field of this group, only <code>null</code> if this group is a
+         *         {@link #getKey() key} with more than one field.
+         */
+        public String getSingleField() {
+            return this.field;
+        }
+
+        public final List<String> getFields() {
+            return this.key == null ? Arrays.asList(this.field) : this.key.getFields();
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + " " + (this.key != null ? this.key.toString() : this.field);
+        }
+    }
+
+    /**
+     * Return the fields grouped by key.
+     * 
+     * @return for each field of this table the matching group.
+     */
+    public synchronized Map<String, FieldGroup> getFieldGroups() {
+        if (this.fieldsGroups == null) {
+            final Map<String, FieldGroup> res = new LinkedHashMap<String, FieldGroup>();
+            // set order
+            for (final String field : this.getFieldsName()) {
+                res.put(field, new FieldGroup(null, field));
+            }
+            for (final Link l : this.getDBSystemRoot().getGraph().getForeignLinks(this)) {
+                indexKey(res, SQLKey.createForeignKey(l));
+            }
+            final SQLKey pk = SQLKey.createPrimaryKey(this);
+            if (pk != null)
+                indexKey(res, pk);
+
+            this.fieldsGroups = Collections.unmodifiableMap(res);
+        }
+        return this.fieldsGroups;
+    }
+
+    static private final void indexKey(final Map<String, FieldGroup> m, final SQLKey k) {
+        final FieldGroup group = new FieldGroup(k, null);
+        for (final String field : k.getFields()) {
+            final FieldGroup previous = m.put(field, group);
+            assert previous.getKeyType() == null;
+        }
+    }
+
     public String toString() {
         return "/" + this.getName() + "/";
     }
@@ -863,6 +955,24 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             @Override
             public Set<SQLField> getFields(SQLTable t) {
                 return t.getForeignKeys();
+            }
+        },
+        /**
+         * {@link SQLTable#getContentFields(boolean) content fields} without {@link #METADATA}.
+         */
+        CONTENT {
+            @Override
+            public Set<SQLField> getFields(SQLTable t) {
+                return t.getContentFields(false);
+            }
+        },
+        /**
+         * {@link #CONTENT content fields} without {@link #FOREIGN_KEYS}
+         */
+        LOCAL_CONTENT {
+            @Override
+            public Set<SQLField> getFields(SQLTable t) {
+                return t.getLocalContentFields();
             }
         };
 
@@ -1509,6 +1619,8 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
 
     @Override
     public String getSQL() {
+        // always use fullname, otherwise must check the datasource's
+        // default schema
         return getSQLName().quote();
     }
 

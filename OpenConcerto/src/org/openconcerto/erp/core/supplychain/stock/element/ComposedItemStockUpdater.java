@@ -28,8 +28,10 @@ import org.openconcerto.utils.cc.ITransformer;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.dbutils.ResultSetHandler;
 
@@ -39,6 +41,7 @@ public class ComposedItemStockUpdater {
     private final DBRoot root;
 
     /**
+     * Met à jour les stocks des nomenclature composé par un des articles de itemsUpdated
      * 
      * @param root
      * @param itemsUpdated liste des StockItem non composés qui ont été mis à jour
@@ -152,18 +155,24 @@ public class ComposedItemStockUpdater {
      * @return l'ensemble des stockItems composés à mettre à jour
      */
     private List<StockItem> getAllComposedItemToUpdate() {
-        List<Integer> ids = new ArrayList<Integer>(itemsUpdated.size());
+        // Liste des ids des artciles non composé mis à jour
+        Set<Integer> ids = new HashSet<Integer>(itemsUpdated.size());
         for (StockItem stockItem : itemsUpdated) {
             ids.add(stockItem.getArticle().getID());
         }
         List<SQLRowValues> list = getComposedItemToUpdate(ids);
         int size = list.size();
 
+        Map<Integer, SQLRowValues> result = new HashMap<Integer, SQLRowValues>(ids.size());
+        for (SQLRowValues sqlRowValues : list) {
+            result.put(sqlRowValues.getID(), sqlRowValues);
+        }
         while (size > 0) {
 
             List<SQLRowValues> l = getComposedItemToUpdate(ids);
-            list.removeAll(l);
-            list.addAll(l);
+            for (SQLRowValues sqlRowValues : l) {
+                result.put(sqlRowValues.getID(), sqlRowValues);
+            }
             size = l.size();
             if (size > 0) {
                 ids.clear();
@@ -173,8 +182,8 @@ public class ComposedItemStockUpdater {
             }
         }
 
-        List<StockItem> items = new ArrayList<StockItem>(list.size());
-        for (SQLRowValues rowVals : list) {
+        List<StockItem> items = new ArrayList<StockItem>(result.size());
+        for (SQLRowValues rowVals : result.values()) {
 
             StockItem item = new StockItem(rowVals);
             items.add(item);
@@ -187,7 +196,7 @@ public class ComposedItemStockUpdater {
      * @param ids
      * @return l'ensemble des Articles composés avec un des articles en parametres
      */
-    private List<SQLRowValues> getComposedItemToUpdate(final List<Integer> ids) {
+    private List<SQLRowValues> getComposedItemToUpdate(final Set<Integer> ids) {
 
         final SQLTable tableArticle = this.root.getTable("ARTICLE");
         final SQLRowValues rowValsArt = new SQLRowValues(tableArticle);

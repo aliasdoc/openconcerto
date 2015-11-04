@@ -13,6 +13,21 @@
  
  package org.openconcerto.erp.core.supplychain.credit.component;
 
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.Date;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
@@ -21,7 +36,6 @@ import org.openconcerto.erp.core.common.ui.MontantPanel;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
-import org.openconcerto.erp.core.supplychain.credit.element.AvoirFournisseurSQLElement;
 import org.openconcerto.erp.generationEcritures.GenerationMvtAvoirFournisseur;
 import org.openconcerto.erp.model.ISQLCompteSelector;
 import org.openconcerto.sql.Configuration;
@@ -38,22 +52,8 @@ import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.ExceptionHandler;
-
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.util.Date;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
 
 public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent implements ActionListener {
 
@@ -111,7 +111,7 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
         }
         vals.put("ID_COMPTE_PCE", idCompteAchat);
         vals.put("ID_TAXE", TaxeCache.getCache().getFirstTaxe().getID());
-        vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(AvoirFournisseurSQLElement.class, new Date()));
+        vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(getElement().getClass(), new Date()));
         return vals;
     }
 
@@ -137,7 +137,7 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
         c.gridwidth = 1;
 
         this.textNom = new JTextField();
-        this.date = new JDate(true);
+
         this.selectFournisseur = new ElementComboBox();
         this.montantPanel = new MontantPanel();
 
@@ -157,6 +157,7 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
         c.gridx++;
         c.weightx = 0;
         c.fill = GridBagConstraints.NONE;
+        this.date = new JDate(true);
         this.add(this.date, c);
 
         // Libellé
@@ -314,7 +315,7 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
             final SQLRow row = getTable().getRow(id);
 
             // incrémentation du numéro auto
-            if (NumerotationAutoSQLElement.getNextNumero(AvoirFournisseurSQLElement.class, row.getDate("DATE").getTime()).equalsIgnoreCase(this.textNumero.getText().trim())) {
+            if (NumerotationAutoSQLElement.getNextNumero(getElement().getClass(), row.getDate("DATE").getTime()).equalsIgnoreCase(this.textNumero.getText().trim())) {
                 SQLRowValues rowVals = new SQLRowValues(tableNum);
                 int val = tableNum.getRow(2).getInt("AVOIR_F_START");
                 val++;
@@ -323,7 +324,7 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
 
             }
 
-            GenerationMvtAvoirFournisseur gen = new GenerationMvtAvoirFournisseur(id);
+            GenerationMvtAvoirFournisseur gen = new GenerationMvtAvoirFournisseur(row);
             gen.genereMouvement();
         } catch (Exception e) {
             ExceptionHandler.handle("Erreur d'insertion", e);
@@ -359,7 +360,7 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
             EcritureSQLElement eltEcr = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
             eltEcr.archiveMouvementProfondeur(idMvt, false);
 
-            GenerationMvtAvoirFournisseur gen = new GenerationMvtAvoirFournisseur(getSelectedID(), idMvt);
+            GenerationMvtAvoirFournisseur gen = new GenerationMvtAvoirFournisseur(row, idMvt);
             gen.genereMouvement();
         } catch (Exception e) {
             ExceptionHandler.handle("Erreur Archivage des fils", e);
@@ -369,10 +370,18 @@ public class AvoirFournisseurSQLComponent extends TransfertBaseSQLComponent impl
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == this.boxAdeduire) {
             if (this.eltModeRegl != null) {
-                this.eltModeRegl.setEditable(!this.boxAdeduire.isSelected());
-                this.eltModeRegl.setCreated(!this.boxAdeduire.isSelected());
+                final boolean b = this.boxAdeduire.isSelected();
+                InteractionMode mode = null;
+                this.eltModeRegl.setEditable((!b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+                this.eltModeRegl.setCreated(!b);
             }
         }
+    }
+
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor rSource) {
+        // TODO Auto-generated method stub
+
     }
 
 }

@@ -16,6 +16,7 @@
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.UISQLComponent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,8 +42,10 @@ public class AxeAnalytiqueSQLElement extends ComptaSQLConfElement {
     }
 
     public SQLComponent createComponent() {
-        return new BaseSQLComponent(this) {
-            public void addViews() {
+        return new UISQLComponent(this) {
+
+            @Override
+            protected void addViews() {
                 this.addRequiredSQLObject(new JTextField(), "NOM");
             }
         };

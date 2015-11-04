@@ -26,6 +26,7 @@ import org.openconcerto.sql.users.rights.TableAllRights;
 import org.openconcerto.sql.users.rights.UserRights;
 import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidObject;
@@ -179,7 +180,7 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
             }
 
             if (this.mode == READONLY) {
-                this.component.setEditable(false);
+                this.component.setEditable(InteractionMode.READ_ONLY);
             } else {
                 // on écoute les changements de validation,
                 // avant component.uiInit() car il fait un fireValidChange()

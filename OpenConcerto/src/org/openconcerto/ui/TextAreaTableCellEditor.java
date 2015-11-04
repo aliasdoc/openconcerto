@@ -66,7 +66,7 @@ public class TextAreaTableCellEditor extends AbstractCellEditor implements Table
                     SwingUtilities.invokeLater(new Runnable() {
 
                         public void run() {
-                            if (t.getCellEditor().stopCellEditing()) {
+                            if (t.getCellEditor() != null && t.getCellEditor().stopCellEditing()) {
                                 if (column >= 0 && column < t.getColumnCount()) {
                                     t.setColumnSelectionInterval(column, column);
                                     t.setRowSelectionInterval(row, row);

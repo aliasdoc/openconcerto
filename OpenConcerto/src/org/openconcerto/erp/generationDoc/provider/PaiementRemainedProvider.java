@@ -23,13 +23,24 @@ import java.util.Collection;
 
 public class PaiementRemainedProvider implements SpreadSheetCellValueProvider {
 
+    private enum Type {
+        DONE, REMAINED
+    };
+
+    private final Type t;
+
+    private PaiementRemainedProvider(Type t) {
+        this.t = t;
+    }
+
     public Object getValue(SpreadSheetCellValueContext context) {
         SQLRowAccessor row = context.getRow();
         return getRestant(row);
     }
 
     public static void register() {
-        SpreadSheetCellValueProviderManager.put("invoice.paiement.remained", new PaiementRemainedProvider());
+        SpreadSheetCellValueProviderManager.put("invoice.paiement.remained", new PaiementRemainedProvider(Type.REMAINED));
+        SpreadSheetCellValueProviderManager.put("invoice.paiement.done", new PaiementRemainedProvider(Type.DONE));
     }
 
     private BigDecimal getRestant(SQLRowAccessor r) {
@@ -42,8 +53,11 @@ public class PaiementRemainedProvider implements SpreadSheetCellValueProvider {
             }
         }
 
-        return new BigDecimal(totalEch).movePointLeft(2);
-
+        long total = totalEch;
+        if (t == Type.DONE) {
+            total = r.getLong("T_TTC") - total;
+        }
+        return new BigDecimal(total).movePointLeft(2);
     }
 
 }

@@ -33,21 +33,23 @@ final class ChangeFKRunnable extends AbstractUpdateOneRunnable {
      * @param id the new id.
      */
     public ChangeFKRunnable(ListSQLLine l, Path p, int id) {
+        // ATTN the row we pass to super has not really changed, so don't use getAffectedPaths()
         super(l.getSrc().getModel(), new SQLRow(p.getLast(), id));
         this.l = l;
+        if (p.length() == 0)
+            throw new IllegalArgumentException("Empty path (i.e. no foreign key)");
         this.p = p;
     }
 
     public void run() {
-        final ListMap<Path, ListSQLLine> affectedPaths = getAffectedPaths();
         // updateLines() do not check previous ID, it just load the new values at the specified path
         // thus we just add our path to the affected paths and it will change to the new ID.
-        affectedPaths.add(this.p, this.l);
-        updateLines(affectedPaths);
+        updateLines(ListMap.singleton(this.p, this.l));
     }
 
     @Override
     protected Collection<String> getModifedFields() {
+        // we want all fields of the new foreign row
         return null;
     }
 

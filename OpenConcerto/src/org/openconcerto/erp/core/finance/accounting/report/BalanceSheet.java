@@ -42,7 +42,7 @@ public class BalanceSheet extends SheetInterface {
     private final static DateFormat dateFormatEcr = DateFormat.getDateInstance(DateFormat.SHORT);
     public static String TEMPLATE_ID = "Balance";
     public static String TEMPLATE_PROPERTY_NAME = "LocationBalance";
-    private Date dateDu, dateAu;
+    private Date dateAu;
     private String compteDeb, compteEnd;
 
     public static void setSize(int debut, int fin) {
@@ -65,7 +65,7 @@ public class BalanceSheet extends SheetInterface {
         return TEMPLATE_ID;
     }
 
-    public BalanceSheet(Date du, Date au, String compteDeb, String compteEnd, boolean centralClient, boolean centralFourn) {
+    public BalanceSheet(Date au, String compteDeb, String compteEnd, boolean centralClient, boolean centralFourn) {
         super();
 
         Calendar cal = Calendar.getInstance();
@@ -81,7 +81,7 @@ public class BalanceSheet extends SheetInterface {
         // this.locationOO = storage.getDocumentOutputDirectory(TEMPLATE_ID);
         // this.locationPDF = storage.getPDFOutputDirectory(TEMPLATE_ID);
         this.dateAu = au;
-        this.dateDu = du;
+
         this.compteDeb = compteDeb;
         this.compteEnd = compteEnd;
         this.centralClient = centralClient;
@@ -99,7 +99,7 @@ public class BalanceSheet extends SheetInterface {
 
     private void makePiedPage(int row) {
 
-        this.mCell.put("C" + row, "Période du " + dateFormatEcr.format(this.dateDu) + " au " + dateFormatEcr.format(this.dateAu));
+        this.mCell.put("C" + row, "Balance au " + dateFormatEcr.format(this.dateAu));
         this.mCell.put("B" + row, "Du compte " + this.compteDeb + " à " + this.compteEnd);
     }
 
@@ -125,7 +125,7 @@ public class BalanceSheet extends SheetInterface {
         sel.addSelect(tableEcriture.getField("DEBIT"), "SUM");
         sel.addSelect(tableEcriture.getField("CREDIT"), "SUM");
 
-        Where w = (new Where(tableEcriture.getField("DATE"), this.dateDu, this.dateAu));
+        Where w = (new Where(tableEcriture.getField("DATE"), "<=", this.dateAu));
 
         if (compteDeb.equals(this.compteEnd)) {
             w = w.and(new Where(tableCompte.getField("NUMERO"), "=", this.compteDeb));

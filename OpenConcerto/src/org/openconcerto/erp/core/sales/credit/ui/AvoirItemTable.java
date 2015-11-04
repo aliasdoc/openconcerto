@@ -19,6 +19,11 @@ import org.openconcerto.sql.element.SQLElement;
 
 public class AvoirItemTable extends AbstractVenteArticleItemTable {
 
+    public AvoirItemTable() {
+        super();
+        setUsedBiasedDevise(false);
+    }
+
     @Override
     protected String getConfigurationFileName() {
         return "Table_Avoir.xml";

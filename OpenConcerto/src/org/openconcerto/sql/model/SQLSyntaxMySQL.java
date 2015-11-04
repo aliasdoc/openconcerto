@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.commons.dbcp.DelegatingConnection;
 
@@ -63,6 +64,8 @@ import org.apache.commons.dbcp.DelegatingConnection;
  * @author Sylvain CUAZ
  */
 class SQLSyntaxMySQL extends SQLSyntax {
+
+    private static final Pattern INT_PATTERN = Pattern.compile("(bigint|smallint|int)");
 
     SQLSyntaxMySQL() {
         super(SQLSystem.MYSQL);
@@ -113,6 +116,12 @@ class SQLSyntaxMySQL extends SQLSyntax {
     @Override
     protected Tuple2<Boolean, String> getCast() {
         return null;
+    }
+
+    @Override
+    public String cast(String expr, String type) {
+        // MySQL doesn't use types but keywords
+        return super.cast(expr, INT_PATTERN.matcher(type).replaceAll("integer").replace("integer", "signed integer"));
     }
 
     @Override
@@ -221,6 +230,15 @@ class SQLSyntaxMySQL extends SQLSyntax {
             newDef = null;
 
         return ListMap.singleton(ClauseType.ALTER_COL, "MODIFY COLUMN " + f.getQuotedName() + " " + getFieldDecl(newType, newDef, newNullable));
+    }
+
+    @Override
+    public String getDropTable(SQLName name, boolean ifExists, boolean restrict) {
+        // doesn't support cascade
+        if (!restrict)
+            return null;
+        else
+            return super.getDropTable(name, ifExists, restrict);
     }
 
     @Override

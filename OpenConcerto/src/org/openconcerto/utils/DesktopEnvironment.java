@@ -19,6 +19,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.Charset;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -99,11 +100,11 @@ public abstract class DesktopEnvironment {
                 return true;
             for (int i = 0; i < len; i++) {
                 switch (s.charAt(i)) {
-                    case ' ':
-                    case '\t':
-                    case '\\':
-                    case '"':
-                        return true;
+                case ' ':
+                case '\t':
+                case '\\':
+                case '"':
+                    return true;
                 }
             }
             return false;
@@ -226,9 +227,15 @@ public abstract class DesktopEnvironment {
     }
 
     public final static String cmdSubstitution(Process p) throws IOException {
+        return cmdSubstitution(p, null);
+    }
+
+    public final static String cmdSubstitution(final Process p, final Charset encoding) throws IOException {
         final ByteArrayOutputStream out = new ByteArrayOutputStream(100 * 1024);
+        p.getErrorStream().close();
         StreamUtils.copy(p.getInputStream(), out);
-        return out.toString();
+        p.getInputStream().close();
+        return encoding == null ? out.toString() : out.toString(encoding.name());
     }
 
     private static final DesktopEnvironment detectDE() {

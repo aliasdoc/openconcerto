@@ -33,6 +33,10 @@ public class PriceByQty {
     }
 
     public static BigDecimal getPriceForQty(int qty, List<PriceByQty> list) {
+        return getPriceForQty(qty, list, new Date(System.currentTimeMillis()));
+    }
+
+    public static BigDecimal getPriceForQty(int qty, List<PriceByQty> list, Date d) {
         BigDecimal result = null;
         Collections.sort(list, new Comparator<PriceByQty>() {
 
@@ -46,12 +50,11 @@ public class PriceByQty {
                 return o1.startDate.compareTo(o2.startDate);
             }
         });
-        Date now = new Date(System.currentTimeMillis());
         for (PriceByQty priceByQty : list) {
             if (priceByQty.qty > qty) {
                 break;
             }
-            if (priceByQty.startDate.before(now)) {
+            if (priceByQty.startDate.before(d)) {
                 result = priceByQty.price;
             }
         }

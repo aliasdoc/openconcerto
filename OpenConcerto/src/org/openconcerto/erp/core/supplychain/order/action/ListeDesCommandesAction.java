@@ -48,7 +48,7 @@ public class ListeDesCommandesAction extends CreateFrameAbstractAction {
                 // Transfert vers BR
                 PredicateRowAction bonAction = new PredicateRowAction(new AbstractAction() {
                     public void actionPerformed(ActionEvent e) {
-                        TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).copySelectedRows(), "BON_RECEPTION");
+                        TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).getSelectedRows(), "BON_RECEPTION");
                     }
                 }, false, "supplychain.order.create.receipt");
 

@@ -22,7 +22,7 @@ import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElemen
 import org.openconcerto.erp.core.supplychain.receipt.element.BonReceptionSQLElement;
 import org.openconcerto.erp.core.supplychain.receipt.ui.BonReceptionItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
-import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.Type;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
@@ -60,6 +60,7 @@ import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.List;
 
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -83,6 +84,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
     private final DeviseField textTotalTTC = new DeviseField();
     private final JTextField textPoidsTotal = new JTextField(6);
     private final JTextField textReference = new JTextField(25);
+    private JDate date = new JDate(true);
 
     public BonReceptionSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("BON_RECEPTION"));
@@ -91,13 +93,21 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
     @Override
     protected SQLRowValues createDefaults() {
         this.tableBonItem.getModel().clearRows();
-        this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(BonReceptionSQLElement.class));
-        return super.createDefaults();
+        this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(getElement().getClass()));
+        SQLRowValues rowVals = new SQLRowValues(getTable());
+        if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
+            rowVals.put("CREATE_VIRTUAL_STOCK", Boolean.TRUE);
+        }
+        return rowVals;
     }
 
     public void addViews() {
         this.setLayout(new GridBagLayout());
         final GridBagConstraints c = new DefaultGridBagConstraints();
+
+        if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
+            this.addView(new JCheckBox(), "CREATE_VIRTUAL_STOCK");
+        }
 
         // Champ Module
         c.gridx = 0;
@@ -136,11 +146,21 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         c.weightx = 0;
         this.add(labelDate, c);
 
-        JDate date = new JDate(true);
         c.gridx++;
         c.weightx = 0;
         c.weighty = 0;
         this.add(date, c);
+
+        this.date.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (!isFilling() && date.getValue() != null) {
+                    tableBonItem.setDateDevise(date.getValue());
+                }
+            }
+        });
+
         // Reference
         c.gridy++;
         c.gridx = 0;
@@ -180,11 +200,31 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         c.weightx = 1;
         c.weighty = 0;
         c.fill = GridBagConstraints.NONE;
+        DefaultGridBagConstraints.lockMinimumSize(boxDevise);
         this.add(boxDevise, c);
         this.addView(boxDevise, "ID_DEVISE");
+        fournisseur.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent arg0) {
+                if (fournisseur.getSelectedRow() != null) {
+                    boxDevise.setValue(fournisseur.getSelectedRow().getForeignID("ID_DEVISE"));
+                } else {
+                    boxDevise.setValue((SQLRowAccessor) null);
+                }
+            }
+        });
 
         // Element du bon
         this.tableBonItem = new BonReceptionItemTable();
+        boxDevise.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                tableBonItem.setDevise(boxDevise.getSelectedRow());
+
+            }
+        });
         c.gridx = 0;
         c.gridy++;
         c.weightx = 1;
@@ -337,7 +377,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         this.addRequiredSQLObject(this.textTotalTTC, "TOTAL_TTC");
         this.addRequiredSQLObject(this.fournisseur, "ID_FOURNISSEUR");
 
-        this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(BonReceptionSQLElement.class));
+        this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(getElement().getClass()));
 
         // Listeners
         this.tableBonItem.getModel().addTableModelListener(new TableModelListener() {
@@ -380,7 +420,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
                 this.tableBonItem.createArticle(idBon, this.getElement());
 
                 // incrémentation du numéro auto
-                if (NumerotationAutoSQLElement.getNextNumero(BonReceptionSQLElement.class).equalsIgnoreCase(this.textNumeroUnique.getText().trim())) {
+                if (NumerotationAutoSQLElement.getNextNumero(getElement().getClass()).equalsIgnoreCase(this.textNumeroUnique.getText().trim())) {
                     SQLRowValues rowVals = new SQLRowValues(this.tableNum);
                     int val = this.tableNum.getRow(2).getInt("BON_R_START");
                     val++;
@@ -562,8 +602,18 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
 
                 return getLibelleStock(rowOrigin, rowElt);
             }
-        }, row, row.getReferentRows(getTable().getTable("BON_RECEPTION_ELEMENT")), Type.REAL_RECEPT);
+        }, row, row.getReferentRows(getTable().getTable("BON_RECEPTION_ELEMENT")),
+                getTable().contains("CREATE_VIRTUAL_STOCK") && row.getBoolean("CREATE_VIRTUAL_STOCK") ? TypeStockUpdate.REAL_VIRTUAL_RECEPT : TypeStockUpdate.REAL_RECEPT);
 
         stockUpdater.update();
+
+    }
+
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor rSource) {
+        if (this.date.getValue() != null) {
+            this.tableBonItem.setDateDevise(this.date.getValue());
+        }
+
     }
 }

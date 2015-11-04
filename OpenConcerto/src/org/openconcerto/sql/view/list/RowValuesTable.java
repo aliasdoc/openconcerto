@@ -22,6 +22,7 @@ import org.openconcerto.sql.request.SQLFieldTranslator;
 import org.openconcerto.sql.sqlobject.itemview.BaseRowItemView;
 import org.openconcerto.sql.view.IListPanel;
 import org.openconcerto.ui.EnhancedTable;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.state.JTableStateManager;
 import org.openconcerto.ui.table.AlternateTableCellRenderer;
 import org.openconcerto.ui.table.XTableColumnModel;
@@ -357,6 +358,10 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
     public void addValueListener(PropertyChangeListener l) {
 
     }
+    
+    @Override
+    public void removeValueListener(PropertyChangeListener l) {
+    }
 
     @Override
     public Component getComp() {
@@ -392,8 +397,20 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
     }
 
     @Override
+    public void setEditable(InteractionMode mode) {
+        this.model.setEditable(mode.isEditable());
+        super.setEnabled(mode.isEnabled());
+    }
+
     public void setEditable(boolean b) {
-        this.model.setEditable(b);
+        this.setEnabled(b);
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        // don't overwrite R/O mode
+        if (enabled != this.isEnabled())
+            this.setEditable(enabled ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
     }
 
     @Override
@@ -456,10 +473,4 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
         }
         this.sqlName = sqlName;
     }
-
-    @Override
-    public void setEnabled(boolean enabled) {
-        this.setEditable(enabled);
-    }
-
 }

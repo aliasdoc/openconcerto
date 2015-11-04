@@ -19,7 +19,10 @@ package org.openconcerto.utils;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -154,6 +157,39 @@ public class CompareUtils {
         if (o1 == null || o2 == null)
             return false;
         return o1.compareTo(o2) == 0;
+    }
+
+    /**
+     * Compare 2 collections in order. Useful since for some classes even though there's an order
+     * <code>equals()</code> ignores it (e.g. {@link LinkedHashMap#equals(Object)}).
+     * 
+     * @param c1 the first object, can be <code>null</code>.
+     * @param c2 the second object, can be <code>null</code>.
+     * @return <code>true</code> if both are <code>null</code> or if all items in order are
+     *         {@link #equals(Object, Object)}.
+     */
+    static public final boolean equalsUsingIterator(Collection<?> c1, Collection<?> c2) {
+        if (c1 == null && c2 == null)
+            return true;
+        if (c1 == null || c2 == null)
+            return false;
+
+        final int size = c1.size();
+        if (size != c2.size())
+            return false;
+        else if (size == 0)
+            return true;
+
+        final Iterator<?> iter1 = c1.iterator();
+        final Iterator<?> iter2 = c2.iterator();
+        while (iter1.hasNext()) {
+            final Object o1 = iter1.next();
+            final Object o2 = iter2.next();
+            if (!equals(o1, o2))
+                return false;
+        }
+        assert !iter1.hasNext() && !iter2.hasNext();
+        return true;
     }
 
     static public interface Equalizer<T> {

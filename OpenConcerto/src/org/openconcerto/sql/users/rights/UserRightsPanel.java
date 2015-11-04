@@ -22,14 +22,15 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.sqlobject.IComboSelectionItem;
 import org.openconcerto.sql.users.UserManager;
-import org.openconcerto.sql.users.rights.UserRightSQLElement.UserRightComp;
 import org.openconcerto.sql.view.ListeModifyPanel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.utils.cc.IClosure;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
 
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -52,8 +53,25 @@ public class UserRightsPanel extends JPanel {
 
         // init the list before adding it, otherwise we see the first refresh from all lines to just
         // these of undef
-        // instantiate our own element to be safe
-        this.modifPanel = new ListeModifyPanel(dir.getElement(UserRightSQLElement.class));
+        this.modifPanel = new ListeModifyPanel(dir.getElement(UserRightSQLElement.class)) {
+            @Override
+            protected void handleAction(JButton source, ActionEvent evt) {
+                super.handleAction(source, evt);
+                // if the user click add and the create frame is then hidden (not closed) and he
+                // later click add again the create frame will be brought to the front, its content
+                // unmodified even if he has selected another principal. So call reset() so that the
+                // principal in the create frame match the selected principal.
+                if (source == this.buttonAjouter) {
+                    this.getAddComp().resetValue();
+                }
+            }
+        };
+        // don't listen to the list, as the behaviour differs if there's some rights for a principal
+        // or not. I.e. if the user clicks add the current principal is selected :
+        // - if the user select another principal with rights, the principal is updated
+        // - if the user select another principal without rights, no lines are available and the
+        // principal is not updated
+        this.modifPanel.setDeaf(true);
         this.modifPanel.setSearchFullMode(false);
         // order is important for rights
         this.modifPanel.getListe().setSortingEnabled(false);
@@ -131,8 +149,8 @@ public class UserRightsPanel extends JPanel {
         req.setWhere(new Where(req.getPrimaryTable().getField("ID_USER_COMMON"), "=", userID));
 
         // enforce the limitation
-        ((UserRightComp) this.modifPanel.getModifComp()).setUserID(userID);
-        ((UserRightComp) this.modifPanel.getAddComp()).setUserID(userID);
+        ((UserRightSQLComponent) this.modifPanel.getModifComp()).setUserID(userID);
+        ((UserRightSQLComponent) this.modifPanel.getAddComp()).setUserID(userID);
     }
 
     public final SQLTable getTable() {

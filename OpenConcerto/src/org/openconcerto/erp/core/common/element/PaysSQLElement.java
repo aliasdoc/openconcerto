@@ -17,6 +17,7 @@ import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.CollectionMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -44,6 +45,11 @@ public class PaysSQLElement extends ComptaSQLConfElement {
         final List<String> l = new ArrayList<String>();
         l.add("NOM");
         return l;
+    }
+
+    @Override
+    public CollectionMap<String, String> getShowAs() {
+        return CollectionMap.singleton(null, getComboFields());
     }
 
     /*

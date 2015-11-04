@@ -492,7 +492,7 @@ public abstract class SQLSyntax {
             } else {
                 // always remove unsigned they're a pain to maintain across systems
                 // use standard SQL types
-                sqlType = typeName.replace("unsigned", "").replace("int2", "smallint").replace("int4", "int").replace("int8", "bigint").trim();
+                sqlType = typeName.replace("unsigned", "").replace("int2", "smallint").replace("integer", "int").replace("int4", "int").replace("int8", "bigint").trim();
             }
         } else {
             sqlType = typeName;
@@ -583,6 +583,10 @@ public abstract class SQLSyntax {
      *         value, <code>null</code> if the syntax do no use casts.
      */
     protected abstract Tuple2<Boolean, String> getCast();
+
+    public String cast(final String expr, final String type) {
+        return "CAST( " + expr + " AS " + type + " )";
+    }
 
     // JDBC says: ordered by NON_UNIQUE, TYPE, INDEX_NAME, and ORDINAL_POSITION
     public List<Map<String, Object>> getIndexInfo(final SQLTable t) throws SQLException {
@@ -713,8 +717,12 @@ public abstract class SQLSyntax {
         return "ALTER TABLE " + table.quote() + " RENAME to " + SQLBase.quoteIdentifier(newName);
     }
 
-    public String getDropTableIfExists(SQLName name) {
-        return "DROP TABLE IF EXISTS " + name.quote();
+    public final String getDropTableIfExists(SQLName name) {
+        return getDropTable(name, true, true);
+    }
+
+    public String getDropTable(SQLName name, final boolean ifExists, final boolean restrict) {
+        return "DROP TABLE " + (ifExists ? "IF EXISTS " : "") + name.quote() + (restrict ? " RESTRICT" : " CASCADE");
     }
 
     public abstract String getDropRoot(String name);
@@ -733,6 +741,10 @@ public abstract class SQLSyntax {
      * @throws SQLException if an error occurs while loading data into the database.
      */
     public final void loadData(final File dir, final DBRoot r, final Set<String> tableNames, final boolean delete) throws IOException, SQLException {
+        this.loadData(dir, r, tableNames, delete, true);
+    }
+
+    public final void loadData(final File dir, final DBRoot r, final Set<String> tableNames, final boolean delete, final boolean disableFC) throws IOException, SQLException {
         final List<Tuple2<File, SQLTable>> tables = new ArrayList<Tuple2<File, SQLTable>>();
         if (tableNames == null) {
             for (final File f : dir.listFiles(new FileFilter() {
@@ -758,10 +770,12 @@ public abstract class SQLSyntax {
             }
         }
         // only run at the end to avoid being stopped while loading
-        r.getBase().getDataSource().execute(disableFKChecks(r));
+        if (disableFC)
+            r.getBase().getDataSource().execute(disableFKChecks(r));
         for (final Tuple2<File, SQLTable> t : tables)
             loadData(t.get0(), t.get1(), delete, Level.INFO);
-        r.getBase().getDataSource().execute(enableFKChecks(r));
+        if (disableFC)
+            r.getBase().getDataSource().execute(enableFKChecks(r));
     }
 
     public final void loadData(final File f, final SQLTable t) throws IOException, SQLException {

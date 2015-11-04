@@ -115,7 +115,7 @@ public class MutableListComboPopupListener {
 
     protected final JPopupMenu getPopup(MouseEvent ev) {
         // respect enabled status
-        if (!this.combo.getPopupComp().isEnabled())
+        if (!InteractionMode.from(this.combo.getPopupComp()).isEditable())
             return null;
         // Bouton droit en non locked
         // On debloque le lock en faisant CTRL + bouton droit

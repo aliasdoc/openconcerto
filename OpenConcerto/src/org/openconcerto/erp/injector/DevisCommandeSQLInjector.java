@@ -35,6 +35,23 @@ public class DevisCommandeSQLInjector extends SQLInjector {
         if (tableDevis.getTable().contains("ID_POLE_PRODUIT")) {
             map(tableDevis.getField("ID_POLE_PRODUIT"), tableCommande.getField("ID_POLE_PRODUIT"));
         }
+        if (getSource().getTable().contains("ID_CONTACT")) {
+            map(tableDevis.getField("ID_CONTACT"), tableCommande.getField("ID_CONTACT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
+        }
+        if (getSource().getTable().contains("ID_ADRESSE") && getDestination().contains("ID_ADRESSE")) {
+            map(tableDevis.getField("ID_ADRESSE"), getDestination().getField("ID_ADRESSE"));
+        }
+        if (getSource().getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            map(tableDevis.getField("ID_ADRESSE_LIVRAISON"), getDestination().getField("ID_ADRESSE_LIVRAISON"));
+        }
+
+        if (getSource().getTable().contains("MONTANT_REMISE") && getDestination().contains("MONTANT_REMISE")) {
+            map(tableDevis.getField("MONTANT_REMISE"), getDestination().getField("MONTANT_REMISE"));
+            map(tableDevis.getField("POURCENT_REMISE"), getDestination().getField("POURCENT_REMISE"));
+        }
     }
 
     @Override

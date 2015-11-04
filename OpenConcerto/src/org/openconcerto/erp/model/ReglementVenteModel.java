@@ -21,7 +21,6 @@ import java.util.Vector;
 
 import javax.swing.table.AbstractTableModel;
 
-
 public class ReglementVenteModel extends AbstractTableModel {
 
     String[] column = { "Numéro", "Libellé", "Date", "Mode de règlement", "Date Règlement", "Montant" };
@@ -29,8 +28,6 @@ public class ReglementVenteModel extends AbstractTableModel {
     ComptaPropsConfiguration conf = ((ComptaPropsConfiguration) Configuration.getInstance());
 
     public ReglementVenteModel() {
-
-        SQLSelect selectFacture = new SQLSelect(conf.getBase());
 
     }
 

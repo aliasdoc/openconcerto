@@ -13,6 +13,7 @@
  
  package org.openconcerto.openoffice.spreadsheet;
 
+import org.openconcerto.openoffice.Length;
 import org.openconcerto.openoffice.LengthUnit;
 import org.openconcerto.openoffice.ODPackage;
 import org.openconcerto.openoffice.Style;
@@ -20,8 +21,6 @@ import org.openconcerto.openoffice.StyleProperties;
 import org.openconcerto.openoffice.StyleStyle;
 import org.openconcerto.openoffice.StyleStyleDesc;
 import org.openconcerto.openoffice.XMLVersion;
-
-import java.math.BigDecimal;
 
 import org.jdom.Element;
 
@@ -51,6 +50,10 @@ public class RowStyle extends StyleStyle {
         return this.rowProps;
     }
 
+    public final Length getHeight() {
+        return this.getTableRowProperties().getHeight();
+    }
+
     // see 17.17 of v1.2-cs01-part1
     public static class StyleTableRowProperties extends StyleProperties {
 
@@ -58,8 +61,8 @@ public class RowStyle extends StyleStyle {
             super(style, style.getFamily());
         }
 
-        public final BigDecimal getHeight(final LengthUnit in) {
-            return LengthUnit.parseLength(getAttributeValue("row-height", this.getNS("style")), in);
+        public final Length getHeight() {
+            return LengthUnit.parseLength(getAttributeValue("row-height", this.getNS("style")));
         }
 
         public final String getBreakBefore() {

@@ -15,12 +15,11 @@
 
 import org.openconcerto.sql.element.GroupSQLComponent;
 import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.ui.group.Group;
 
 public class ProductGoupSQLComponent extends GroupSQLComponent {
 
     public ProductGoupSQLComponent(SQLElement element) {
-        super(element, new ProductEditGroup());
+        super(element);
 
     }
 

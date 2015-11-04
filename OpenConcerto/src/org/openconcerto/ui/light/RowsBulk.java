@@ -13,6 +13,9 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONconverter;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -21,7 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class RowsBulk implements Externalizable {
+public class RowsBulk implements Externalizable, JSONAble {
 
     private List<Row> rows;
     private int offset;
@@ -41,7 +44,7 @@ public class RowsBulk implements Externalizable {
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         int rowCount = in.readInt();
         if (rowCount == 0) {
-            this.rows = Collections.EMPTY_LIST;
+            this.rows = Collections.emptyList();
         } else {
             this.rows = new ArrayList<Row>(rowCount);// colcount
             int columnCount = in.readByte();
@@ -67,16 +70,16 @@ public class RowsBulk implements Externalizable {
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         // nb rows
-        int rowCount = rows.size();
+        int rowCount = this.rows.size();
         out.writeInt(rowCount);
         // content
-        if (rows.size() > 0) {
+        if (this.rows.size() > 0) {
             // nbcols
-            int columnCount = rows.get(0).getValues().size();
+            int columnCount = this.rows.get(0).getValues().size();
             out.writeByte(columnCount);
             // ids
             for (int j = 0; j < rowCount; j++) {
-                Row row = rows.get(j);
+                Row row = this.rows.get(j);
                 out.writeLong(row.getId());
 
             }
@@ -85,7 +88,7 @@ public class RowsBulk implements Externalizable {
             for (int i = 0; i < columnCount; i++) {
 
                 for (int j = 0; j < rowCount; j++) {
-                    Row row = rows.get(j);
+                    Row row = this.rows.get(j);
                     Object v = row.getValues().get(i);
                     out.writeObject(v);
                 }
@@ -93,8 +96,8 @@ public class RowsBulk implements Externalizable {
             }
 
         }
-        out.writeInt(offset);
-        out.writeInt(total);
+        out.writeInt(this.offset);
+        out.writeInt(this.total);
     }
 
     public List<Row> getRows() {
@@ -102,10 +105,22 @@ public class RowsBulk implements Externalizable {
     }
 
     public int getOffset() {
-        return offset;
+        return this.offset;
     }
 
     public int getTotal() {
-        return total;
+        return this.total;
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+
+        result.append("\"rows\":" + JSONconverter.getJSON(this.rows) + ",");
+        result.append("\"offset\":" + JSONconverter.getJSON(this.offset) + ",");
+        result.append("\"total\":" + JSONconverter.getJSON(this.total));
+
+        result.append("}");
+        return result.toString();
     }
 }

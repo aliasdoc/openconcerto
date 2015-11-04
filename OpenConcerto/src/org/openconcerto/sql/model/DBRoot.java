@@ -313,10 +313,16 @@ public final class DBRoot extends DBStructureItemDB {
     }
 
     public final SQLCreateRoot getDefinitionSQL(final SQLSystem sys) {
+        return this.getDefinitionSQL(sys, true);
+    }
+
+    public final SQLCreateRoot getDefinitionSQL(final SQLSystem sys, final boolean withTables) {
         final SQLCreateRoot res = new SQLCreateRoot(sys.getSyntax(), this.getName());
-        // order by name to be able to do diffs
-        for (final SQLTable table : new TreeMap<String, SQLTable>(this.getTablesMap()).values()) {
-            res.addTable(table.getCreateTable(sys));
+        if (withTables) {
+            // order by name to be able to do diffs
+            for (final SQLTable table : new TreeMap<String, SQLTable>(this.getTablesMap()).values()) {
+                res.addTable(table.getCreateTable(sys));
+            }
         }
         return res;
     }

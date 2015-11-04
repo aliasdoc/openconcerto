@@ -226,4 +226,10 @@ public class IFtp extends FTPClient {
         return __storeFile(FTPCommand.STOU, null, local);
     }
 
+    // Force passive mode
+    @Override
+    protected void _connectAction_() throws IOException {
+        super._connectAction_();
+        enterLocalPassiveMode();
+    }
 }

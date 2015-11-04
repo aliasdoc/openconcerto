@@ -13,36 +13,31 @@
  
  package org.openconcerto.sql.view.list.search;
 
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLRowValues.CreateMode;
-import org.openconcerto.sql.model.SQLRowValuesCluster.State;
-import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.sql.view.list.ITableModel;
-import org.openconcerto.sql.view.list.LineListener;
 import org.openconcerto.sql.view.list.ListAccess;
 import org.openconcerto.sql.view.list.ListSQLLine;
+import org.openconcerto.sql.view.list.UpdateQueue;
+import org.openconcerto.sql.view.list.UpdateQueue.TaskType;
+import org.openconcerto.sql.view.list.search.SearchOne.Mode;
 import org.openconcerto.sql.view.search.SearchSpec;
 import org.openconcerto.utils.IFutureTask;
-import org.openconcerto.utils.ListMap;
-import org.openconcerto.utils.RTInterruptedException;
-import org.openconcerto.utils.RecursionType;
 import org.openconcerto.utils.SleepingQueue;
-import org.openconcerto.utils.cc.IPredicate;
+import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
+import java.util.Deque;
 import java.util.concurrent.FutureTask;
 
+import javax.swing.SwingUtilities;
+
 public final class SearchQueue extends SleepingQueue {
+
+    static public interface SetStateRunnable extends Runnable {
+    }
 
     /**
      * Whether the passed future performs a search.
@@ -50,8 +45,16 @@ public final class SearchQueue extends SleepingQueue {
      * @param f a task in this queue, can be <code>null</code>.
      * @return <code>true</code> if <code>f</code> searches.
      */
-    public static boolean isSearch(FutureTask<?> f) {
-        return (f instanceof IFutureTask) && ((IFutureTask<?>) f).getRunnable() instanceof SearchRunnable;
+    public static boolean isSearch(final FutureTask<?> f) {
+        final Runnable r = getRunnable(f);
+        return r instanceof SearchRunnable && ((SearchRunnable) r).performsSearch();
+    }
+
+    public static Runnable getRunnable(final FutureTask<?> f) {
+        if (f instanceof IFutureTask)
+            return ((IFutureTask<?>) f).getRunnable();
+        else
+            return null;
     }
 
     /**
@@ -68,169 +71,107 @@ public final class SearchQueue extends SleepingQueue {
     }
 
     private final ITableModel model;
+    // only accessed within this queue
     SearchSpec search;
-    private final List<ListSQLLine> fullList;
     private final ListAccess listAccess;
-    private final LineListener lineListener;
+    // thread-safe
+    private final IClosure<Deque<FutureTask<?>>> cancelClosure;
 
     public SearchQueue(final ListAccess la) {
         super(SearchQueue.class.getName() + " on " + la.getModel());
         this.listAccess = la;
         this.model = la.getModel();
         this.search = null;
-        this.fullList = new ArrayList<ListSQLLine>();
-
-        this.lineListener = new LineListener() {
+        this.cancelClosure = UpdateQueue.createCancelClosure(this, new ITransformer<FutureTask<?>, TaskType>() {
             @Override
-            public void lineChanged(int id, ListSQLLine l, Set<Integer> colIndex) {
-                changeFullList(id, l, colIndex);
+            public TaskType transformChecked(FutureTask<?> input) {
+                final Runnable r = getRunnable(input);
+                if (r instanceof SearchRunnable)
+                    return TaskType.COMPUTE;
+                else if (r instanceof SetStateRunnable)
+                    return TaskType.SET_STATE;
+                else
+                    return TaskType.USER;
             }
-        };
-        this.getModel().getLinesSource().addLineListener(this.lineListener);
+        });
+    }
+
+    public void orderChanged() {
+        // don't search all if only order has changed
+        this.put(new SearchRunnable(this) {
+
+            @Override
+            protected boolean performsSearch() {
+                return false;
+            }
+
+            @Override
+            public void run() {
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        getAccess().setList(null, null);
+                    }
+                });
+            }
+        });
+    }
+
+    public void changeFullList(final int id, final ListSQLLine modifiedLine, final Collection<Integer> modifiedCols, final Mode mode) {
+        final SearchOne oneSearchRunnable = new SearchOne(this, id, modifiedLine, modifiedCols, mode);
+        this.put(oneSearchRunnable);
+    }
+
+    public void fullListChanged() {
+        fullDataChange();
+    }
+
+    public void setSearch(final SearchSpec s) {
+        this.setSearch(s, null);
+    }
+
+    public void setSearch(final SearchSpec s, final Runnable r) {
+        // needs to be 2 different runnables, that way if the search is changed and then the table
+        // is updated : the queue would naively contain setSearch, searchAll, searchAll and thus we
+        // can cancel one searchAll. Whereas if the setSearch was contained in searchAll, we
+        // couldn't cancel it.
+        // use tasksDo() so that no other runnable can come between setSearch and searchAll.
+        // Otherwise a runnable might the new search query but not the new filtered list.
+        this.tasksDo(new IClosure<Deque<FutureTask<?>>>() {
+            @Override
+            public void executeChecked(Deque<FutureTask<?>> input) {
+                put(new SetStateRunnable() {
+                    @Override
+                    public void run() {
+                        SearchQueue.this.search = s;
+                    }
+                });
+                fullDataChange();
+                if (r != null) {
+                    put(new Runnable() {
+                        @Override
+                        public void run() {
+                            SwingUtilities.invokeLater(r);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private void fullDataChange() {
+        this.put(new SearchAll(this));
     }
 
     @Override
-    protected void willDie() {
-        this.getModel().getLinesSource().rmLineListener(this.lineListener);
-        super.willDie();
-    }
-
-    /**
-     * The lines and their path affected by a change of the passed row.
-     * 
-     * @param r the row that has changed.
-     * @return the refreshed lines and their changed paths.
-     */
-    public ListMap<ListSQLLine, Path> getAffectedLines(final SQLRow r) {
-        return this.execGetAffected(r, new ListMap<ListSQLLine, Path>(), true);
-    }
-
-    public ListMap<Path, ListSQLLine> getAffectedPaths(final SQLRow r) {
-        return this.execGetAffected(r, new ListMap<Path, ListSQLLine>(), false);
-    }
-
-    private <K, V> ListMap<K, V> execGetAffected(final SQLRow r, final ListMap<K, V> res, final boolean byLine) {
-        return this.execute(new Callable<ListMap<K, V>>() {
-            @Override
-            public ListMap<K, V> call() throws Exception {
-                return getAffected(r, res, byLine);
-            }
-        });
-    }
-
-    /**
-     * Executes <code>c</code> in this queue, blocking the current thread.
-     * 
-     * @param <R> type of result
-     * @param c what to do.
-     * @return the result of <code>c</code>.
-     */
-    private <R> R execute(final Callable<R> c) {
-        try {
-            return this.execute(new FutureTask<R>(c)).get();
-        } catch (InterruptedException e) {
-            throw new RTInterruptedException(e);
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e);
+    protected void willPut(final FutureTask<?> qr) throws InterruptedException {
+        if (getRunnable(qr) instanceof SearchAll) {
+            // si on recherche tout, ne sert à rien de garder les recherches précédentes.
+            this.tasksDo(this.cancelClosure);
         }
     }
 
-    // must be called from within this queue, as this method use fullList
-    private <K, V> ListMap<K, V> getAffected(final SQLRow r, ListMap<K, V> res, boolean byLine) {
-        final SQLTable t = r.getTable();
-        final int id = r.getID();
-        if (id < SQLRow.MIN_VALID_ID)
-            throw new IllegalArgumentException("invalid ID: " + id);
-        if (!this.fullList.isEmpty()) {
-            final SQLRowValues proto = this.getModel().getLinesSource().getParent().getMaxGraph();
-            final List<Path> pathsToT = new ArrayList<Path>();
-            proto.getGraph().walk(proto, pathsToT, new ITransformer<State<List<Path>>, List<Path>>() {
-                @Override
-                public List<Path> transformChecked(State<List<Path>> input) {
-                    if (input.getCurrent().getTable() == t) {
-                        input.getAcc().add(input.getPath());
-                    }
-                    return input.getAcc();
-                }
-            }, RecursionType.BREADTH_FIRST, Direction.ANY);
-            for (final Path p : pathsToT) {
-                final String lastReferentField = getLastReferentField(p);
-                for (final ListSQLLine line : this.fullList) {
-                    boolean put = false;
-                    for (final SQLRowValues current : line.getRow().followPath(p, CreateMode.CREATE_NONE, false)) {
-                        // works for rowValues w/o any ID
-                        if (current != null && current.getID() == id) {
-                            put = true;
-                        }
-                    }
-                    // if the modified row isn't in the existing line, it might still affect it if
-                    // it's a referent row insertion
-                    if (!put && lastReferentField != null && r.exists()) {
-                        final int foreignID = r.getInt(lastReferentField);
-                        for (final SQLRowValues current : line.getRow().followPath(p.minusLast(), CreateMode.CREATE_NONE, false)) {
-                            if (current.getID() == foreignID) {
-                                put = true;
-                            }
-                        }
-                    }
-                    if (put) {
-                        // add to the list of paths that have been refreshed
-                        add(byLine, res, p, line);
-                    }
-                }
-            }
-        }
-        return res;
-    }
-
-    @SuppressWarnings("unchecked")
-    <V, K> void add(boolean byLine, ListMap<K, V> res, final Path p, final ListSQLLine line) {
-        if (byLine)
-            res.add((K) line, (V) p);
-        else
-            res.add((K) p, (V) line);
-    }
-
-    private synchronized void changeFullList(final int id, final ListSQLLine modifiedLine, final Collection<Integer> modifiedCols) {
-        final SearchOne oneSearchRunnable = new SearchOne(this, id, modifiedLine, modifiedCols);
-        this.putTask(new ChangeListOne("changeFullList " + id + " newLine: " + modifiedLine, this, modifiedLine, id, oneSearchRunnable));
-        this.putTask(oneSearchRunnable);
-    }
-
-    public synchronized void setFullList(final List<ListSQLLine> l) {
-        if (l == null)
-            throw new NullPointerException();
-        this.putTask(new ChangeListAll("setFullList", this, l));
-        fullDataChange();
-    }
-
-    public synchronized void setSearch(final SearchSpec s) {
-        this.putTask(new Runnable() {
-            public void run() {
-                SearchQueue.this.search = s;
-            }
-        });
-        fullDataChange();
-    }
-
-    private synchronized void fullDataChange() {
-        this.clearCompute();
-        this.putTask(new SearchAll(this));
-    }
-
-    private synchronized void putTask(final Runnable r) {
-        this.execute(new IFutureTask<Object>(r, null));
-    }
-
-    private synchronized void clearCompute() {
-        this.cancel(new IPredicate<FutureTask<?>>() {
-            @Override
-            public boolean evaluateChecked(FutureTask<?> f) {
-                return isSearch(f);
-            }
-        });
-    }
-
+    @Override
     public String toString() {
         return this.getClass().getName() + " for " + this.getModel();
     }
@@ -239,16 +180,8 @@ public final class SearchQueue extends SleepingQueue {
         return this.search;
     }
 
-    final List<ListSQLLine> getFullList() {
-        return this.fullList;
-    }
-
     final ListAccess getAccess() {
         return this.listAccess;
-    }
-
-    public final int getFullListSize() {
-        return this.fullList.size();
     }
 
     public final ITableModel getModel() {

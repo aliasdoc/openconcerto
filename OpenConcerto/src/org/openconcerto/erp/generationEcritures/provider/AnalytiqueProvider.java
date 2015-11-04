@@ -15,7 +15,16 @@
 
 import org.openconcerto.sql.model.SQLRow;
 
+import java.util.List;
+
 public interface AnalytiqueProvider {
 
-    public void addAssociation(SQLRow rowEcr, SQLRow rowSource);
+    /**
+     * @param axe
+     * @param rowEcr
+     * @param rowSource
+     * @return la liste des associations créées. Si aucune n'est créée, une association sera créée
+     *         sur le poste par défaut
+     */
+    public List<SQLRow> addAssociation(SQLRow axe, SQLRow rowEcr, SQLRow rowSource);
 }

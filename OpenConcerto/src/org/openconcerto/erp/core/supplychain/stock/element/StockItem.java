@@ -13,25 +13,30 @@
  
  package org.openconcerto.erp.core.supplychain.stock.element;
 
-import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.preferences.SQLPreferences;
 import org.openconcerto.sql.request.UpdateBuilder;
-import org.openconcerto.ui.preferences.DefaultProps;
 import org.openconcerto.utils.ListMap;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Représente un article avec son stock
+ * 
+ * @author Utilisateur
+ * 
+ */
 public class StockItem {
 
-    public enum Type {
-        REEL, THEORIQUE
+    public enum TypeStockMouvement {
+        REEL, THEORIQUE, REEL_THEORIQUE
     };
 
     private double realQty, virtualQty, receiptQty, deliverQty;
@@ -55,7 +60,7 @@ public class StockItem {
         }
     }
 
-    public void updateQty(double qty, Type t) {
+    public void updateQty(double qty, TypeStockMouvement t) {
         updateQty(qty, t, false);
     }
 
@@ -91,10 +96,8 @@ public class StockItem {
 
     public void fillCommandeFournisseur(ListMap<SQLRow, SQLRowValues> cmd) {
 
-        DefaultProps props = DefaultNXProps.getInstance();
-        String stockMin = props.getStringProperty("ArticleStockMin");
-        Boolean bStockMin = !stockMin.equalsIgnoreCase("false");
-        boolean gestionStockMin = (bStockMin == null || bStockMin.booleanValue());
+        SQLPreferences prefs = new SQLPreferences(article.getTable().getDBRoot());
+        boolean gestionStockMin = prefs.getBoolean("ArticleStockMin", true);
         if (article.getTable().getFieldsName().contains("QTE_MIN") && gestionStockMin && article.getObject("QTE_MIN") != null && getRealQty() < article.getInt("QTE_MIN")) {
             // final float qteShow = qteNvlle;
             SQLInjector inj = SQLInjector.getInjector(article.getTable(), article.getTable().getTable("COMMANDE_ELEMENT"));
@@ -129,9 +132,9 @@ public class StockItem {
      * @param t Type de stock à mettre à jour (réel ou virtuel)
      * @param archive annulation du stock
      */
-    public void updateQty(double qty, Type t, boolean archive) {
+    public void updateQty(double qty, TypeStockMouvement t, boolean archive) {
 
-        if (t == Type.REEL) {
+        if (t == TypeStockMouvement.REEL || t == TypeStockMouvement.REEL_THEORIQUE) {
             final double qteNvlle;
             final double qteOrigin = this.realQty;
             if (archive) {
@@ -156,7 +159,10 @@ public class StockItem {
 
             this.realQty = qteNvlle;
 
-        } else {
+        }
+
+        if (t == TypeStockMouvement.THEORIQUE || t == TypeStockMouvement.REEL_THEORIQUE) {
+
             // THEORIQUE
             final double qteNvlle;
             final double qteOrigin = this.virtualQty;

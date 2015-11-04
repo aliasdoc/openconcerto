@@ -17,9 +17,7 @@ import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * The FROM clause of an SQLSelect, eg "FROM OBSERVATION O JOIN TENSION T on O.ID_TENSION = T.ID".
@@ -42,43 +40,36 @@ class FromClause implements SQLItem {
         }
     };
 
-    // which tables have already been added to this clause
-    private final Set<TableRef> tables;
     private final List<SQLItem> sql;
 
     public FromClause() {
         this.sql = new ArrayList<SQLItem>();
-        this.tables = new HashSet<TableRef>();
     }
 
     public FromClause(FromClause f) {
         this();
         this.sql.addAll(f.sql);
-        this.tables.addAll(f.tables);
     }
 
     void add(TableRef res) {
-        if (this.tables.add(res)) {
-            if (!this.sql.isEmpty())
-                this.sql.add(COMMA);
-            this.sql.add(res);
-        }
+        if (!this.sql.isEmpty())
+            this.sql.add(COMMA);
+        this.sql.add(res);
     }
 
     void add(SQLSelectJoin j) {
-        if (this.tables.add(j.getJoinedTable())) {
-            if (this.sql.isEmpty())
-                throw new IllegalArgumentException("nothing to join with " + j);
-            else {
-                this.sql.add(NEWLINE);
-                this.sql.add(j);
-            }
-        } else {
-            // avoid this (where the 2nd line already added MOUVEMENT) :
-            // sel.addSelect(tableEcriture.getField("NOM"));
-            // sel.addSelect(tableMouvement.getField("NUMERO"));
-            // sel.addJoin("LEFT", "ECRITURE.ID_MOUVEMENT");
-            throw new IllegalArgumentException(j.getJoinedTable() + ": the joined table is already in this from: " + this);
+        if (this.sql.isEmpty())
+            throw new IllegalArgumentException("nothing to join with " + j);
+        this.sql.add(NEWLINE);
+        this.sql.add(j);
+    }
+
+    void remove(SQLSelectJoin j) {
+        final int index = this.sql.indexOf(j);
+        if (index >= 0) {
+            final List<SQLItem> toClear = this.sql.subList(index - 1, index + 1);
+            assert toClear.get(0) == NEWLINE && toClear.get(1).equals(j) && toClear.size() == 2;
+            toClear.clear();
         }
     }
 

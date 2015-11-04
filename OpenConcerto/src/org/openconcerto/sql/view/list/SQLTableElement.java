@@ -278,14 +278,14 @@ public class SQLTableElement {
         for (int i = 0; i < this.modificationListener.size(); i++) {
             SQLTableElement element = this.modificationListener.get(i);
             // System.out.println("FireModification: from:" + this.name + " to:" + element.name);
-            element.valueModified(row);
+            element.valueModified(row, this);
         }
     }
 
-    private void valueModified(final SQLRowValues row) {
+    private void valueModified(final SQLRowValues row, SQLTableElement source) {
         if (this.modifier != null) {
             Object oldValue = row.getObject(this.rowField);
-            Object newValue = this.modifier.computeValueFrom(row);
+            Object newValue = this.modifier.computeValueFrom(row, source);
             // Test pour eviter un deadlock sur les listeners
             if (!CompareUtils.equals(oldValue, newValue)) {
                 if (this.rowField != null) {
@@ -339,7 +339,7 @@ public class SQLTableElement {
     public Object getValueFrom(final SQLRowValues row) {
         Object result;
         if (this.getModifier() != null) {
-            result = this.getModifier().getValueFrom(row);
+            result = this.getModifier().getValueFrom(row, this);
         } else {
             result = row.getObject(this.getRowField());
         }

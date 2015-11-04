@@ -13,6 +13,9 @@
  
  package org.openconcerto.erp.core.common.ui;
 
+import java.awt.Component;
+
+import javax.swing.JTable;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 
@@ -20,5 +23,15 @@ public class NiveauTableCellRender extends DefaultTableCellRenderer {
 
     public NiveauTableCellRender() {
         this.setHorizontalAlignment(SwingConstants.CENTER);
+    }
+
+    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+
+        if (value != null && ((Integer) value).intValue() == -1) {
+            value = "Ø";
+        }
+        Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+        return c;
     }
 }

@@ -29,5 +29,9 @@ public class CommandeFactureAchatSQLInjector extends SQLInjector {
         map(tableCommande.getField("T_TTC"), tableAchat.getField("MONTANT_TTC"));
         map(tableCommande.getField("T_HT"), tableAchat.getField("MONTANT_HT"));
         map(tableCommande.getField("T_TVA"), tableAchat.getField("MONTANT_TVA"));
+        if (tableAchat.contains("SOURCE")) {
+            map(tableCommande.getField("ID"), tableAchat.getField("IDSOURCE"));
+            mapDefaultValues(tableAchat.getField("SOURCE"), tableCommande.getName());
+        }
     }
 }

@@ -13,14 +13,14 @@
  
  package org.openconcerto.erp.injector;
 
-import java.math.BigDecimal;
-import java.util.Collection;
-
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
+
+import java.math.BigDecimal;
+import java.util.Collection;
 
 public class BonFactureSQLInjector extends SQLInjector {
 
@@ -34,6 +34,22 @@ public class BonFactureSQLInjector extends SQLInjector {
         if (tableBon.getTable().contains("ID_POLE_PRODUIT")) {
             map(tableBon.getField("ID_POLE_PRODUIT"), tableFacture.getField("ID_POLE_PRODUIT"));
         }
+        if (getSource().getTable().contains("ID_CONTACT")) {
+            map(getSource().getField("ID_CONTACT"), getDestination().getField("ID_CONTACT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
+        }
+        if (tableBon.contains("ID_TAXE_PORT")) {
+            map(tableBon.getField("ID_TAXE_PORT"), tableFacture.getField("ID_TAXE_PORT"));
+        }
+        if (tableBon.contains("PORT_HT")) {
+            map(tableBon.getField("PORT_HT"), tableFacture.getField("PORT_HT"));
+        }
+        if (tableBon.contains("REMISE_HT")) {
+            map(tableBon.getField("REMISE_HT"), tableFacture.getField("REMISE_HT"));
+        }
+
     }
 
     @Override

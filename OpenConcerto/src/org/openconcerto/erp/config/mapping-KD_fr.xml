@@ -4,10 +4,8 @@
 	<TABLE name="AFFAIRE_ELEMENT">
 		<FIELD name="ACTIVITE" label="Domaine" titlelabel="Domaine" />
 		<FIELD name="SOUS_ACTIVITE" label="Sous domaine" titlelabel="Sous domaine" />
-		<FIELD name="POURCENT_REALISE" label="% déjà réalisé"
-			titlelabel="% déjà réalisé" />
-		<FIELD name="TOTAL_HT_REALISE" label="Total déjà facturé"
-			titlelabel="Total déjà facturé" />
+		<FIELD name="POURCENT_REALISE" label="% déjà réalisé" titlelabel="% déjà réalisé" />
+		<FIELD name="TOTAL_HT_REALISE" label="Total déjà facturé" titlelabel="Total déjà facturé" />
 		<FIELD name="ID_CODE_MISSION" label="Code Mission" />
 		<FIELD name="ID_DEPARTEMENT" label="Département" />
 		<FIELD name="ID_TARIF_MISSION" label="Code Client" />
@@ -30,10 +28,12 @@
 	</TABLE>
 
 	<TABLE name="DEVIS">
+		<FIELD name="ID_VERIFICATEUR" label="Vérificateur" />
 		<FIELD name="NUMERO" label="Numéro" />
 		<FIELD name="OBJET" label="Référence cmd client" />
 		<FIELD name="DATE_PREV" label="Intervention prévue le" />
 		<FIELD name="INDICE_0" label="Indice Syntec de base" />
+		<FIELD name="SEND_POST_MAIL" label="Envoyer une copie du rapport par courrier" />
 	</TABLE>
 
 	<TABLE name="DEVIS_ELEMENT">
@@ -74,10 +74,9 @@
 		<FIELD name="ID_TARIF_MISSION" label="Code Tarif" />
 		<FIELD name="ACTIVITE" label="Domaine" titlelabel="Domaine" />
 		<FIELD name="SOUS_ACTIVITE" label="Sous Domaine" titlelabel="Sous Domaine" />
-		<FIELD name="REPARTITION_POURCENT" label="Répartition %"
-			titlelabel="Répartition %" />
+		<FIELD name="REPARTITION_POURCENT" label="Répartition %" titlelabel="Répartition %" />
 	</TABLE>
-	
+
 	<TABLE name="AVOIR_CLIENT_ELEMENT">
 		<FIELD name="ID_CODE_MISSION" label="Code Mission" />
 		<FIELD name="ID_DEPARTEMENT" label="Département" />
@@ -85,13 +84,11 @@
 		<FIELD name="ID_TARIF_MISSION" label="Code Tarif" />
 		<FIELD name="ACTIVITE" label="Domaine" titlelabel="Domaine" />
 		<FIELD name="SOUS_ACTIVITE" label="Sous Domaine" titlelabel="Sous Domaine" />
-		<FIELD name="REPARTITION_POURCENT" label="Répartition %"
-			titlelabel="Répartition %" />
+		<FIELD name="REPARTITION_POURCENT" label="Répartition %" titlelabel="Répartition %" />
 	</TABLE>
 
 	<TABLE name="SAISIE_VENTE_FACTURE">
-		<FIELD name="TYPE_INTERVENTION" label="Numéro Intervention"
-			titlelabel="Numéro Intervention" />
+		<FIELD name="TYPE_INTERVENTION" label="Numéro Intervention" titlelabel="Numéro Intervention" />
 	</TABLE>
 
 	<TABLE name="TARIF_MISSION_LIBELLE">
@@ -106,7 +103,7 @@
 	</TABLE>
 
 	<TABLE name="AVOIR_CLIENT">
-	
+
 		<FIELD name="NOM" label="Référence" titlelabel="Référence" />
 	</TABLE>
 

@@ -28,7 +28,7 @@ public class SetMap<K, V> extends CollectionMap2<K, Set<V>, V> implements SetMap
         Unmodifiable(CollectionMap2Itf<K, Set<V>, V> delegate) {
             super(delegate, new UnmodifiableCollectionMap.UnmodifiableMap<K, Set<V>>(delegate) {
                 @Override
-                protected Set<V> toUnmodifiable(Set<V> coll) {
+                protected Set<V> nonNullToUnmodifiable(Set<V> coll) {
                     return Collections.unmodifiableSet(coll);
                 }
             });

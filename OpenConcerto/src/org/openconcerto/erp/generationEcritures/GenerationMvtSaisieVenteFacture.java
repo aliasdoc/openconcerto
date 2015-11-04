@@ -48,6 +48,7 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
     private static final SQLTable ecrTable = base.getTable("ECRITURE");
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
+    private final boolean genereReglement;
 
     /**
      * Generation de la comptabilité associée à la modification d'une saisie de vente facture
@@ -55,16 +56,21 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
      * @param idSaisieVenteFacture
      * @param idMvt id du mouvement qui est dejà associé à la facture
      */
-    public GenerationMvtSaisieVenteFacture(int idSaisieVenteFacture, int idMvt, boolean useComptePCEVente) {
+    public GenerationMvtSaisieVenteFacture(int idSaisieVenteFacture, int idMvt, boolean useComptePCEVente, boolean genereReglement) {
         System.err.println("********* init GeneRation");
         this.idMvt = idMvt;
         this.idSaisieVenteFacture = idSaisieVenteFacture;
         this.useComptePCEVente = useComptePCEVente;
+        this.genereReglement = genereReglement;
         new Thread(GenerationMvtSaisieVenteFacture.this).start();
     }
 
+    public GenerationMvtSaisieVenteFacture(int idSaisieVenteFacture, int idMvt, boolean useComptePCEVente) {
+        this(idSaisieVenteFacture, idMvt, useComptePCEVente, true);
+    }
+
     public GenerationMvtSaisieVenteFacture(int idSaisieVenteFacture, int idMvt) {
-        this(idSaisieVenteFacture, idMvt, false);
+        this(idSaisieVenteFacture, idMvt, false, true);
     }
 
     /**
@@ -79,6 +85,7 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
     private void genereMouvement() throws Exception {
 
         SQLRow saisieRow = GenerationMvtSaisieVenteFacture.saisieVFTable.getRow(this.idSaisieVenteFacture);
+        setRowAnalytiqueSource(saisieRow);
         SQLRow clientRow = saisieRow.getForeignRow("ID_CLIENT");
 
         // Calcul des montants
@@ -94,6 +101,7 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
         } else {
             this.nom = "Fact. vente " + saisieRow.getObject("NUMERO").toString();
         }
+        this.mEcritures.put("NOM", this.nom);
 
         // iniatilisation des valeurs de la map
         this.date = (Date) saisieRow.getObject("DATE");
@@ -121,7 +129,13 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
             tableEchantillon = saisieVFTable.getTable("ECHANTILLON_ELEMENT");
         }
         BigDecimal portHT = BigDecimal.valueOf(saisieRow.getLong("PORT_HT")).movePointLeft(2);
-        TotalCalculator calc = getValuesFromElement(saisieRow, saisieVFTable.getTable("SAISIE_VENTE_FACTURE_ELEMENT"), portHT, saisieRow.getForeign("ID_TAXE_PORT"), tableEchantillon);
+        TotalCalculator calc;
+        if (clientRow.getTable().contains("ID_COMPTE_PCE_PRODUIT") && !clientRow.isForeignEmpty("ID_COMPTE_PCE_PRODUIT")) {
+            calc = getValuesFromElement(false, "T_PV_HT", saisieRow, saisieVFTable.getTable("SAISIE_VENTE_FACTURE_ELEMENT"), portHT, saisieRow.getForeign("ID_TAXE_PORT"), tableEchantillon,
+                    clientRow.getForeign("ID_COMPTE_PCE_PRODUIT"));
+        } else {
+            calc = getValuesFromElement(saisieRow, saisieVFTable.getTable("SAISIE_VENTE_FACTURE_ELEMENT"), portHT, saisieRow.getForeign("ID_TAXE_PORT"), tableEchantillon);
+        }
 
         // On génére les ecritures si la facture n'est pas un acompte
         long ttcLongValue = calc.getTotalTTC().movePointRight(2).longValue();
@@ -140,8 +154,7 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
                     this.mEcritures.put("ID_COMPTE_PCE", idComptePCE);
                     this.mEcritures.put("DEBIT", Long.valueOf(0));
                     this.mEcritures.put("CREDIT", Long.valueOf(b));
-                    SQLRow rowEcr = ajoutEcriture();
-                    addAssocAnalytiqueFromProvider(rowEcr, saisieRow);
+                    ajoutEcriture();
                 }
             }
 
@@ -245,19 +258,21 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
             valSasieVF.update(this.idSaisieVenteFacture);
         }
 
-            // Génération du reglement
-            SQLRow modeRegl = saisieRow.getForeignRow("ID_MODE_REGLEMENT");
-            final SQLRow typeRegRow = modeRegl.getForeignRow("ID_TYPE_REGLEMENT");
-            String label = this.nom + " (" + typeRegRow.getString("NOM") + ")";
-            int idAvoir = saisieRow.getInt("ID_AVOIR_CLIENT");
-            if (idAvoir > 1) {
-                // SQLRow avoirRow = base.getTable("AVOIR_CLIENT").getRow(idAvoir);
-                long l = ((Number) saisieRow.getObject("T_AVOIR_TTC")).longValue();
-                prixTTC = new PrixTTC(((Long) saisieRow.getObject("T_TTC")).longValue() - l);
-            }
-            prixTTC = new PrixTTC(prixTTC.getLongValue() - montantAcompteTTC);
-            if (prixTTC.getLongValue() > 0) {
-                new GenerationReglementVenteNG(label, clientRow, prixTTC, this.date, modeRegl, saisieRow, mvtTable.getRow(idMvt));
+            if (genereReglement) {
+                // Génération du reglement
+                SQLRow modeRegl = saisieRow.getForeignRow("ID_MODE_REGLEMENT");
+                final SQLRow typeRegRow = modeRegl.getForeignRow("ID_TYPE_REGLEMENT");
+                String label = this.nom + " (" + typeRegRow.getString("NOM") + ")";
+                int idAvoir = saisieRow.getInt("ID_AVOIR_CLIENT");
+                if (idAvoir > 1) {
+                    // SQLRow avoirRow = base.getTable("AVOIR_CLIENT").getRow(idAvoir);
+                    long l = ((Number) saisieRow.getObject("T_AVOIR_TTC")).longValue();
+                    prixTTC = new PrixTTC(((Long) saisieRow.getObject("T_TTC")).longValue() - l);
+                }
+                prixTTC = new PrixTTC(prixTTC.getLongValue() - montantAcompteTTC);
+                if (prixTTC.getLongValue() > 0) {
+                    new GenerationReglementVenteNG(label, clientRow, prixTTC, this.date, modeRegl, saisieRow, mvtTable.getRow(idMvt));
+                }
             }
         // Mise à jour de mouvement associé à la facture
 

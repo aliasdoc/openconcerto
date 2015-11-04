@@ -26,6 +26,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.Arrays;
 
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
@@ -92,6 +93,12 @@ public class MouvementStockSQLComponent extends BaseSQLComponent {
         c.weighty = 0;
         c.anchor = GridBagConstraints.NORTHWEST;
         this.add(this.textQte, c);
+
+        c.gridx++;
+        JCheckBox boxReel = new JCheckBox(getLabelFor("REEL"));
+        this.add(boxReel, c);
+        addView(boxReel, "REEL");
+
         c.gridy++;
         c.weighty = 1;
         final JPanel comp = new JPanel();

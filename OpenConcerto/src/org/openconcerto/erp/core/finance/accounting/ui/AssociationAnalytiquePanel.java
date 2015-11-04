@@ -20,12 +20,15 @@ import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
 import org.openconcerto.sql.view.list.RowValuesTableModel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JLabelBold;
+import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.GestionDevise;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -46,7 +49,7 @@ public class AssociationAnalytiquePanel extends JPanel {
         final long solde = debit - credit;
 
         final GridBagConstraints c = new DefaultGridBagConstraints();
-        final AnalytiqueItemTable table = new AnalytiqueItemTable();
+        final AnalytiqueItemTable table = new AnalytiqueItemTable(false);
         final SQLRequestComboBox box = new SQLRequestComboBox();
         box.uiInit(Configuration.getInstance().getDirectory().getElement("ECRITURE").getComboRequest());
         box.setEnabled(false);
@@ -75,7 +78,7 @@ public class AssociationAnalytiquePanel extends JPanel {
         c.anchor = GridBagConstraints.EAST;
         this.add(labelTotal, c);
 
-        table.insertFrom("ID_ECRITURE", rowEcr.getID());
+        table.insertFrom(rowEcr);
 
         c.fill = GridBagConstraints.NONE;
         c.weightx = 0;
@@ -119,6 +122,14 @@ public class AssociationAnalytiquePanel extends JPanel {
                 for (int i = 0; i < count; i++) {
                     SQLRowValues rowVals = model.getRowValuesAt(i);
                     soldeRows += rowVals.getLong("MONTANT");
+                }
+                long montantRestant = solde - soldeRows;
+                if (solde != 0) {
+                    table.getDefaultRowValues().put("MONTANT", montantRestant);
+                    BigDecimal pourcent = new BigDecimal(montantRestant).divide(new BigDecimal(solde), DecimalUtils.HIGH_PRECISION).abs().movePointRight(2).setScale(4, RoundingMode.HALF_UP);
+                    table.getDefaultRowValues().put("POURCENT", pourcent);
+                } else {
+                    table.getDefaultRowValues().put("POURCENT", BigDecimal.ZERO);
                 }
                 buttonApply.setEnabled(soldeRows == solde);
                 if (!buttonApply.isEnabled()) {

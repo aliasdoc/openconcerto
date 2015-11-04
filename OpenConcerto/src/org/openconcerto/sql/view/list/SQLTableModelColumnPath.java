@@ -16,7 +16,6 @@
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.graph.Path;
@@ -80,7 +79,7 @@ public class SQLTableModelColumnPath extends SQLTableModelColumn {
     @Override
     public String getToolTip() {
         final List<String> humanPath = new ArrayList<String>(this.p.getPath().length());
-        for (final SQLField f : this.p.getPath().getSingleSteps()) {
+        for (final SQLField f : this.p.getPath().getSingleFields()) {
             humanPath.add(getLabelFor(f));
         }
         humanPath.add(getLabelFor(this.p.getField()));
@@ -99,12 +98,6 @@ public class SQLTableModelColumnPath extends SQLTableModelColumn {
     @Override
     public Set<FieldPath> getPaths() {
         return Collections.singleton(this.p);
-    }
-
-    @Override
-    public Set<String> getUsedCols() {
-        // a field column value only depends on its field
-        return Collections.emptySet();
     }
 
     @Override
@@ -132,10 +125,11 @@ public class SQLTableModelColumnPath extends SQLTableModelColumn {
         // value == null if the user emptied the cell (see GenericEditor.stopCellEditing())
         if (value == null && this.getField().isNullable() != Boolean.TRUE)
             value = SQLRowValues.SQL_DEFAULT;
-        final SQLRowValues ourVals = l.getRow().assurePath(this.p.getPath());
-        final SQLRowValues vals = new SQLRowValues(ourVals.getTable()).put(this.p.getFieldName(), value);
-        if (ourVals.getID() >= SQLRow.MIN_VALID_ID)
-            vals.setID(ourVals.getID());
+        final SQLRowValues ourVals = l.getRow().followPath(this.p.getPath());
+        final SQLRowValues vals = new SQLRowValues(this.p.getPath().getLast()).put(this.p.getFieldName(), value);
+        if (ourVals != null && ourVals.hasID())
+            vals.setID(ourVals.getIDNumber());
+        vals.getGraph().freeze();
         try {
             l.getSrc().commit(l, this.p.getPath(), vals);
         } catch (SQLException e) {

@@ -46,6 +46,8 @@ import com.jcraft.jsch.Session;
 
 public abstract class ComptaBasePropsConfiguration extends PropsConfiguration {
 
+    public abstract void setUpSocieteDataBaseConnexion(int base);
+
     public static File getConfFile(final String appName) {
         return getConfFile(appName, new File("."));
     }

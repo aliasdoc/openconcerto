@@ -25,7 +25,6 @@ import java.awt.Component;
 import java.math.BigInteger;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.Locale;
 
 import javax.swing.JTable;
 import javax.swing.SwingConstants;
@@ -34,7 +33,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 public class ListEcheanceClientRenderer extends DefaultTableCellRenderer {
 
     private final static Color couleurEcheance = new Color(255, 128, 64);
-    private static final DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.FRENCH);
+    private final DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM);
 
     // Beige
     private final static Color couleur1 = new Color(253, 243, 204);
@@ -73,12 +72,15 @@ public class ListEcheanceClientRenderer extends DefaultTableCellRenderer {
             this.setText(dateFormat.format((Date) value));
         }
 
-        // System.err.println(value + " Value.class :: --> " + value.getClass());
         if (value != null && (table.getColumnClass(column) == Long.class || table.getColumnClass(column) == BigInteger.class)
                 && (value.getClass() == Long.class || value.getClass() == BigInteger.class)) {
 
             this.setText(GestionDevise.currencyToString(((Long) value).longValue()));
-            this.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        }
+        this.setHorizontalAlignment(SwingConstants.RIGHT);
+        if (table.getColumnClass(column) == String.class) {
+            this.setHorizontalAlignment(SwingConstants.LEFT);
         }
 
             final ListSQLLine line = ITableModel.getLine(table.getModel(), row);

@@ -15,9 +15,12 @@
 
 import org.openconcerto.sql.model.IFieldPath;
 import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLRowValues.CreateMode;
+import org.openconcerto.sql.request.BaseFillSQLRequest;
 import org.openconcerto.sql.request.ListSQLRequest;
+import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.change.ListChangeIndex;
+
+import java.util.Collections;
 
 /**
  * A SQLTableModelSource directly tied to the database. Any changes to its lines are propagated to
@@ -44,18 +47,29 @@ public class SQLTableModelSourceOnline extends SQLTableModelSource {
     }
 
     @Override
-    protected void colsChanged(ListChangeIndex<SQLTableModelColumn> change) {
+    protected SQLTableModelSourceState createState() {
+        return new SQLTableModelSourceStateOnline(this.getAllColumns(), this.getReq());
+    }
+
+    @Override
+    protected void colsChanged(final ListChangeIndex<SQLTableModelColumn> change) {
         super.colsChanged(change);
         // add needed fields for each new column
-        for (final SQLTableModelColumn col : change.getItemsAdded()) {
-            for (final IFieldPath p : col.getPaths()) {
-                // don't back track : e.g. if path is SITE -> CLIENT <- SITE we want the siblings of
-                // SITE, if we want fields of the primary SITE we pass the path SITE
-                final SQLRowValues assurePath = this.getReq().getGraphToFetch().followPathToOne(p.getPath(), CreateMode.CREATE_ONE, false);
-                if (!assurePath.getFields().contains(p.getFieldName()))
-                    assurePath.put(p.getFieldName(), null);
+        this.getReq().changeGraphToFetch(new IClosure<SQLRowValues>() {
+            @Override
+            public void executeChecked(SQLRowValues g) {
+                for (final SQLTableModelColumn col : change.getItemsAdded()) {
+                    // DebugRow should uses all *fetched* fields, but since it cannot know them
+                    // getPaths() return all fields in the table. So don't fetch all fields just for
+                    // this debug column
+                    if (!(col instanceof DebugRow)) {
+                        for (final IFieldPath p : col.getPaths()) {
+                            BaseFillSQLRequest.addToFetch(g, p.getPath(), Collections.singleton(p.getFieldName()));
+                        }
+                    }
+                }
             }
-        }
+        });
     }
 
     @Override

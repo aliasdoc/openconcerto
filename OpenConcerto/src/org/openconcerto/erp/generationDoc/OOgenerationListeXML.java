@@ -577,13 +577,17 @@ public class OOgenerationListeXML {
 
         Map<String, Map<Integer, String>> mapStyleDef = StyleSQLElement.getMapAllStyle();
 
+        Map<String, Map<Integer, String>> mapStyleFounded = new HashMap<String, Map<Integer, String>>();
+
         // on parcourt chaque ligne de la feuille pour recuperer les styles
         int columnCount = (colEnd == -1) ? sheet.getColumnCount() : (colEnd + 1);
         System.err.println("End column search : " + columnCount);
 
         int rowCount = (rowEnd > 0) ? rowEnd : sheet.getRowCount();
+
         System.err.println("End row search : " + rowCount);
-        for (int i = 0; i < rowCount; i++) {
+        for (int i = 0; i < rowCount && (mapStyleDef.keySet().size() - 2) > mapStyleFounded.keySet().size(); i++) {
+
             int x = 0;
             Map<Integer, String> mapCellStyle = new HashMap<Integer, String>();
             String style = "";
@@ -599,23 +603,22 @@ public class OOgenerationListeXML {
                         try {
                             if (mapStyleDef.containsKey(c.getValue().toString())) {
                                 style = c.getValue().toString();
-                                // System.err.println("FIND STYLE " +
-                                // c.getValue().toString() +
-                                // " SET VALUE " + cellStyle);
                             }
                         } catch (IllegalStateException e) {
                             e.printStackTrace();
                         }
                         mapCellStyle.put(Integer.valueOf(x), cellStyle);
-                        if (style.trim().length() != 0) {
+                        if (style.trim().length() > 0) {
                             c.clearValue();
-                            // c.setStyle("Default");
                             if (!style.trim().equalsIgnoreCase("Normal") && mapStyleDef.get("Normal") != null) {
                                 String styleCell = mapStyleDef.get("Normal").get(Integer.valueOf(x));
                                 if (styleCell != null && styleCell.length() != 0) {
                                     c.setStyleName(styleCell);
                                 }
                             }
+
+                            mapStyleFounded.put(style, mapCellStyle);
+
                         }
                     }
                 } catch (IndexOutOfBoundsException e) {
@@ -624,13 +627,9 @@ public class OOgenerationListeXML {
                 x++;
             }
 
-            if (style.length() > 0) {
-                mapStyleDef.put(style, mapCellStyle);
-                // System.err.println("style " + mapCellStyle);
-            }
         }
-        cacheStyle.put(sheet, mapStyleDef);
-        return mapStyleDef;
+        cacheStyle.put(sheet, mapStyleFounded);
+        return mapStyleFounded;
     }
 
     public static void main(String[] args) {

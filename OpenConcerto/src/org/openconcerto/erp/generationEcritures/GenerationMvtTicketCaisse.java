@@ -41,6 +41,7 @@ public class GenerationMvtTicketCaisse extends GenerationEcritures {
     public GenerationMvtTicketCaisse(SQLRow ticket, int idMvt) {
 
         System.err.println("********* init GeneRation");
+        setRowAnalytiqueSource(ticket);
         this.idMvt = idMvt;
         this.rowTicket = ticket;
 

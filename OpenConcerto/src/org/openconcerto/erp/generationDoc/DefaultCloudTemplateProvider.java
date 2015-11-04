@@ -52,14 +52,19 @@ public class DefaultCloudTemplateProvider extends AbstractLocalTemplateProvider 
         if (!remoteTemplateDirExists) {
             System.err.println("DefaultCloudTemplateProvider: No remote templates in path: " + remotePath);
             File defaultTemplateDir = new File("Configuration/Template/Default");
-            try {
-                if (getCloudDir().list().length <= 0) {
+            if (getCloudDir().list().length <= 0) {
+                try {
                     FileUtils.copyDirectory(defaultTemplateDir, getCloudDir());
-                    FileUtils.copyDirectory(defaultTemplateDir, getLocalDir());
+                } catch (IOException e) {
+                    ExceptionHandler.handle("Impossible de copier les modèles sur le répertoire cloud depuis " + defaultTemplateDir.getAbsolutePath() + " vers " + getCloudDir().getAbsolutePath(), e);
                 }
-            } catch (IOException e) {
-                ExceptionHandler.handle("Impossible d'initialiser les modèles", e);
+                try {
+                    FileUtils.copyDirectory(defaultTemplateDir, getLocalDir());
+                } catch (IOException e) {
+                    ExceptionHandler.handle("Impossible de copier les modèles sur le répertoire local depuis " + defaultTemplateDir.getAbsolutePath() + " vers " + getCloudDir().getAbsolutePath(), e);
+                }
             }
+
         } else {
             try {
                 client.retrieveDirectory(getCloudDir(), remotePath, config.getToken());

@@ -14,6 +14,8 @@
  package org.openconcerto.ui;
 
 import java.awt.Component;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
 
 import javax.swing.Action;
 import javax.swing.JPopupMenu;
@@ -26,6 +28,16 @@ public class SwingThreadUtils {
             r.run();
         else
             SwingUtilities.invokeLater(r);
+    }
+
+    public static <T> T call(final Callable<T> c) throws Exception {
+        if (SwingUtilities.isEventDispatchThread()) {
+            return c.call();
+        } else {
+            final FutureTask<T> f = new FutureTask<T>(c);
+            SwingUtilities.invokeLater(f);
+            return f.get();
+        }
     }
 
     /**
