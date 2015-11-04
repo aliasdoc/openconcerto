@@ -357,13 +357,14 @@ public class CloturePanel extends JPanel {
             SQLRowValues rowValsSociete = new SQLRowValues(this.societe);
             rowValsSociete.put("ID_EXERCICE_COMMON", rowNewEx.getID());
             rowValsSociete.update(this.rowSociete.getID());
-
+            // Recharge les informations de la societe pour pointer sur le nouvel exercice
+            ComptaPropsConfiguration.getInstanceCompta().getRowSociete().fetchValues();
         } catch (SQLException e) {
 
             e.printStackTrace();
         }
         this.bar.setValue(4);
-        this.opEnCours.setText("Etat: clôture termninée");
+        this.opEnCours.setText("Etat: clôture terminée");
     }
 
     private void soldeCompte(boolean compteBilan) throws SQLException {

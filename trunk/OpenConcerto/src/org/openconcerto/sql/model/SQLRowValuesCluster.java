@@ -13,11 +13,13 @@
  
  package org.openconcerto.sql.model;
 
+import org.openconcerto.sql.model.SQLRowValues.CreateMode;
 import org.openconcerto.sql.model.SQLRowValues.ForeignCopyMode;
 import org.openconcerto.sql.model.SQLRowValues.ReferentChangeEvent;
 import org.openconcerto.sql.model.SQLRowValues.ReferentChangeListener;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.utils.CollectionMap2.Mode;
 import org.openconcerto.utils.CollectionUtils;
@@ -33,6 +35,7 @@ import org.openconcerto.utils.cc.IdentitySet;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EventObject;
@@ -42,6 +45,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -82,6 +86,8 @@ public class SQLRowValuesCluster {
     // { vals -> listener on vals' graph }
     private Map<SQLRowValues, List<ValueChangeListener>> listeners;
 
+    private boolean frozen = false;
+
     private SQLRowValuesCluster() {
         this.links = new ArrayList<Link>();
         // SQLRowValues equals() depends on their values, but we must tell apart each reference
@@ -121,6 +127,12 @@ public class SQLRowValuesCluster {
         return Collections.unmodifiableSet(this.items);
     }
 
+    /**
+     * The number of items in this instance. NOTE: calling {@link SQLRowValues#getGraphSize()} is
+     * preferable since it might avoid an allocation.
+     * 
+     * @return the number of items.
+     */
     public final int size() {
         return this.items.size();
     }
@@ -134,6 +146,17 @@ public class SQLRowValuesCluster {
             throw new IllegalArgumentException(vals + " not in " + this);
     }
 
+    // if true a single link path passed to followPath() will never yield more than one row
+    final boolean hasOneRowPerPath() {
+        for (final SQLRowValues item : this.getItems()) {
+            for (final Entry<SQLField, Set<SQLRowValues>> e : item.getReferents().entrySet()) {
+                if (e.getValue().size() > 1)
+                    return false;
+            }
+        }
+        return true;
+    }
+
     public final Set<SQLTable> getTables() {
         final Set<SQLTable> res = new HashSet<SQLTable>();
         for (final SQLRowValues v : this.items)
@@ -141,10 +164,29 @@ public class SQLRowValuesCluster {
         return res;
     }
 
+    public final boolean isFrozen() {
+        return this.frozen;
+    }
+
+    /**
+     * Freeze this graph so that no modification can be made. Once this method returns, this
+     * instance can be safely published (e.g. stored into a field that is properly guarded by a
+     * lock) to other threads without further synchronizations.
+     * 
+     * @return <code>true</code> if this call changed the frozen status.
+     */
+    public final boolean freeze() {
+        if (this.frozen)
+            return false;
+        this.frozen = true;
+        return true;
+    }
+
     void remove(SQLRowValues src, SQLField f, SQLRowValues dest) {
         assert dest != null;
         assert src.getGraph() == this;
         assert src.getTable() == f.getTable();
+        assert !this.isFrozen() : "Should already be checked by SQLRowValues";
 
         final Link toRm = new Link(src, f, dest);
         this.links.remove(toRm);
@@ -193,6 +235,8 @@ public class SQLRowValuesCluster {
     void add(SQLRowValues src, SQLField f, SQLRowValues dest) {
         assert dest != null;
         assert src.getTable() == f.getTable();
+        assert !this.isFrozen() : "Should already be checked by SQLRowValues";
+
         final boolean containsSrc = this.contains(src);
         final boolean containsDest = this.contains(dest);
         if (!containsSrc && !containsDest)
@@ -209,9 +253,11 @@ public class SQLRowValuesCluster {
             if (containsSrc) {
                 rowToAdd = dest;
                 // merge the two graphs
-                // add dest before since it will be needed to store us
-                // add dest after any other link from us, to keep the order of foreigns (needed for
-                // deepCopy())
+                // add dest before src since it will be needed to store us (adding at the end would
+                // work, but src would need to be inserted, then updated)
+                // add dest just before src, to keep the order of foreigns (needed for deepCopy()
+                // and insertion order) (adding at the beginning would reverse the order of foreign
+                // rows to insert)
                 final int srcIndex = this.links.indexOf(new Link(src));
                 if (srcIndex < 0)
                     throw new IllegalStateException("Source link not found for " + src);
@@ -223,8 +269,6 @@ public class SQLRowValuesCluster {
             }
             final SQLRowValuesCluster graphToAdd = rowToAdd.getGraph(false);
 
-            if (index >= 0)
-                this.links.add(index, toAdd);
             // to preserve memory a single node has no graph unless required
             // this way rowToAdd never had to create a Cluster, it will use us.
             if (graphToAdd == null) {
@@ -246,8 +290,9 @@ public class SQLRowValuesCluster {
                     graphToAdd.listeners = null;
                 }
             }
-            if (index < 0)
-                this.links.add(toAdd);
+            // To keep foreign links order, new links should be added after existing ones from src
+            // (which are after srcIndex). Since they're merged in store(), just add at the end.
+            this.links.add(toAdd);
         }
         assert src.getGraph() == dest.getGraph();
     }
@@ -271,10 +316,26 @@ public class SQLRowValuesCluster {
     }
 
     final SQLRowValues deepCopy(SQLRowValues v) {
+        return this.deepCopy(v, false);
+    }
+
+    final SQLRowValues deepCopy(SQLRowValues v, final boolean freeze) {
         // copy all rowValues of this graph
         final Map<SQLRowValues, SQLRowValues> noLinkCopy = new IdentityHashMap<SQLRowValues, SQLRowValues>();
-        for (final SQLRowValues n : this.getItems())
-            noLinkCopy.put(n, new SQLRowValues(n, ForeignCopyMode.NO_COPY));
+        // don't copy foreigns, but we want to preserve the order of all fields. This works because
+        // the second put() with the actual foreign row doesn't change the order.
+        final ForeignCopyMode copyMode = ForeignCopyMode.COPY_NULL;
+        for (final SQLRowValues n : this.getItems()) {
+            final SQLRowValues copy;
+            // might as well use the minimum memory if the values won't change
+            if (freeze) {
+                copy = new SQLRowValues(n.getTable(), n.size(), n.getForeignsSize(), n.getReferents().size());
+                copy.setAll(n.getAllValues(copyMode));
+            } else {
+                copy = new SQLRowValues(n, copyMode);
+            }
+            noLinkCopy.put(n, copy);
+        }
 
         // and link them together in order
         for (final Link l : this.links) {
@@ -285,7 +346,13 @@ public class SQLRowValuesCluster {
             }
         }
 
-        return noLinkCopy.get(v);
+        final SQLRowValues res = noLinkCopy.get(v);
+        // only force graph creation if needed
+        if (freeze)
+            res.getGraph().freeze();
+        assert res.isFrozen() == freeze;
+
+        return res;
     }
 
     public final StoreResult insert() throws SQLException {
@@ -407,7 +474,7 @@ public class SQLRowValuesCluster {
                 }
                 return res;
             }
-        });
+        }, true);
         // fire events
         for (final SQLTableEvent n : events) {
             // MAYBE put a Map<SQLRowValues, SQLTableEvent> to know how our fellow values have been
@@ -454,6 +521,26 @@ public class SQLRowValuesCluster {
             return this.allowCycle;
         }
 
+        /**
+         * Set whether cycles (encountering the same row twice) are allowed. If <code>false</code>
+         * is passed, then steps that go back to already visited rows will never be crossed :
+         * 
+         * <pre>
+         *       /- ID_CONTACT_RAPPORT \
+         *  SITE -- ID_CONTACT_CHEF ---> CONTACT 
+         *       \-     ID_SITE        /
+         * </pre>
+         * 
+         * The SITE will only be passed once and ID_SITE would never be crossed from CONTACT. To go
+         * through all paths, pass <code>true</code> and SITE will be visited 3 times if
+         * {@link Direction#FOREIGN} and 7 times if {@link Direction#ANY}. Note that in both cases,
+         * CONTACT will be visited 3 times if {@link Direction#ANY} and twice if
+         * {@link Direction#FOREIGN}.
+         * 
+         * @param allowCycle <code>true</code> if {@link State#getValsPath()} can contains the same
+         *        row twice, <code>false</code> to stop before that happens.
+         * @return this.
+         */
         public WalkOptions setCycleAllowed(boolean allowCycle) {
             this.allowCycle = allowCycle;
             return this;
@@ -519,7 +606,16 @@ public class SQLRowValuesCluster {
     }
 
     /**
-     * Walk through the graph from the passed state.
+     * Walk through the graph from the passed state. NOTE: this method will call the {@link State}
+     * with each path a row can be reached (except if this would cause a cycle, see
+     * {@link WalkOptions#setCycleAllowed(boolean)}). E.g. for :
+     * 
+     * <pre>
+     *  SITE -- ID_CONTACT_CHEF ---> CONTACT -- ID_TITLE ---> TITLE 
+     *       \- ID_CONTACT_RAPPORT /
+     * </pre>
+     * 
+     * The CONTACT and TITLE will be passed twice, once for each link.
      * 
      * @param <T> type of acc.
      * @param state the current position in the graph.
@@ -534,18 +630,21 @@ public class SQLRowValuesCluster {
             if (e != null)
                 return e;
         }
-        // get the foreign or referents rowValues
-        StopRecurseException res = null;
-        if (options.getDirection() != Direction.REFERENT) {
-            res = rec(state, options, Direction.FOREIGN);
+
+        if (!options.isCycleAllowed() || !state.hasCycle()) {
+            // get the foreign or referents rowValues
+            StopRecurseException res = null;
+            if (options.getDirection() != Direction.REFERENT) {
+                res = rec(state, options, Direction.FOREIGN);
+            }
+            if (res != null)
+                return res;
+            if (options.getDirection() != Direction.FOREIGN) {
+                res = rec(state, options, Direction.REFERENT);
+            }
+            if (res != null)
+                return res;
         }
-        if (res != null)
-            return res;
-        if (options.getDirection() != Direction.FOREIGN) {
-            res = rec(state, options, Direction.REFERENT);
-        }
-        if (res != null)
-            return res;
 
         if (computeThisState && options.getRecursionType() == RecursionType.DEPTH_FIRST) {
             final StopRecurseException e = state.compute();
@@ -572,19 +671,94 @@ public class SQLRowValuesCluster {
         if (actualDirection == Direction.REFERENT || options.isForeignsOrderIgnored())
             Collections.sort(keys, FIELD_COMPARATOR);
         for (final SQLField f : keys) {
+            final Step step = Step.create(f, actualDirection);
+            // we must never go back from where we came
+            final boolean backtrack = state.getPath().length() > 0 && state.getPath().getStep(-1).equals(step.reverse());
             for (final SQLRowValues v : nextVals.getNonNull(f)) {
+                // backtrack is not enough, there can be other referents than previous
                 // avoid infinite loop (don't use equals so that we can go over several equals rows)
-                if (options.isCycleAllowed() || !state.identityContains(v)) {
-                    final Path path = state.getPath().add(f, actualDirection);
+                if (!(backtrack && v == state.getPrevious()) && (options.isCycleAllowed() || !state.identityContains(v))) {
+                    final Path path = state.getPath().add(step);
                     final List<SQLRowValues> valsPath = new ArrayList<SQLRowValues>(currentValsPath);
                     valsPath.add(v);
-                    final StopRecurseException e = this.walk(new State<T>(valsPath, path, state.getAcc(), state.closure), options, true);
+                    final StopRecurseException e = this.walk(new State<T>(Collections.unmodifiableList(valsPath), path, state.getAcc(), state.closure), options, true);
                     if (e != null && e.isCompletely())
                         return e;
                 }
             }
         }
         return null;
+    }
+
+    static public final class IndexedRows {
+        private final List<State<?>> flatList;
+        private final Map<SQLRowValues, Integer> indexes;
+
+        public IndexedRows(List<State<?>> flatList, Map<SQLRowValues, Integer> indexes) {
+            super();
+            this.flatList = flatList;
+            this.indexes = indexes;
+            assert flatList.size() == indexes.size();
+        }
+
+        public List<State<?>> getStates() {
+            return this.flatList;
+        }
+
+        public int getSize() {
+            return this.flatList.size();
+        }
+
+        public State<?> getFirstState(int i) {
+            return this.flatList.get(i);
+        }
+
+        public SQLRowValues getRow(int i) {
+            return this.getFirstState(i).getCurrent();
+        }
+
+        public Path getFirstPath(int i) {
+            return this.getFirstState(i).getPath();
+        }
+
+        public int getIndex(final SQLRowValues v) {
+            return this.indexes.get(v);
+        }
+    }
+
+    /**
+     * Return all rows of this graph. This method will
+     * {@link #walk(SQLRowValues, Object, ITransformer, WalkOptions) walk} the graph with the passed
+     * parameters and collect the {@link State state} when it first reaches each row.
+     * 
+     * @param vals where to start.
+     * @param recType how to recurse.
+     * @param useForeignsOrder <code>true</code> to use the order of foreign keys.
+     * @return all rows.
+     */
+    public final IndexedRows getIndexedRows(final SQLRowValues vals, final RecursionType recType, final boolean useForeignsOrder) {
+        final int size = this.size();
+        final List<State<?>> flatList = new ArrayList<State<?>>(size);
+        final IdentityHashMap<SQLRowValues, Integer> thisIndexes = new IdentityHashMap<SQLRowValues, Integer>(size);
+
+        final WalkOptions walkOptions = new WalkOptions(Direction.ANY).setRecursionType(recType).setForeignsOrderIgnored(!useForeignsOrder).setStartIncluded(true);
+        this.walk(vals, null, new ITransformer<State<Object>, Object>() {
+            @Override
+            public Object transformChecked(State<Object> input) {
+                final SQLRowValues r = input.getCurrent();
+                if (thisIndexes.containsKey(r)) {
+                    // happens when there's multiple paths between 2 rows
+                    throw new StopRecurseException("already added").setCompletely(false);
+                } else {
+                    thisIndexes.put(r, flatList.size());
+                    flatList.add(input);
+                }
+                return null;
+            }
+        }, walkOptions);
+
+        assert flatList.size() == size : "missing rows, should have been " + size + " but was " + flatList.size() + " : " + flatList;
+        return new IndexedRows(Collections.unmodifiableList(flatList), Collections.unmodifiableMap(thisIndexes));
     }
 
     final void walkFields(final SQLRowValues start, IClosure<FieldPath> closure, final boolean includeFK) {
@@ -611,35 +785,128 @@ public class SQLRowValuesCluster {
     }
 
     /**
-     * Copy this leaving only the fields specified by <code>graph</code>.
+     * Copy this leaving only the fields specified by <code>graph</code>. NOTE: the result is
+     * guaranteed not to be larger than <code>graph</code>, but it might be smaller if this didn't
+     * contain all the paths.
      * 
      * @param start where to start pruning, eg RECEPTEUR {DESIGNATION="rec", CONSTAT="ok",
      *        ID_LOCAL=LOCAL{DESIGNATION="local"}}.
-     * @param graph the structure wanted, eg RECEPTEUR {DESIGNATION=null}.
-     * @return a copy of graph with our values, eg RECEPTEUR {DESIGNATION="rec"}.
+     * @param graph the maximum structure wanted, eg RECEPTEUR {DESIGNATION=null}.
+     * @return a copy of this no larger than <code>graph</code>, eg RECEPTEUR {DESIGNATION="rec"}.
      */
-    public final SQLRowValues prune(final SQLRowValues start, SQLRowValues graph) {
+    public final SQLRowValues prune(final SQLRowValues start, final SQLRowValues graph) {
+        return this.prune(start, graph, true);
+    }
+
+    /**
+     * Copy this leaving only the fields specified by <code>graph</code>. NOTE: the result is
+     * guaranteed not to be larger than <code>graph</code>, but it might be smaller if this didn't
+     * contain all the paths. NOTE : only fields are considered, i.e. referents are not used. E.g.
+     * with the rows below, no links would be removed, even though one LOCAL in the graph has no
+     * CPI.
+     * 
+     * <pre>
+     * Graph :
+     *        LOCAL LOCAL
+     *      /        |
+     *   SOURCE --> CPI
+     * 
+     * This : 
+     *        LOCAL
+     *      /       \
+     *   SOURCE --> CPI
+     * </pre>
+     * 
+     * 
+     * @param start where to start pruning, e.g. RECEPTEUR {DESIGNATION="rec", CONSTAT="ok",
+     *        ID_LOCAL=LOCAL{DESIGNATION="local"}}.
+     * @param graph the maximum structure wanted, e.g. RECEPTEUR {DESIGNATION=null}.
+     * @param keepUnionOfFields only relevant when the same row from this can be reached by more
+     *        than one path in <code>graph</code>.
+     * 
+     *        <pre>
+     * Graph :
+     *       /- ID_CONTACT_RAPPORT --> CONTACT1
+     *  SITE -- ID_CONTACT_CHEF ---> CONTACT2 
+     * 
+     * This :
+     *       /- ID_CONTACT_RAPPORT \
+     *  SITE -- ID_CONTACT_CHEF ---> CONTACT
+     * </pre>
+     * 
+     *        If <code>true</code> keep the union of all fields, if <code>false</code> the
+     *        intersection.
+     * @return a copy of this no larger than <code>graph</code>, e.g. RECEPTEUR {DESIGNATION="rec"}.
+     */
+    public final SQLRowValues prune(final SQLRowValues start, final SQLRowValues graph, final boolean keepUnionOfFields) {
         this.containsCheck(start);
         if (!start.getTable().equals(graph.getTable()))
             throw new IllegalArgumentException(start + " is not from the same table as " + graph);
-        final SQLRowValues res = new SQLRowValues(start.getTable());
-        graph.walkGraph(res, new ITransformer<State<SQLRowValues>, SQLRowValues>() {
+        // there's no way to tell apart 2 referents
+        if (!graph.getGraph().hasOneRowPerPath())
+            throw new IllegalArgumentException("More than one row for " + graph.printGraph());
+
+        final SQLRowValues res = start.deepCopy();
+
+        final SetMap<SQLRowValues, String> toRetain = new SetMap<SQLRowValues, String>(new IdentityHashMap<SQLRowValues, Set<String>>(), Mode.NULL_FORBIDDEN);
+        // BREADTH_FIRST to stop as soon as this no longer have rows in the graph
+        // CycleAllowed since we need to go through every path (e.g. what is a cycle in graph might
+        // not be in this :
+        // SITE1 -> CONTACT1 -> SITE1 for graph and
+        // SITE1 -> CONTACT1 -> SITE2 for this)
+        final WalkOptions walkOptions = new WalkOptions(Direction.ANY).setRecursionType(RecursionType.BREADTH_FIRST).setStartIncluded(true).setCycleAllowed(true);
+        graph.getGraph().walk(graph, null, new ITransformer<State<Object>, Object>() {
             @Override
-            public SQLRowValues transformChecked(State<SQLRowValues> input) {
-                final SQLRowValues current = input.getCurrent();
-                final SQLRowValues creatingVals;
-                if (input.getPath().length() == 0) {
-                    creatingVals = input.getAcc();
-                } else {
-                    creatingVals = new SQLRowValues(current.getTable());
-                    input.getAcc().put(input.getFrom().getName(), creatingVals);
+            public Object transformChecked(State<Object> input) {
+                final SQLRowValues r = input.getCurrent();
+                // since we allowed cycles in graph, allow it here
+                final Collection<SQLRowValues> rows = res.followPath(input.getPath(), CreateMode.CREATE_NONE, false, true);
+                // since we're using BREADTH_FIRST, the next path will be longer so no need to
+                // continue if there's already no row
+                if (rows.isEmpty())
+                    throw new StopRecurseException().setCompletely(false);
+                for (final SQLRowValues row : rows) {
+                    if (keepUnionOfFields || !toRetain.containsKey(row))
+                        toRetain.addAll(row, r.getFields());
+                    else
+                        toRetain.getCollection(row).retainAll(r.getFields());
                 }
-                final SQLRowValues source = start.assurePath(input.getPath());
-                // flatten to not load rowValues
-                creatingVals.load(new SQLRowValues(source).flatten(true), current.getFields());
-                return creatingVals;
+                return null;
             }
-        });
+        }, walkOptions);
+
+        // remove extra fields and flatten if necessary
+        for (final Entry<SQLRowValues, Set<String>> e : toRetain.entrySet()) {
+            final SQLRowValues r = e.getKey();
+            r.retainAll(e.getValue());
+            final Set<String> toFlatten = new HashSet<String>();
+            for (final Entry<String, SQLRowValues> e2 : r.getForeigns().entrySet()) {
+                final SQLRowValues foreign = e2.getValue();
+                if (!toRetain.containsKey(foreign)) {
+                    toFlatten.add(e2.getKey());
+                }
+            }
+            for (final String fieldToFlatten : toFlatten) {
+                r.flatten(fieldToFlatten, ForeignCopyMode.COPY_ID_OR_RM);
+            }
+        }
+        // now, remove referents that aren't in the graph
+        for (final SQLRowValues r : new ArrayList<SQLRowValues>(res.getGraph().getItems())) {
+            if (!toRetain.containsKey(r)) {
+                // only remove links at the border and even then, only remove links to the result :
+                // avoid creating a myriad of graphs
+                final Set<String> toFlatten = new HashSet<String>();
+                for (final Entry<String, SQLRowValues> e2 : r.getForeigns().entrySet()) {
+                    final SQLRowValues foreign = e2.getValue();
+                    if (toRetain.containsKey(foreign)) {
+                        toFlatten.add(e2.getKey());
+                    }
+                }
+                r.removeAll(toFlatten);
+            }
+        }
+        assert res.getGraph().getItems().equals(toRetain.keySet());
+
         return res;
     }
 
@@ -796,53 +1063,58 @@ public class SQLRowValuesCluster {
         return sb.toString();
     }
 
-    final String getFirstDifference(final SQLRowValues vals, final SQLRowValues other, final boolean useForeignsOrder) {
+    final String getFirstDifference(final SQLRowValues vals, final SQLRowValues other, final boolean useForeignsOrder, final boolean useFieldsOrder) {
         this.containsCheck(vals);
-        if (this == other.getGraph())
+        if (vals == other)
             return null;
+        final int size = this.size();
         // don't call walk() if we can avoid as it is quite costly
-        if (this.size() != other.getGraph().size())
-            return "different size : " + this.size() + " != " + other.getGraph().size();
-        else if (!vals.equalsJustThis(other))
+        if (size != other.getGraph().size())
+            return "different size : " + size + " != " + other.getGraph().size();
+        else if (!vals.equalsJustThis(other, useFieldsOrder))
             return "unequal :\n" + vals + " !=\n" + other;
-        if (this.size() == 1)
+        if (size == 1)
             return null;
 
         // BREADTH_FIRST no need to go deep if the first values are not equals
-        final WalkOptions walkOptions = new WalkOptions(Direction.ANY).setRecursionType(RecursionType.BREADTH_FIRST).setForeignsOrderIgnored(!useForeignsOrder);
+        final IndexedRows thisRows = this.getIndexedRows(vals, RecursionType.BREADTH_FIRST, useForeignsOrder);
+        final IndexedRows otherRows = other.getGraph().getIndexedRows(other, RecursionType.BREADTH_FIRST, useForeignsOrder);
 
-        final List<SQLRowValues> flatList = new ArrayList<SQLRowValues>();
-        final List<Path> paths = new ArrayList<Path>();
-        this.walk(vals, flatList, new ITransformer<State<List<SQLRowValues>>, List<SQLRowValues>>() {
-            @Override
-            public List<SQLRowValues> transformChecked(State<List<SQLRowValues>> input) {
-                input.getAcc().add(input.getCurrent());
-                paths.add(input.getPath());
-                return input.getAcc();
-            }
-        }, walkOptions);
-        assert flatList.size() == this.size() : "missing rows";
-
-        // now walk the other graph, checking that each row is equal
+        // now check that each row is equal
         // (this works because walk() always goes with the same order, see #FIELD_COMPARATOR and
         // WalkOptions.setForeignsOrderIgnored())
-        final AtomicInteger index = new AtomicInteger(0);
-        final StopRecurseException stop = other.getGraph().walk(other, null, new ITransformer<State<Object>, Object>() {
-            @Override
-            public Object transformChecked(State<Object> input) {
-                final Path thisPath = paths.get(index.get());
-                if (!thisPath.equals(input.getPath()))
-                    throw new StopRecurseException("unequal graph at index " + index.get() + " " + thisPath + " != " + input.getPath());
+        for (int i = 0; i < size; i++) {
+            final SQLRowValues thisVals = thisRows.getRow(i);
+            final SQLRowValues oVals = otherRows.getRow(i);
+            final Path thisPath = thisRows.getFirstPath(i);
+            final Path oPath = otherRows.getFirstPath(i);
 
-                final SQLRowValues thisVals = flatList.get(index.get());
-                final SQLRowValues oVals = input.getCurrent();
-                if (!thisVals.equalsJustThis(oVals))
-                    throw new StopRecurseException("unequal at " + input.getPath() + " :\n" + thisVals + " !=\n" + oVals);
-                index.incrementAndGet();
-                return input.getAcc();
+            if (!thisPath.equals(oPath))
+                return ("unequal graph at index " + i + " " + thisPath + " != " + oPath);
+
+            // no need to check again
+            assert i != 0 || (thisVals == vals && oVals == other);
+            // don't use foreign ID, foreign rows are checked below
+            if (i != 0 && !thisVals.equalsJustThis(oVals, useFieldsOrder, false)) {
+                return "unequal local values at " + thisPath + " :\n" + thisVals + " !=\n" + oVals;
             }
-        }, walkOptions);
-        return stop == null ? null : stop.getMessage();
+            final Map<String, SQLRowValues> thisForeigns = thisVals.getForeigns();
+            final Map<String, SQLRowValues> otherForeigns = oVals.getForeigns();
+            if (!thisForeigns.keySet().equals(otherForeigns.keySet()))
+                return "unequal foreigns at " + thisPath + " :\n" + thisForeigns.keySet() + " !=\n" + otherForeigns.keySet();
+
+            for (final Entry<String, SQLRowValues> e : thisForeigns.entrySet()) {
+                final String ff = e.getKey();
+                final SQLRowValues thisForeign = e.getValue();
+                final SQLRowValues otherForeign = otherForeigns.get(ff);
+                if (thisRows.getIndex(thisForeign) != otherRows.getIndex(otherForeign))
+                    return "unequal foreign " + ff + " at " + thisPath + " for " + thisVals + " and " + oVals;
+                // since they point to the same index, the equality will be checked by the time this
+                // loop ends
+            }
+        }
+
+        return null;
     }
 
     static public final class StopRecurseException extends RuntimeException {
@@ -890,7 +1162,7 @@ public class SQLRowValuesCluster {
         }
 
         public SQLField getFrom() {
-            return this.path.length() == 0 ? null : this.path.getSingleStep(this.path.length() - 1);
+            return this.path.length() == 0 ? null : this.path.getSingleField(this.path.length() - 1);
         }
 
         /**
@@ -938,10 +1210,14 @@ public class SQLRowValuesCluster {
         }
 
         final boolean identityContains(final SQLRowValues vals) {
-            for (final SQLRowValues v : this.valsPath)
-                if (vals == v)
-                    return true;
-            return false;
+            return CollectionUtils.identityContains(this.valsPath, vals);
+        }
+
+        boolean hasCycle() {
+            final int size = this.valsPath.size();
+            if (size < 2)
+                return false;
+            return CollectionUtils.identityContains(this.valsPath.subList(0, size - 1), this.valsPath.get(size - 1));
         }
 
         public Path getPath() {
@@ -1043,6 +1319,25 @@ public class SQLRowValuesCluster {
             this.nodes = nodes;
         }
 
+        final SQLRowValues getRowValuesFor(final SQLRow stored) {
+            for (final Entry<SQLRowValues, Node> e : this.nodes.entrySet()) {
+                if (e.getValue().getStoredRow().equals(stored))
+                    return e.getKey();
+            }
+            return null;
+        }
+
+        /**
+         * Get the set of rows at the time the {@link SQLRowValuesCluster#store(StoreMode)} was
+         * performed. NOTE : the field values of the returned rows might have changed since the
+         * store but the other methods of this class use the instance identity.
+         * 
+         * @return the rows that were stored.
+         */
+        final Set<SQLRowValues> getRowValues() {
+            return Collections.unmodifiableSet(this.nodes.keySet());
+        }
+
         public final int getStoredCount() {
             return this.nodes.size();
         }
@@ -1053,6 +1348,10 @@ public class SQLRowValuesCluster {
 
         public final SQLRowValues getStoredValues(SQLRowValues vals) {
             return this.nodes.get(vals).getStoredValues();
+        }
+
+        final List<SQLTableEvent> getEvents(SQLRowValues vals) {
+            return this.nodes.get(vals).getEvents();
         }
     }
 
@@ -1112,6 +1411,10 @@ public class SQLRowValuesCluster {
         // the last event
         private final SQLTableEvent getEvent() {
             return CollectionUtils.getLast(this.modif);
+        }
+
+        final List<SQLTableEvent> getEvents() {
+            return Collections.unmodifiableList(this.modif);
         }
 
         private final SQLTableEvent addEvent(SQLTableEvent evt) {

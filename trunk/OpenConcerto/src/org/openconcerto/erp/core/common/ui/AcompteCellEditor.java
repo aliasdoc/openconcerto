@@ -36,6 +36,7 @@ public class AcompteCellEditor extends AbstractCellEditor implements TableCellEd
         super();
 
         this.acompteField = new AcompteField();
+        this.acompteField.setBorder(null);
         this.fieldNamePercent = fieldNamePercent;
         this.fieldNameMontant = fieldNameMontant;
     }

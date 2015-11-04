@@ -39,8 +39,9 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
     private Calendar calendar;
     private Date currentvalue, initialvalue;
     private Popup aPopup;
-    boolean popupOpen = false;
+    private boolean popupOpen = false;
     private TimestampEditorPanel content = new TimestampEditorPanel();
+    private boolean allowNull = true;
 
     public TimestampTableCellEditor(boolean showHour) {
         this();
@@ -51,6 +52,10 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
         super(DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT));
         this.calendar = Calendar.getInstance();
         this.content.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+    }
+
+    public void setAllowNull(boolean b) {
+        this.allowNull = b;
     }
 
     public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
@@ -72,27 +77,20 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
             this.aPopup = null;
         }
 
-        this.aPopup = PopupUtils.createPopup(table, this.content, p.x, p.y);
+        this.aPopup = PopupUtils.createPopup(c, this.content, p.x, p.y);
         showPopup();
         this.content.setCellEditor(this);
         this.content.addActionListener(this);
-
         return c;
     }
 
     public void cancelCellEditing() {
-        if (this.popupOpen) {
-            return;
-        }
         hidePopup();
         this.currentvalue = this.initialvalue;
         super.cancelCellEditing();
     }
 
     public boolean stopCellEditing() {
-        if (this.popupOpen) {
-            return false;
-        }
         hidePopup();
         return super.stopCellEditing();
     }
@@ -107,20 +105,17 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
     }
 
     public void showPopup() {
-
         this.popupOpen = true;
         this.aPopup.show();
     }
 
     public Object getCellEditorValue() {
-        Date v = (Date) super.getCellEditorValue();
+        final Date v = (Date) super.getCellEditorValue();
         long t = System.currentTimeMillis();
         if (v != null) {
             t = v.getTime();
-        }
-        if (v == null) {
-            Timestamp n = null;
-            return n;
+        } else if (this.allowNull) {
+            return null;
         }
         return new Timestamp(t);
     }

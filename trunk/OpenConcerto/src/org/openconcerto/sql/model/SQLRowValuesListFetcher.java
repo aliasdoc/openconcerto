@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.utils.CollectionMap2Itf.ListMapItf;
 import org.openconcerto.utils.CompareUtils;
+import org.openconcerto.utils.CopyUtils;
 import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.RTInterruptedException;
 import org.openconcerto.utils.RecursionType;
@@ -49,6 +50,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
+
 import org.apache.commons.dbutils.ResultSetHandler;
 
 /**
@@ -56,6 +60,7 @@ import org.apache.commons.dbutils.ResultSetHandler;
  * 
  * @author Sylvain
  */
+@ThreadSafe
 public class SQLRowValuesListFetcher {
 
     /**
@@ -214,17 +219,28 @@ public class SQLRowValuesListFetcher {
         };
     }
 
+    // unmodifiable
     private final SQLRowValues graph;
     private final Path descendantPath;
+    @GuardedBy("this")
     private ITransformer<SQLSelect, SQLSelect> selTransf;
-    private Integer selID;
+    @GuardedBy("this")
+    private Number selID;
+    @GuardedBy("this")
     private Set<Path> ordered;
+    @GuardedBy("this")
     private boolean descendantsOrdered;
+    @GuardedBy("this")
     private SQLRowValues minGraph;
+    @GuardedBy("this")
     private boolean includeForeignUndef;
+    @GuardedBy("this")
     private SQLSelect frozen;
-    // graftPlace -> {referent path -> fetcher}
-    private final Map<Path, Map<Path, SQLRowValuesListFetcher>> grafts;
+    @GuardedBy("this")
+    private boolean freezeRows;
+    // graftPlace -> {referent path -> fetcher}, unmodifiable
+    @GuardedBy("this")
+    private Map<Path, Map<Path, SQLRowValuesListFetcher>> grafts;
 
     /**
      * Construct a new instance with the passed graph of SQLRowValues.
@@ -264,7 +280,7 @@ public class SQLRowValuesListFetcher {
      * Construct a new instance.
      * 
      * @param graph what SQLRowValues should be returned by {@link #fetch()}.
-     * @param referentPath a {@link Path#isSingleLink() single link} path from the primary table,
+     * @param referentPath a {@link Path#isSingleField() single link} path from the primary table,
      *        <code>null</code> meaning don't fetch referent rows.
      */
     public SQLRowValuesListFetcher(SQLRowValues graph, final Path referentPath) {
@@ -275,7 +291,7 @@ public class SQLRowValuesListFetcher {
      * Construct a new instance.
      * 
      * @param graph what SQLRowValues should be returned by {@link #fetch()}.
-     * @param referentPath a {@link Path#isSingleLink() single link} path from the primary table,
+     * @param referentPath a {@link Path#isSingleField() single link} path from the primary table,
      *        <code>null</code> meaning don't fetch referent rows.
      * @param prune if <code>true</code> the graph will be pruned to only contain
      *        <code>referentPath</code>. If <code>false</code> the graph will be kept as is, which
@@ -285,6 +301,7 @@ public class SQLRowValuesListFetcher {
     SQLRowValuesListFetcher(final SQLRowValues graph, final Path referentPath, final boolean prune) {
         super();
         this.graph = graph.deepCopy();
+
         this.descendantPath = referentPath == null ? Path.get(graph.getTable()) : referentPath;
         if (!this.descendantPath.isDirection(Direction.REFERENT))
             throw new IllegalArgumentException("path is not (exclusively) referent : " + this.descendantPath);
@@ -292,7 +309,7 @@ public class SQLRowValuesListFetcher {
         if (descRow == null)
             throw new IllegalArgumentException("path is not contained in the passed rowValues : " + referentPath + "\n" + this.graph.printTree());
         // followPath() do the following check
-        assert this.descendantPath.getFirst() == this.graph.getTable() && this.descendantPath.isSingleLink();
+        assert this.descendantPath.getFirst() == this.graph.getTable() && this.descendantPath.isSingleField();
 
         if (prune) {
             this.graph.getGraph().walk(descRow, null, new ITransformer<State<Object>, Object>() {
@@ -309,20 +326,73 @@ public class SQLRowValuesListFetcher {
         }
 
         // always need IDs
-        for (final SQLRowValues curr : this.getGraph().getGraph().getItems()) {
+        for (final SQLRowValues curr : this.graph.getGraph().getItems()) {
             // don't overwrite existing values
             if (!curr.hasID())
                 curr.setID(null);
         }
 
-        this.selTransf = null;
-        this.selID = null;
-        this.ordered = Collections.<Path> emptySet();
-        this.descendantsOrdered = false;
-        this.minGraph = null;
-        this.includeForeignUndef = false;
-        this.frozen = null;
-        this.grafts = new HashMap<Path, Map<Path, SQLRowValuesListFetcher>>(4);
+        this.graph.getGraph().freeze();
+
+        synchronized (this) {
+            this.selTransf = null;
+            this.selID = null;
+            this.ordered = Collections.<Path> emptySet();
+            this.descendantsOrdered = false;
+            this.minGraph = null;
+            this.includeForeignUndef = false;
+            this.frozen = null;
+            this.freezeRows = false;
+            this.grafts = Collections.emptyMap();
+        }
+    }
+
+    // be aware that the new instance will share the same selTransf, and if it doesn't directly
+    // (with copyTransf) some state can still be shared
+    private SQLRowValuesListFetcher(SQLRowValuesListFetcher f, final boolean copyTransf) {
+        synchronized (f) {
+            this.graph = f.getGraph().toImmutable();
+            this.descendantPath = f.getReferentPath();
+            // can't deadlock since this hasn't been published
+            synchronized (this) {
+                this.selTransf = copyTransf ? CopyUtils.copy(f.selTransf) : f.selTransf;
+                this.selID = f.getSelID();
+                this.ordered = f.getOrder();
+                this.descendantsOrdered = f.areReferentsOrdered();
+                this.minGraph = f.minGraph == null ? null : f.minGraph.toImmutable();
+                this.includeForeignUndef = f.includeForeignUndef;
+                // a new instance is always mutable
+                this.frozen = null;
+
+                this.freezeRows = f.freezeRows;
+
+                // Recursively copy grafts
+                final Map<Path, Map<Path, SQLRowValuesListFetcher>> outerMutable = new HashMap<Path, Map<Path, SQLRowValuesListFetcher>>(f.grafts);
+                for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> e : outerMutable.entrySet()) {
+                    final Map<Path, SQLRowValuesListFetcher> innerMutable = new HashMap<Path, SQLRowValuesListFetcher>(e.getValue());
+                    for (final Entry<Path, SQLRowValuesListFetcher> innerEntry : innerMutable.entrySet()) {
+                        innerEntry.setValue(new SQLRowValuesListFetcher(innerEntry.getValue(), copyTransf));
+                    }
+                    e.setValue(Collections.unmodifiableMap(innerMutable));
+                }
+                this.grafts = Collections.unmodifiableMap(outerMutable);
+            }
+        }
+    }
+
+    /**
+     * Get a frozen version of this. If not already {@link #isFrozen() frozen}, copy this and its
+     * grafts and {@link #freeze()} the copy.
+     * 
+     * @return <code>this</code> if already frozen, otherwise a frozen copy of <code>this</code>.
+     */
+    public final SQLRowValuesListFetcher toUnmodifiable() {
+        synchronized (this) {
+            if (this.isFrozen())
+                return this;
+            // no need to try to deep copy since we freeze before releasing the lock
+            return new SQLRowValuesListFetcher(this, false).freeze();
+        }
     }
 
     /**
@@ -332,7 +402,7 @@ public class SQLRowValuesListFetcher {
      * 
      * @return this.
      */
-    public final SQLRowValuesListFetcher freeze() {
+    public synchronized final SQLRowValuesListFetcher freeze() {
         if (!this.isFrozen()) {
             this.frozen = new SQLSelect(this.getReq());
             for (final Map<Path, SQLRowValuesListFetcher> m : this.grafts.values()) {
@@ -343,13 +413,34 @@ public class SQLRowValuesListFetcher {
         return this;
     }
 
-    public final boolean isFrozen() {
+    public synchronized final boolean isFrozen() {
         return this.frozen != null;
     }
 
     private final void checkFrozen() {
         if (this.isFrozen())
             throw new IllegalStateException("this has been frozen: " + this);
+    }
+
+    /**
+     * Whether the rows returned by {@link #fetch()} are {@link SQLRowValues#isFrozen()
+     * unmodifiable}.
+     * 
+     * @param b <code>true</code> to make all rows unmodifiable.
+     */
+    public synchronized final void setReturnedRowsUnmodifiable(final boolean b) {
+        this.checkFrozen();
+        this.freezeRows = b;
+    }
+
+    /**
+     * Whether the rows returned by {@link #fetch()} are {@link SQLRowValues#isFrozen()
+     * unmodifiable}.
+     * 
+     * @return <code>true</code> if all rows are returned unmodifiable.
+     */
+    public synchronized boolean areReturnedRowsUnmodifiable() {
+        return this.freezeRows;
     }
 
     public SQLRowValues getGraph() {
@@ -365,7 +456,7 @@ public class SQLRowValuesListFetcher {
      * 
      * @param includeForeignUndef <code>true</code> to include undefined rows.
      */
-    public final void setIncludeForeignUndef(boolean includeForeignUndef) {
+    public synchronized final void setIncludeForeignUndef(boolean includeForeignUndef) {
         this.checkFrozen();
         this.includeForeignUndef = includeForeignUndef;
     }
@@ -376,7 +467,7 @@ public class SQLRowValuesListFetcher {
      * 
      * @param b <code>true</code> if only full rows should be fetched.
      */
-    public final void setFullOnly(boolean b) {
+    public synchronized final void setFullOnly(boolean b) {
         this.checkFrozen();
         if (b)
             this.minGraph = this.getGraph().deepCopy();
@@ -384,7 +475,7 @@ public class SQLRowValuesListFetcher {
             this.minGraph = null;
     }
 
-    public final void requirePath(final Path p) {
+    public synchronized final void requirePath(final Path p) {
         this.checkFrozen();
         if (this.getGraph().followPath(p) == null)
             throw new IllegalArgumentException("Path not included in this graph : " + p + "\n" + this.getGraph().printGraph());
@@ -393,7 +484,7 @@ public class SQLRowValuesListFetcher {
         this.minGraph.assurePath(p);
     }
 
-    private final boolean isPathRequired(final Path p) {
+    private synchronized final boolean isPathRequired(final Path p) {
         return this.minGraph != null && this.minGraph.followPath(p) != null;
     }
 
@@ -407,12 +498,12 @@ public class SQLRowValuesListFetcher {
      * @param selTransf will be passed the query which has been constructed, and the return value
      *        will be actually executed, can be <code>null</code>.
      */
-    public void setSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf) {
+    public synchronized void setSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf) {
         this.checkFrozen();
         this.selTransf = selTransf;
     }
 
-    public final ITransformer<SQLSelect, SQLSelect> getSelTransf() {
+    public synchronized final ITransformer<SQLSelect, SQLSelect> getSelTransf() {
         return this.selTransf;
     }
 
@@ -421,12 +512,12 @@ public class SQLRowValuesListFetcher {
      * 
      * @param selID an ID for the primary key, <code>null</code> to not filter.
      */
-    public void setSelID(Integer selID) {
+    public synchronized void setSelID(Number selID) {
         this.checkFrozen();
         this.selID = selID;
     }
 
-    public final Integer getSelID() {
+    public synchronized final Number getSelID() {
         return this.selID;
     }
 
@@ -436,7 +527,7 @@ public class SQLRowValuesListFetcher {
      * @param b <code>true</code> if the query should be ordered.
      * @return this.
      */
-    public final SQLRowValuesListFetcher setOrdered(final boolean b) {
+    public synchronized final SQLRowValuesListFetcher setOrdered(final boolean b) {
         this.setOrder(b ? Collections.singleton(Path.get(getGraph().getTable())) : Collections.<Path> emptySet(), true);
         this.setReferentsOrdered(b, false);
         return this;
@@ -446,7 +537,7 @@ public class SQLRowValuesListFetcher {
         return this.setOrder(order, false);
     }
 
-    private final SQLRowValuesListFetcher setOrder(final Collection<Path> order, final boolean safeVal) {
+    private synchronized final SQLRowValuesListFetcher setOrder(final Collection<Path> order, final boolean safeVal) {
         this.checkFrozen();
         for (final Path p : order)
             if (this.getGraph().followPath(p) == null)
@@ -455,7 +546,7 @@ public class SQLRowValuesListFetcher {
         return this;
     }
 
-    public final Set<Path> getOrder() {
+    public synchronized final Set<Path> getOrder() {
         return this.ordered;
     }
 
@@ -473,7 +564,7 @@ public class SQLRowValuesListFetcher {
      * @param rec if grafts should also be changed.
      * @return this.
      */
-    public final SQLRowValuesListFetcher setReferentsOrdered(final boolean b, final boolean rec) {
+    public synchronized final SQLRowValuesListFetcher setReferentsOrdered(final boolean b, final boolean rec) {
         this.descendantsOrdered = b;
         if (rec) {
             for (final Map<Path, SQLRowValuesListFetcher> m : this.grafts.values()) {
@@ -484,7 +575,7 @@ public class SQLRowValuesListFetcher {
         return this;
     }
 
-    public final boolean areReferentsOrdered() {
+    public synchronized final boolean areReferentsOrdered() {
         return this.descendantsOrdered;
     }
 
@@ -504,7 +595,7 @@ public class SQLRowValuesListFetcher {
      * @param graftPath a path from this values to where <code>other</code> rows should be grafted.
      * @return the previous fetcher.
      */
-    public final SQLRowValuesListFetcher graft(final SQLRowValuesListFetcher other, Path graftPath) {
+    public synchronized final SQLRowValuesListFetcher graft(final SQLRowValuesListFetcher other, Path graftPath) {
         checkFrozen();
         if (this == other)
             throw new IllegalArgumentException("trying to graft onto itself");
@@ -522,17 +613,21 @@ public class SQLRowValuesListFetcher {
         if (descendantPathLength == 0)
             throw new IllegalArgumentException("empty path");
         // checked by computePath
-        assert descendantPath.isSingleLink();
+        assert descendantPath.isSingleField();
         // we used to disallow that :
         // this is LOCAL* -> BATIMENT -> SITE and CPI -> LOCAL -> BATIMENT* is being grafted
         // but this is sometimes desirable, e.g. for each LOCAL find all of its siblings with the
         // same capacity (or any other predicate)
 
+        // shallow copy : all values are still immutable
+        final Map<Path, Map<Path, SQLRowValuesListFetcher>> outerMutable = new HashMap<Path, Map<Path, SQLRowValuesListFetcher>>(this.grafts);
+        final Map<Path, SQLRowValuesListFetcher> innerMutable;
         if (!this.grafts.containsKey(graftPath)) {
             // allow getFetchers() to use a list, easing tests and avoiding using equals()
-            this.grafts.put(graftPath, new LinkedHashMap<Path, SQLRowValuesListFetcher>(4));
+            innerMutable = new LinkedHashMap<Path, SQLRowValuesListFetcher>(4);
         } else {
             final Map<Path, SQLRowValuesListFetcher> map = this.grafts.get(graftPath);
+            innerMutable = new LinkedHashMap<Path, SQLRowValuesListFetcher>(map);
             // e.g. fetching *BATIMENT* <- LOCAL and *BATIMENT* <- LOCAL <- CPI (with different
             // WHERE) and LOCAL have different fields. This isn't supported since we would have to
             // merge fields in merge() and it would be quite long
@@ -550,17 +645,28 @@ public class SQLRowValuesListFetcher {
                 }
             }
         }
-        return this.grafts.get(graftPath).put(descendantPath, other);
+        final SQLRowValuesListFetcher res = innerMutable.put(descendantPath, other);
+        outerMutable.put(graftPath, Collections.unmodifiableMap(innerMutable));
+        this.grafts = Collections.unmodifiableMap(outerMutable);
+        return res;
     }
 
     public final Collection<SQLRowValuesListFetcher> ungraft() {
         return this.ungraft(Path.get(getGraph().getTable()));
     }
 
-    public final Collection<SQLRowValuesListFetcher> ungraft(final Path graftPath) {
+    public synchronized final Collection<SQLRowValuesListFetcher> ungraft(final Path graftPath) {
         checkFrozen();
-        final Map<Path, SQLRowValuesListFetcher> res = this.grafts.remove(graftPath);
+        if (!this.grafts.containsKey(graftPath))
+            return null;
+        final Map<Path, Map<Path, SQLRowValuesListFetcher>> outerMutable = new HashMap<Path, Map<Path, SQLRowValuesListFetcher>>(this.grafts);
+        final Map<Path, SQLRowValuesListFetcher> res = outerMutable.remove(graftPath);
+        this.grafts = Collections.unmodifiableMap(outerMutable);
         return res == null ? null : res.values();
+    }
+
+    private synchronized final Map<Path, Map<Path, SQLRowValuesListFetcher>> getGrafts() {
+        return this.grafts;
     }
 
     /**
@@ -570,7 +676,7 @@ public class SQLRowValuesListFetcher {
      * @return the grafts by their path to fetch, e.g. SITE, BATIMENT, LOCAL, CPI_BT.
      */
     public final Map<Path, SQLRowValuesListFetcher> getGrafts(final Path graftPath) {
-        return Collections.unmodifiableMap(this.grafts.get(graftPath));
+        return this.getGrafts().get(graftPath);
     }
 
     /**
@@ -582,7 +688,7 @@ public class SQLRowValuesListFetcher {
      */
     public final ListMapItf<Path, SQLRowValuesListFetcher> getFetchers(final boolean includeSelf) {
         final ListMap<Path, SQLRowValuesListFetcher> res = new ListMap<Path, SQLRowValuesListFetcher>();
-        for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> e : this.grafts.entrySet()) {
+        for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> e : this.getGrafts().entrySet()) {
             assert e.getKey() != null;
             res.putCollection(e.getKey(), e.getValue().values());
         }
@@ -605,7 +711,7 @@ public class SQLRowValuesListFetcher {
         if (this.getGraph().followPath(fetchedPath) != null)
             res.add(Path.get(getGraph().getTable()), this);
         // search grafts
-        for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> e : this.grafts.entrySet()) {
+        for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> e : this.getGrafts().entrySet()) {
             final Path graftPlace = e.getKey();
             if (fetchedPath.startsWith(graftPlace) && fetchedPath.length() > graftPlace.length()) {
                 final Path rest = fetchedPath.subPath(graftPlace.length());
@@ -640,8 +746,20 @@ public class SQLRowValuesListFetcher {
     }
 
     public final SQLSelect getReq() {
-        if (this.isFrozen())
-            return this.frozen;
+        return this.getReq(null);
+    }
+
+    // see fetch() comment as to why the Where parameter isn't public.
+    private synchronized final SQLSelect getReq(final Where w) {
+        if (this.isFrozen()) {
+            if (w == null) {
+                return this.frozen;
+            } else {
+                final SQLSelect res = new SQLSelect(this.frozen);
+                res.andWhere(w);
+                return res;
+            }
+        }
 
         final SQLTable t = this.getGraph().getTable();
         final SQLSelect sel = new SQLSelect();
@@ -651,27 +769,21 @@ public class SQLRowValuesListFetcher {
             sel.setExcludeUndefined(true, t);
         }
 
-        walk(sel, new ITransformer<State<SQLSelect>, SQLSelect>() {
+        walk(null, new ITransformer<State<String>, String>() {
             @Override
-            public SQLSelect transformChecked(State<SQLSelect> input) {
+            public String transformChecked(State<String> input) {
                 final String alias;
                 if (input.getFrom() != null) {
-                    alias = getAlias(input.getAcc(), input.getPath());
-                    final String aliasPrev = input.getPath().length() == 1 ? null : input.getAcc().followPath(t.getName(), input.getPath().subPath(0, -1)).getAlias();
+                    alias = getAlias(sel, input.getPath());
+                    final String aliasPrev = input.getAcc();
                     final String joinType = isPathRequired(input.getPath()) ? "INNER" : "LEFT";
-                    if (input.isBackwards()) {
-                        // eg LEFT JOIN loc on loc.ID_BATIMENT = BATIMENT.ID
-                        input.getAcc().addBackwardJoin(joinType, alias, input.getFrom(), aliasPrev);
-                    } else {
-                        input.getAcc().addJoin(joinType, new AliasedField(input.getFrom(), aliasPrev), alias);
-                    }
-
+                    sel.addJoin(joinType, aliasPrev, input.getPath().getStep(-1), alias);
                 } else {
                     alias = null;
                 }
-                addFields(input.getAcc(), input.getCurrent(), alias);
+                addFields(sel, input.getCurrent(), alias);
 
-                return input.getAcc();
+                return alias;
             }
 
         });
@@ -685,16 +797,16 @@ public class SQLRowValuesListFetcher {
             }
         }
 
-        if (this.selID != null)
-            sel.andWhere(new Where(t.getKey(), "=", this.selID));
-        return this.getSelTransf() == null ? sel : this.getSelTransf().transformChecked(sel);
+        if (this.getSelID() != null)
+            sel.andWhere(new Where(t.getKey(), "=", this.getSelID()));
+        return (this.getSelTransf() == null ? sel : this.getSelTransf().transformChecked(sel)).andWhere(w);
     }
 
     static String getAlias(final SQLSelect sel, final Path path) {
         String res = "tAlias";
         final int stop = path.length();
         for (int i = 0; i < stop; i++) {
-            res += "__" + path.getSingleStep(i).getName();
+            res += "__" + path.getSingleField(i).getName();
         }
         // needed for backward, otherwise tableAlias__ID_BATIMENT for LOCAL
         res += "__" + path.getTable(stop).getName();
@@ -798,10 +910,12 @@ public class SQLRowValuesListFetcher {
     static private final class RSH implements ResultSetHandler {
         private final List<String> selectFields;
         private final List<GraphNode> graphNodes;
+        private final boolean freezeRows;
 
-        private RSH(List<String> selectFields, List<GraphNode> l) {
+        private RSH(List<String> selectFields, List<GraphNode> l, boolean freezeRows) {
             this.selectFields = selectFields;
             this.graphNodes = l;
+            this.freezeRows = freezeRows;
         }
 
         @Override
@@ -860,18 +974,18 @@ public class SQLRowValuesListFetcher {
                 // become multi-threaded only for large values
                 final int currentCount = rows.size();
                 if (currentCount % 1000 == 0) {
-                    futures.add(exec.submit(new Linker(l, rows, nextToLink, currentCount)));
+                    futures.add(exec.submit(new Linker(l, rows, nextToLink, currentCount, this.freezeRows)));
                     nextToLink = currentCount;
                 }
             }
             final int rowSize = rows.size();
             assert nextToLink > 0 == futures.size() > 0;
             if (nextToLink > 0)
-                futures.add(exec.submit(new Linker(l, rows, nextToLink, rowSize)));
+                futures.add(exec.submit(new Linker(l, rows, nextToLink, rowSize, this.freezeRows)));
 
             // either link all rows, or...
             if (nextToLink == 0)
-                link(l, rows, 0, rowSize);
+                link(l, rows, 0, rowSize, this.freezeRows);
             else {
                 // ...wait for every one and most importantly check for any exceptions
                 try {
@@ -922,11 +1036,64 @@ public class SQLRowValuesListFetcher {
      *         SQLRowValues passed to the constructor.
      */
     public final List<SQLRowValues> fetch() {
-        return this.fetch(true);
+        return this.fetch(null);
     }
 
-    private final List<SQLRowValues> fetch(final boolean merge) {
-        final SQLSelect req = this.getReq();
+    private void checkTable(final Where w) throws IllegalArgumentException {
+        if (w == null)
+            return;
+        final SQLTable t = this.getGraph().getTable();
+        for (final FieldRef f : w.getFields()) {
+            if (!f.getTableRef().equals(t))
+                throw new IllegalArgumentException("Not all from the primary table " + t + " : " + w);
+        }
+    }
+
+    /**
+     * Execute the request transformed by <code>selTransf</code> and with the passed where (even if
+     * {@link #isFrozen()}) and return the result as a list of SQLRowValues. NOTE: this method
+     * doesn't use the cache of SQLDataSource.
+     * 
+     * @param w a where to {@link SQLSelect#andWhere(Where) restrict} the result, can only uses the
+     *        primary table (others have unspecified aliases), can be <code>null</code>.
+     * @return a list of SQLRowValues, one item per row, each item having the same structure as the
+     *         SQLRowValues passed to the constructor.
+     * @throws IllegalArgumentException if the passed where doesn't refer exclusively to the primary
+     *         table.
+     */
+    public final List<SQLRowValues> fetch(final Where w) throws IllegalArgumentException {
+        return this.fetch(w, null);
+    }
+
+    /**
+     * Execute the request transformed by <code>selTransf</code> and with the passed where (even if
+     * {@link #isFrozen()}) and return the result as a list of SQLRowValues. NOTE: this method
+     * doesn't use the cache of SQLDataSource.
+     * 
+     * @param w a where to {@link SQLSelect#andWhere(Where) restrict} the result, can only uses the
+     *        primary table (others have unspecified aliases), can be <code>null</code>.
+     * @param unmodifiableRows whether to return unmodifiable rows, <code>null</code> to use
+     *        {@link #areReturnedRowsUnmodifiable() the default}.
+     * @return a list of SQLRowValues, one item per row, each item having the same structure as the
+     *         SQLRowValues passed to the constructor.
+     * @throws IllegalArgumentException if the passed where doesn't refer exclusively to the primary
+     *         table.
+     */
+    public final List<SQLRowValues> fetch(final Where w, final Boolean unmodifiableRows) throws IllegalArgumentException {
+        return this.fetch(true, w, unmodifiableRows);
+    }
+
+    private final List<SQLRowValues> fetch(final boolean merge, final Where w, final Boolean unmodifiableRows) throws IllegalArgumentException {
+        checkTable(w);
+        final SQLSelect req;
+        final Map<Path, Map<Path, SQLRowValuesListFetcher>> grafts;
+        final boolean freezeRows;
+        // the only other internal state used is this.descendantPath which is final immutable
+        synchronized (this) {
+            req = this.getReq(w);
+            grafts = this.getGrafts();
+            freezeRows = unmodifiableRows == null ? this.areReturnedRowsUnmodifiable() : unmodifiableRows.booleanValue();
+        }
         // getName() would take 5% of ResultSetHandler.handle()
         final List<FieldRef> selectFields = req.getSelectFields();
         final int selectFieldsSize = selectFields.size();
@@ -969,16 +1136,22 @@ public class SQLRowValuesListFetcher {
         }
         assert l.size() == graphSize : "All nodes weren't explored once : " + l.size() + " != " + graphSize + "\n" + this.getGraph().printGraph();
 
+        final boolean mergeReferents = merge && this.fetchReferents();
+        final boolean mergeGrafts = grafts.size() > 0;
+        // if it is possible let the handler do the freeze, avoid another loop and further is
+        // multi-threaded
+        final boolean handlerCanFreeze = !mergeReferents && !mergeGrafts;
+
         // if we wanted to use the cache, we'd need to copy the returned list and its items (i.e.
         // deepCopy()), since we modify them afterwards. Or perhaps include the code after this line
         // into the result set handler.
-        final IResultSetHandler rsh = new IResultSetHandler(new RSH(selectFieldsNames, l), false);
+        final IResultSetHandler rsh = new IResultSetHandler(new RSH(selectFieldsNames, l, freezeRows && handlerCanFreeze), false);
         @SuppressWarnings("unchecked")
         final List<SQLRowValues> res = (List<SQLRowValues>) table.getBase().getDataSource().execute(req.asString(), rsh, false);
         // e.g. list of batiment pointing to site
-        final List<SQLRowValues> merged = merge && this.fetchReferents() ? merge(res) : res;
-        if (this.grafts.size() > 0) {
-            for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> graftPlaceEntry : this.grafts.entrySet()) {
+        final List<SQLRowValues> merged = mergeReferents ? merge(res) : res;
+        if (mergeGrafts) {
+            for (final Entry<Path, Map<Path, SQLRowValuesListFetcher>> graftPlaceEntry : grafts.entrySet()) {
                 // e.g. BATIMENT
                 final Path graftPlace = graftPlaceEntry.getKey();
                 final Path mapPath = Path.get(graftPlace.getLast());
@@ -1004,14 +1177,16 @@ public class SQLRowValuesListFetcher {
                     assert descendantPath.getFirst() == graftPlace.getLast() : descendantPath + " != " + graftPlace;
                     final SQLRowValuesListFetcher graft = e.getValue();
 
-                    final SQLSelect toRestore = graft.frozen;
-                    graft.frozen = new SQLSelect(graft.getReq()).andWhere(new Where(graft.getGraph().getTable().getKey(), ids));
                     // don't merge then...
-                    final List<SQLRowValues> referentVals = graft.fetch(false);
-                    graft.frozen = toRestore;
+                    final List<SQLRowValues> referentVals = graft.fetch(false, new Where(graft.getGraph().getTable().getKey(), ids), false);
                     // ...but now
-                    this.merge(merged, referentVals, byRows, descendantPath);
+                    merge(merged, referentVals, byRows, descendantPath);
                 }
+            }
+        }
+        if (freezeRows && !handlerCanFreeze) {
+            for (final SQLRowValues r : merged) {
+                r.getGraph().freeze();
             }
         }
         return merged;
@@ -1026,24 +1201,26 @@ public class SQLRowValuesListFetcher {
         private final List<List<SQLRowValues>> rows;
         private final int fromIndex;
         private final int toIndex;
+        private final boolean freezeRows;
 
-        public Linker(final List<GraphNode> l, final List<List<SQLRowValues>> rows, final int first, final int last) {
+        public Linker(final List<GraphNode> l, final List<List<SQLRowValues>> rows, final int first, final int last, final boolean freezeRows) {
             super();
             this.l = l;
             this.rows = rows;
             this.fromIndex = first;
             this.toIndex = last;
+            this.freezeRows = freezeRows;
         }
 
         @Override
         public Object call() throws Exception {
-            link(this.l, this.rows, this.fromIndex, this.toIndex);
+            link(this.l, this.rows, this.fromIndex, this.toIndex, this.freezeRows);
             return null;
         }
 
     }
 
-    private static void link(final List<GraphNode> l, final List<List<SQLRowValues>> rows, final int start, final int stop) {
+    private static void link(final List<GraphNode> l, final List<List<SQLRowValues>> rows, final int start, final int stop, final boolean freezeRows) {
         final int graphSize = l.size();
         for (int nodeIndex = 1; nodeIndex < graphSize; nodeIndex++) {
             final GraphNode node = l.get(nodeIndex);
@@ -1051,6 +1228,9 @@ public class SQLRowValuesListFetcher {
             final String fromName = node.getFromName();
             final int linkIndex = node.getLinkIndex();
             final boolean backwards = node.isBackwards();
+
+            // freeze after the last put()
+            final boolean freeze = freezeRows && nodeIndex == graphSize - 1;
 
             for (int i = start; i < stop; i++) {
                 final List<SQLRowValues> row = rows.get(i);
@@ -1071,6 +1251,16 @@ public class SQLRowValuesListFetcher {
                     // check is done by updateLinks()
                     valsToFill.put(fromName, valsToPut, false);
                 }
+                // can't use creatingVals, use primary row which is never null
+                if (freeze)
+                    row.get(0).getGraph().freeze();
+            }
+        }
+        if (freezeRows && graphSize == 1) {
+            for (int i = start; i < stop; i++) {
+                final List<SQLRowValues> row = rows.get(i);
+                final boolean justFrozen = row.get(0).getGraph().freeze();
+                assert justFrozen : "Already frozen";
             }
         }
     }
@@ -1103,7 +1293,7 @@ public class SQLRowValuesListFetcher {
      * @return a smaller list in which all rowValues are unique.
      */
     private final List<SQLRowValues> merge(final List<SQLRowValues> l) {
-        return this.merge(l, l, null, this.descendantPath);
+        return merge(l, l, null, this.descendantPath);
     }
 
     /**
@@ -1117,7 +1307,7 @@ public class SQLRowValuesListFetcher {
      * @param descendantPath the path to merge.
      * @return the merged and grafted values.
      */
-    private final List<SQLRowValues> merge(final List<SQLRowValues> tree, final List<SQLRowValues> graft, final ListMap<Tuple2<Path, Number>, SQLRowValues> graftPlaceRows, Path descendantPath) {
+    static private final List<SQLRowValues> merge(final List<SQLRowValues> tree, final List<SQLRowValues> graft, final ListMap<Tuple2<Path, Number>, SQLRowValues> graftPlaceRows, Path descendantPath) {
         final boolean isGraft = graftPlaceRows != null;
         assert (tree != graft) == isGraft : "Trying to graft onto itself";
         final List<SQLRowValues> res = isGraft ? tree : new ArrayList<SQLRowValues>();
@@ -1143,7 +1333,7 @@ public class SQLRowValuesListFetcher {
                             final List<SQLRowValues> destinationRows = map.get(row);
                             final int destinationSize = destinationRows.size();
                             assert destinationSize > 0 : "Map contains row but have no corresponding value: " + row;
-                            final String ffName = descendantPath.getSingleStep(i).getName();
+                            final String ffName = descendantPath.getSingleField(i).getName();
                             // avoid the first deepCopy() (needed since rows of 'previous' have
                             // already been added to 'map') and copy before merging
                             for (int j = 1; j < destinationSize; j++) {
@@ -1187,9 +1377,19 @@ public class SQLRowValuesListFetcher {
     public boolean equals(Object obj) {
         if (obj instanceof SQLRowValuesListFetcher) {
             final SQLRowValuesListFetcher o = (SQLRowValuesListFetcher) obj;
+            final SQLSelect thisReq, oReq;
+            final Map<Path, Map<Path, SQLRowValuesListFetcher>> thisGrafts, oGrafts;
+            synchronized (this) {
+                thisReq = this.getReq();
+                thisGrafts = this.getGrafts();
+            }
+            synchronized (o) {
+                oReq = o.getReq();
+                oGrafts = o.getGrafts();
+            }
             // use getReq() to avoid selTransf equality pb (ie we generally use anonymous classes
             // which thus lack equals())
-            return this.getReq().equals(o.getReq()) && CompareUtils.equals(this.descendantPath, o.descendantPath) && this.grafts.equals(o.grafts);
+            return thisReq.equals(oReq) && CompareUtils.equals(this.descendantPath, o.descendantPath) && thisGrafts.equals(oGrafts);
         } else
             return false;
     }

@@ -219,6 +219,7 @@ public class OOXMLTableField extends OOXMLField {
             result.append(" € HT");
             return result.toString();
         } else {
+            // result.append("(0,125 + 0,875 x (");
             result.append("(0,15 + 0,85 x (");
             result.append(GestionDevise.currencyToString(indiceN));
             result.append(" / ");

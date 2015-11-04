@@ -13,6 +13,18 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.element;
 
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JSeparator;
+import javax.swing.SwingUtilities;
+
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
@@ -30,19 +42,8 @@ import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.ExceptionHandler;
-
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JSeparator;
-import javax.swing.SwingUtilities;
 
 public class RelanceSQLElement extends ComptaSQLConfElement {
 
@@ -237,8 +238,8 @@ public class RelanceSQLElement extends ComptaSQLConfElement {
                 super.select(r);
 
                 // numero de facture et client figé
-                this.comboFacture.setEditable(false);
-                this.comboClient.setEditable(false);
+                this.comboFacture.setInteractionMode(InteractionMode.DISABLED);
+                this.comboClient.setInteractionMode(InteractionMode.DISABLED);
                 this.fireValidChange();
             }
 

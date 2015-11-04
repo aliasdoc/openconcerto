@@ -45,7 +45,7 @@ public class FieldPath implements IFieldPath {
     public FieldPath(final Path p, final String fieldName) {
         super();
         this.p = p;
-        if (!this.p.isSingleLink())
+        if (!this.p.isSingleField())
             throw new IllegalArgumentException(p + " is not single link");
         this.fieldName = fieldName;
         if (!p.getLast().contains(fieldName))
@@ -109,12 +109,7 @@ public class FieldPath implements IFieldPath {
 
     @Override
     public String toString() {
-        String path = "";
-        for (int i = 0; i < this.p.length(); i++) {
-            final SQLField step = this.p.getSingleStep(i);
-            path += step.getFullName() + ",";
-        }
-        return this.getClass().getSimpleName() + " " + path + this.fieldName;
+        return this.getClass().getSimpleName() + " " + this.p.toString(false) + "." + SQLField.CHAR + this.fieldName + SQLField.CHAR;
     }
 
 }

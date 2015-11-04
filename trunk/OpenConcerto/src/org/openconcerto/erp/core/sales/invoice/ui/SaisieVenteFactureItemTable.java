@@ -23,6 +23,8 @@ import org.openconcerto.sql.element.SQLElement;
 public class SaisieVenteFactureItemTable extends AbstractVenteArticleItemTable {
 
     public SaisieVenteFactureItemTable() {
+        super();
+        setUsedBiasedDevise(false);
     }
 
     @Override
@@ -34,11 +36,10 @@ public class SaisieVenteFactureItemTable extends AbstractVenteArticleItemTable {
     public SQLElement getSQLElement() {
         return Configuration.getInstance().getDirectory().getElement("SAISIE_VENTE_FACTURE_ELEMENT");
     }
-    
+
     public static Map<String, Boolean> map = new HashMap<String, Boolean>();
 
     protected Map<String, Boolean> getCustomVisibilityMap() {
         return map;
     }
 }
-

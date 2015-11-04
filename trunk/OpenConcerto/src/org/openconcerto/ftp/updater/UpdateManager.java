@@ -45,7 +45,9 @@ public class UpdateManager implements Runnable {
     private boolean enabled;
 
     UpdateManager() {
-
+        // Solve Windows Firewall issue
+        System.setProperty("java.net.preferIPv4Stack", "true");
+        //
         final Properties props = new Properties();
         final File f = new File("Configuration/update.properties");
         if (f.exists()) {
@@ -73,7 +75,6 @@ public class UpdateManager implements Runnable {
     }
 
     public static synchronized void start() {
-
         UpdateManager u = new UpdateManager();
         if (!u.isStarted()) {
             u.startWatcher();
@@ -88,7 +89,6 @@ public class UpdateManager implements Runnable {
 
     public static synchronized void forceUpdate() {
         counter = UPDATE_COUNT;
-
     }
 
     private boolean isStarted() {
@@ -143,9 +143,7 @@ public class UpdateManager implements Runnable {
                         bReaderLocal = new BufferedReader(new FileReader(".version"));
                         currentVersion = Integer.parseInt(bReaderLocal.readLine());
                     } catch (Exception e) {
-                        // TODO Auto-generated catch block
                         System.err.println(".version manquant");
-
                     } finally {
                         if (bReaderLocal != null) {
                             bReaderLocal.close();

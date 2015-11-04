@@ -17,6 +17,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -37,7 +38,12 @@ public class ProcessStreams {
          */
         REDIRECT,
         /**
-         * Close process streams.
+         * Consume streams.
+         */
+        CONSUME,
+        /**
+         * Close process streams. NOTE : some programs might fail (e.g. route on FreeBSD), in those
+         * cases use {@link #CONSUME}.
          */
         CLOSE,
         /**
@@ -52,6 +58,8 @@ public class ProcessStreams {
             p.getErrorStream().close();
         } else if (action == Action.REDIRECT) {
             new ProcessStreams(p);
+        } else if (action == Action.CONSUME) {
+            new ProcessStreams(p, StreamUtils.NULL_OS, StreamUtils.NULL_OS);
         }
         return p;
     }
@@ -62,9 +70,23 @@ public class ProcessStreams {
     private final Future<?> err;
 
     public ProcessStreams(final Process p) {
+        this(p, System.out, System.err);
+    }
+
+    /**
+     * Create a new instance and start reading from the passed process. If a passed
+     * {@link OutputStream} is <code>null</code>, then the corresponding {@link InputStream} is not
+     * used at all, so the caller should handle it. If the output must be discarded, use
+     * {@link StreamUtils#NULL_OS}.
+     * 
+     * @param p the process to read from.
+     * @param out where to write the {@link Process#getInputStream() standard output}.
+     * @param err where to write the {@link Process#getErrorStream() standard error}.
+     */
+    public ProcessStreams(final Process p, final OutputStream out, final OutputStream err) {
         this.latch = new CountDownLatch(2);
-        this.out = writeToAsync(p.getInputStream(), System.out);
-        this.err = writeToAsync(p.getErrorStream(), System.err);
+        this.out = writeToAsync(p.getInputStream(), out);
+        this.err = writeToAsync(p.getErrorStream(), err);
         this.exec.submit(new Runnable() {
             public void run() {
                 try {
@@ -88,16 +110,27 @@ public class ProcessStreams {
     }
 
     private final void stop(Future<?> f) {
+        if (f == null)
+            return;
         // TODO
         // ATTN don't interrupt, hangs in readLine()
         f.cancel(false);
     }
 
-    private final Future<?> writeToAsync(final InputStream ins, final PrintStream outs) {
+    private final Future<?> writeToAsync(final InputStream ins, final Object outs) {
+        if (outs == null) {
+            this.latch.countDown();
+            return null;
+        }
         return this.exec.submit(new Callable<Object>() {
             public Object call() throws InterruptedException, IOException {
                 try {
-                    writeTo(ins, outs);
+                    // PrintStream is also an OutputStream
+                    if (outs instanceof PrintStream)
+                        writeTo(ins, (PrintStream) outs);
+                    else
+                        StreamUtils.copy(ins, (OutputStream) outs);
+                    ins.close();
                     return null;
                 } finally {
                     ProcessStreams.this.latch.countDown();
@@ -112,7 +145,7 @@ public class ProcessStreams {
      * @param ins the source.
      * @param outs the destination.
      * @throws InterruptedException if current thread is interrupted.
-     * @throws IOException if io error.
+     * @throws IOException if I/O error.
      */
     public static final void writeTo(InputStream ins, PrintStream outs) throws InterruptedException, IOException {
         final BufferedReader r = new BufferedReader(new InputStreamReader(ins));

@@ -80,12 +80,12 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
 
     private boolean selectAuto = true;
 
-    ComboSQLRequest comboRequest;
+    private ComboSQLRequest comboRequest;
 
     protected ITextWithCompletionPopUp popup;
 
-    OrderedSet<SelectionListener> listeners = new OrderedSet<SelectionListener>();
-    Component popupInvoker;
+    private OrderedSet<SelectionListener> listeners = new OrderedSet<SelectionListener>();
+    private Component popupInvoker;
 
     private boolean isLoading = false;
     private int idToSelect = -1;
@@ -242,6 +242,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
      * Load or reload the cache for completion
      */
     public void loadCache() {
+        assert !SwingUtilities.isEventDispatchThread();
         synchronized (this) {
             this.isLoading = true;
         }
@@ -254,7 +255,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
     }
 
     void loadCacheAsynchronous() {
-
+        assert SwingUtilities.isEventDispatchThread();
         synchronized (this) {
             this.isLoading = true;
         }
@@ -300,6 +301,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
 
         if (aText.length() > 0) {
             // car index(chaine vide) existe toujours...
+            @SuppressWarnings("unchecked")
             Collection<IComboSelectionItem> col = this.mainCache.getItems();
             for (IComboSelectionItem item : col) {
 
@@ -358,7 +360,13 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
     }
 
     private void updateAutoCompletion(boolean autoselectIfMatch) {
+
+        System.err.println("---ITextWithCompletion.updateAutoCompletion() autoselectIfMatch:" + autoselectIfMatch);
+
+        assert SwingUtilities.isEventDispatchThread();
         if (!this.isCompletionEnabled() || this.isLoading) {
+            System.err.println("ITextWithCompletion.updateAutoCompletion() autoselectIfMatch:" + autoselectIfMatch + " quick exit : is loading: " + this.isLoading + " completion enabled: "
+                    + this.isCompletionEnabled());
             return;
         }
         String t = this.text.getText().trim();
@@ -372,10 +380,8 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
         // on vide le model
         this.model.removeAllElements();
         this.model.addAll(l);
-        // for (Iterator<IComboSelectionItem> iter = l.iterator(); iter.hasNext();) {
-        // IComboSelectionItem element = iter.next();
-        // this.model.addElement(element);
-        // }
+
+        System.err.println("ITextWithCompletion.updateAutoCompletion() text:" + t + " : " + l.size() + " values found, this.selectAuto : " + this.selectAuto);
         if (l.size() > 0) {
             showPopup();
         } else {
@@ -385,34 +391,37 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
 
         int newId = this.selectedId;
         boolean found = false;
-        for (Iterator<IComboSelectionItem> iter = l.iterator(); iter.hasNext();) {
-            IComboSelectionItem element = iter.next();
-            if (element.getLabel().equalsIgnoreCase(t) && autoselectIfMatch) {
-                newId = element.getId();
-                hidePopup();
-                found = true;
-                break;
-            }
-        }
-        if (this.selectAuto && found && newId != this.selectedId) {
-            this.selectedId = newId;
-            SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    ITextWithCompletion.this.fireSelectionId(ITextWithCompletion.this.getSelectedId());
+        if (autoselectIfMatch) {
+            for (IComboSelectionItem element : l) {
+                if (element.getLabel().equalsIgnoreCase(t)) {
+                    newId = element.getId();
+                    hidePopup();
+                    found = true;
+                    break;
                 }
-            });
+            }
+            System.err.println("ITextWithCompletion.updateAutoCompletion() text:" + t + " : " + l.size() + " values found, " + t + " found:" + found);
+
         }
+
         if (!found) {
             this.selectedId = -1;
             fireSelectionId(-1);
+        } else {
+            if (this.selectAuto && newId != this.selectedId) {
+                this.selectedId = newId;
+                ITextWithCompletion.this.fireSelectionId(ITextWithCompletion.this.getSelectedId());
+            }
         }
     }
 
-    public synchronized void hidePopup() {
+    public void hidePopup() {
+        assert SwingUtilities.isEventDispatchThread();
         this.popup.setVisible(false);
     }
 
-    private synchronized void showPopup() {
+    private void showPopup() {
+        assert SwingUtilities.isEventDispatchThread();
         if (this.model.getSize() > 0) {
             if (this.popupInvoker.isShowing())
                 this.popup.show(this.popupInvoker, 0, this.text.getBounds().height);
@@ -523,6 +532,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
     private boolean isDispatching = false;
 
     private void fireSelectionId(int id) {
+        assert SwingUtilities.isEventDispatchThread();
         if (!this.isDispatching) {
             this.isDispatching = true;
             for (Iterator<SelectionListener> iter = this.listeners.iterator(); iter.hasNext();) {
@@ -548,7 +558,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
     }
 
     public Object getText() {
-
+        assert SwingUtilities.isEventDispatchThread();
         return this.text.getText();
     }
 
@@ -556,6 +566,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
      * @param popupInvoker The popupInvoker to set.
      */
     public void setPopupInvoker(Component popupInvoker) {
+        assert SwingUtilities.isEventDispatchThread();
         this.popupInvoker = popupInvoker;
     }
 
@@ -587,6 +598,7 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
     }
 
     public void setLimitedSize(int nbChar) {
+        assert SwingUtilities.isEventDispatchThread();
         // rm previous ones
         final DocumentFilterList dfl = DocumentFilterList.get((AbstractDocument) this.text.getDocument());
         final Iterator<DocumentFilter> iter = dfl.getFilters().iterator();

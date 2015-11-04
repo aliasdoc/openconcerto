@@ -25,7 +25,14 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+
+import net.jcip.annotations.GuardedBy;
 
 /**
  * A queue that can be put to sleep. Submitted runnables are converted to FutureTask, that can later
@@ -35,13 +42,170 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SleepingQueue {
 
+    public static enum RunningState {
+        NEW, RUNNING, WILL_DIE, DYING, DEAD
+    }
+
+    /**
+     * A task that can kill a queue.
+     * 
+     * @author Sylvain
+     * 
+     * @param <V> The result type returned by this FutureTask's <tt>get</tt> method
+     */
+    public static final class LethalFutureTask<V> extends FutureTask<V> {
+        private final SleepingQueue q;
+
+        public LethalFutureTask(final SleepingQueue q, final Callable<V> c) {
+            super(c);
+            this.q = q;
+        }
+
+        public final SleepingQueue getQueue() {
+            return this.q;
+        }
+
+        @Override
+        public String toString() {
+            // don't includeCurrentTask as it could be us
+            return this.getClass().getSimpleName() + " for " + this.getQueue().toString(false);
+        }
+    }
+
+    private static final ScheduledThreadPoolExecutor exec;
+
+    static {
+        // daemon thread to allow the VM to exit
+        exec = new ScheduledThreadPoolExecutor(2, new ThreadFactory("DieMonitor", true).setPriority(Thread.MIN_PRIORITY));
+        // allow threads to die
+        exec.setKeepAliveTime(30, TimeUnit.SECONDS);
+        exec.allowCoreThreadTimeOut(true);
+        exec.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        exec.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+
+        assert exec.getPoolSize() == 0 : "Wasting resources";
+    }
+
+    public static final ScheduledFuture<?> watchDying(final LethalFutureTask<?> lethalFuture) {
+        return watchDying(lethalFuture, 1, 1, TimeUnit.MINUTES);
+    }
+
+    /**
+     * Watch the passed future until it's done. When
+     * {@link SleepingQueue#die(boolean, Runnable, Callable) killing} a queue, the currently running
+     * task must first complete then the actual killing (represented by a {@link LethalFutureTask})
+     * begins. This involves running methods and passed runnables which can all hang or throw an
+     * exception. Therefore this method will periodically report on the status of the killing, and
+     * report any exception that was thrown.
+     * 
+     * @param lethalFuture the killing to watch.
+     * @param initialDelay the time to delay first execution.
+     * @param delay the delay between the termination of one execution and the commencement of the
+     *        next.
+     * @param unit the time unit of the initialDelay and delay parameters.
+     * @return a future representing the watching.
+     */
+    public static final ScheduledFuture<?> watchDying(final LethalFutureTask<?> lethalFuture, final int initialDelay, final int delay, final TimeUnit unit) {
+        return watchDying(lethalFuture, initialDelay, delay, unit, null);
+    }
+
+    static final ScheduledFuture<?> watchDying(final LethalFutureTask<?> lethalFuture, final int initialDelay, final int delay, final TimeUnit unit,
+            final IClosure<? super ExecutionException> exnHandler) {
+        // don't use fixed rate as it might burden our threads and if we just checked the status
+        // while being late, there's no need to check sooner the next time.
+        final AtomicReference<Future<?>> f = new AtomicReference<Future<?>>();
+        final ScheduledFuture<?> res = exec.scheduleWithFixedDelay(new Runnable() {
+
+            // lethalFuture won't kill the queue, i.e. willDie threw an exception and forceDie was
+            // false.
+            private void wontKill(final RunningState runningState, final boolean isDone) {
+                Log.get().fine("Our watched future won't kill the queue, current state : " + runningState + " " + lethalFuture);
+                if (isDone)
+                    cancel();
+            }
+
+            private void cancel() {
+                assert lethalFuture.isDone();
+                try {
+                    lethalFuture.get();
+                } catch (InterruptedException e) {
+                    // either we were cancelled or the executor is shutting down (i.e. the VM is
+                    // terminating)
+                    Log.get().log(Level.FINER, "Interrupted while waiting on a finished future " + lethalFuture, e);
+                } catch (ExecutionException e) {
+                    if (exnHandler == null)
+                        Log.get().log(Level.WARNING, "Threw an exception : " + lethalFuture, e);
+                    else
+                        exnHandler.executeChecked(e);
+                }
+                f.get().cancel(true);
+            }
+
+            @Override
+            public void run() {
+                final boolean isDone;
+                final RunningState runningState;
+                final FutureTask<?> beingRun;
+                final SleepingQueue q = lethalFuture.getQueue();
+                synchronized (q) {
+                    runningState = q.getRunningState();
+                    beingRun = q.getBeingRun();
+                    isDone = lethalFuture.isDone();
+                }
+                final Level l = Level.INFO;
+                if (runningState == RunningState.RUNNING) {
+                    // willDie threw an exception but lethalFuture might not be completely done
+                    // in that case, wait for the next execution
+                    wontKill(runningState, isDone);
+                } else if (runningState == RunningState.WILL_DIE) {
+                    if (isDone) {
+                        wontKill(runningState, isDone);
+                    } else if (beingRun == lethalFuture) {
+                        // in willDie() method or Runnable
+                        Log.get().log(l, "Pre-death has not yet finished " + lethalFuture);
+                    } else {
+                        Log.get().log(l, "Death has not yet begun for " + lethalFuture + "\ncurrently running : " + beingRun);
+                    }
+                } else if (runningState == RunningState.DYING) {
+                    assert beingRun == null || beingRun instanceof LethalFutureTask;
+                    if (beingRun == null) {
+                        // should be dead real soon
+                        // just wait for the next execution
+                        assert isDone;
+                        Log.get().log(l, "Death was carried out but the thread is not yet terminated. Watching " + lethalFuture);
+                    } else if (beingRun == lethalFuture) {
+                        // in dying() method or Callable
+                        Log.get().log(l, "Post-death has not yet finished " + lethalFuture);
+                    } else {
+                        assert isDone;
+                        wontKill(runningState, isDone);
+                    }
+                } else if (runningState == RunningState.DEAD) {
+                    // OK
+                    Log.get().log(l, "Death was carried out and the thread is terminated but not necessarily by " + lethalFuture);
+                    cancel();
+                } else {
+                    Log.get().warning("Illegal state " + runningState + " for " + lethalFuture);
+                }
+            }
+        }, initialDelay, delay, unit);
+        f.set(res);
+        return res;
+    }
+
     private final String name;
 
+    @GuardedBy("this")
+    private RunningState state;
+
     private final PropertyChangeSupport support;
+    @GuardedBy("this")
     private FutureTask<?> beingRun;
 
     private final SingleThreadedExecutor tasksQueue;
+    @GuardedBy("this")
     private boolean canceling;
+    @GuardedBy("this")
     private IPredicate<FutureTask<?>> cancelPredicate;
 
     public SleepingQueue() {
@@ -52,14 +216,57 @@ public class SleepingQueue {
         super();
         this.name = name;
 
+        this.state = RunningState.NEW;
+
         this.canceling = false;
         this.cancelPredicate = null;
         this.support = new PropertyChangeSupport(this);
         this.setBeingRun(null);
 
         this.tasksQueue = new SingleThreadedExecutor();
+    }
 
-        this.tasksQueue.start();
+    public final void start() {
+        synchronized (this) {
+            this.tasksQueue.start();
+            this.setState(RunningState.RUNNING);
+            started();
+        }
+    }
+
+    /**
+     * Start this queue only if not already started.
+     * 
+     * @return <code>true</code> if the queue was started.
+     */
+    public final boolean startIfNew() {
+        // don't use getRunningState() which calls isAlive()
+        synchronized (this) {
+            final boolean starting = this.state == RunningState.NEW;
+            if (starting)
+                this.start();
+            assert this.state.compareTo(RunningState.NEW) > 0;
+            return starting;
+        }
+    }
+
+    protected void started() {
+    }
+
+    protected synchronized final void setState(final RunningState s) {
+        this.state = s;
+    }
+
+    public synchronized final RunningState getRunningState() {
+        // an Error could have stopped our thread so can't rely on this.state
+        if (this.state == RunningState.NEW || this.tasksQueue.isAlive())
+            return this.state;
+        else
+            return RunningState.DEAD;
+    }
+
+    public final boolean currentlyInQueue() {
+        return Thread.currentThread() == this.tasksQueue;
     }
 
     /**
@@ -72,14 +279,25 @@ public class SleepingQueue {
         thr.setPriority(Thread.MIN_PRIORITY);
     }
 
-    public final FutureTask<?> put(Runnable workRunnable) {
-        if (this.shallAdd(workRunnable)) {
-            final IFutureTask<Object> t = this.tasksQueue.newTaskFor(workRunnable);
-            this.add(t);
-            return t;
-        } else
-            return null;
+    protected final <T> FutureTask<T> newTaskFor(final Runnable task) {
+        return this.newTaskFor(task, null);
+    }
 
+    protected <T> FutureTask<T> newTaskFor(final Runnable task, T value) {
+        return new IFutureTask<T>(task, value, " for {" + this.name + "}");
+    }
+
+    public final FutureTask<?> put(Runnable workRunnable) {
+        // otherwise if passing a FutureTask, it will itself be wrapped in another FutureTask. The
+        // outer FutureTask will call the inner one's run(), which just record any exception. So the
+        // outer one's get() won't throw it and the exception will effectively be swallowed.
+        final FutureTask<?> t;
+        if (workRunnable instanceof FutureTask) {
+            t = ((FutureTask<?>) workRunnable);
+        } else {
+            t = this.newTaskFor(workRunnable);
+        }
+        return this.execute(t);
     }
 
     public final <F extends FutureTask<?>> F execute(F t) {
@@ -98,7 +316,7 @@ public class SleepingQueue {
         this.tasksQueue.put(t);
     }
 
-    private final boolean shallAdd(Runnable runnable) {
+    private final boolean shallAdd(FutureTask<?> runnable) {
         if (runnable == null)
             throw new NullPointerException("null runnable");
         try {
@@ -116,7 +334,7 @@ public class SleepingQueue {
      * @param r the runnable that is being added.
      * @throws InterruptedException if r should not be added to this queue.
      */
-    protected void willPut(Runnable r) throws InterruptedException {
+    protected void willPut(FutureTask<?> r) throws InterruptedException {
     }
 
     /**
@@ -202,7 +420,7 @@ public class SleepingQueue {
     public boolean setSleeping(boolean sleeping) {
         final boolean res = this.tasksQueue.setSleeping(sleeping);
         if (res) {
-            this.support.firePropertyChange("sleeping", null, this.isSleeping());
+            this.support.firePropertyChange("sleeping", null, sleeping);
         }
         return res;
     }
@@ -214,27 +432,49 @@ public class SleepingQueue {
      * 
      * @return the future killing.
      */
-    public final Future<?> die() {
+    public final LethalFutureTask<?> die() {
         return this.die(true, null, null);
     }
 
     /**
-     * Stops this queue. Once the returned future completes successfully then no task is executing (
-     * {@link #isDead()} will happen sometimes later, the time for the thread to terminate). If the
-     * returned future throws an exception because of the passed runnables or of {@link #willDie()}
-     * or {@link #dying()}, one can check with {@link #dieCalled()} to see if the queue is dying.
+     * Stops this queue. All tasks in the queue, including the {@link #getBeingRun() currently
+     * running}, will be {@link Future#cancel(boolean) cancelled}. The currently running task will
+     * thus complete unless it checks for interrupt. Once the returned future completes successfully
+     * then no task is executing ( {@link #isDead()} will happen sometimes later, the time for the
+     * thread to terminate). If the returned future throws an exception because of the passed
+     * runnables or of {@link #willDie()} or {@link #dying()}, one can check with
+     * {@link #dieCalled()} to see if the queue is dying.
+     * <p>
+     * This method tries to limit the cases where the returned Future will not get executed : it
+     * checks that this was {@link #start() started} and is not already {@link RunningState#DYING}
+     * or {@link RunningState#DEAD}. It also doesn't allow {@link RunningState#WILL_DIE} as it could
+     * cancel the previously passed runnables or never run the passed runnables. But even with these
+     * restrictions a number of things can prevent the result from getting executed : the
+     * {@link #getBeingRun() currently running} task hangs indefinitely, it throws an {@link Error}
+     * ; the passed runnables hang indefinitely.
+     * </p>
      * 
      * @param force <code>true</code> if this is guaranteed to die (even if <code>willDie</code> or
      *        {@link #willDie()} throw an exception).
      * @param willDie the last actions to take before killing this queue.
      * @param dying the last actions to take before this queue is dead.
      * @return the future killing, which will return <code>dying</code> result.
+     * @throws IllegalStateException if the state isn't {@link RunningState#RUNNING}.
      * @see #dieCalled()
      */
-    public final <V> Future<V> die(final boolean force, final Runnable willDie, final Callable<V> dying) {
+    public final <V> LethalFutureTask<V> die(final boolean force, final Runnable willDie, final Callable<V> dying) throws IllegalStateException {
+        synchronized (this) {
+            final RunningState state = this.getRunningState();
+            if (state == RunningState.NEW)
+                throw new IllegalStateException("Not started");
+            if (state.compareTo(RunningState.RUNNING) > 0)
+                throw new IllegalStateException("die() already called or thread was killed by an Error : " + state);
+            assert state == RunningState.RUNNING;
+            this.setState(RunningState.WILL_DIE);
+        }
         // reset sleeping to original value if die not effective
         final AtomicBoolean resetSleeping = new AtomicBoolean(false);
-        final FutureTask<V> res = new FutureTask<V>(new Callable<V>() {
+        final LethalFutureTask<V> res = new LethalFutureTask<V>(this, new Callable<V>() {
             @Override
             public V call() throws Exception {
                 Exception willDieExn = null;
@@ -254,15 +494,18 @@ public class SleepingQueue {
                         }
                     }
                 } catch (Exception e) {
-                    if (!force)
+                    if (!force) {
+                        setState(RunningState.RUNNING);
                         throw e;
-                    else
+                    } else {
                         willDieExn = e;
+                    }
                 }
                 try {
                     // don't interrupt ourselves
                     SleepingQueue.this.tasksQueue.die(false);
                     assert SleepingQueue.this.tasksQueue.isDying();
+                    setState(RunningState.DYING);
                     // since there's already been an exception, throw it as soon as possible
                     // also dying() might itself throw an exception for the same reason or we now
                     // have 2 exceptions to throw
@@ -289,7 +532,14 @@ public class SleepingQueue {
             public void executeChecked(Deque<FutureTask<?>> input) {
                 // since we cancel the current task, we might as well remove all of them since they
                 // might depend on the cancelled one
+                // cancel removed tasks so that callers of get() don't wait forever
+                for (final FutureTask<?> ft : input) {
+                    // by definition tasks in the queue aren't executing, so interrupt parameter is
+                    // useless. On the other hand cancel() might return false if already cancelled.
+                    ft.cancel(false);
+                }
                 input.clear();
+
                 input.addFirst(res);
                 // die as soon as possible, even if there's a long task already running
                 final FutureTask<?> beingRun = getBeingRun();
@@ -308,20 +558,19 @@ public class SleepingQueue {
         // nothing by default
     }
 
-    protected void dying() {
+    protected void dying() throws Exception {
         // nothing by default
     }
 
     /**
      * Whether this will die. If this method returns <code>true</code>, it is guaranteed that no
-     * other task will be taken from the queue to be started, and that this queue will die. But the
-     * already executing task will complete unless it checks for interrupt. Note: this method
-     * doesn't return <code>true</code> right after {@link #die()} as the method is asynchronous and
-     * if {@link #willDie()} fails it may not die at all ; as explained in its comment you may use
-     * its returned future to wait for the killing.
+     * other task will be taken from the queue to be started. Note: this method doesn't return
+     * <code>true</code> right after {@link #die()} as the method is asynchronous and if
+     * {@link #willDie()} fails it may not die at all ; as explained in its comment you may use its
+     * returned future to wait for the killing.
      * 
-     * @return <code>true</code> if this queue will not execute any more tasks (but it may finish
-     *         one last task).
+     * @return <code>true</code> if this queue will not execute any more tasks (but it may hang
+     *         indefinitely if the dying runnable blocks).
      * @see #isDead()
      */
     public final boolean dieCalled() {
@@ -339,6 +588,24 @@ public class SleepingQueue {
         return this.tasksQueue.isDead();
     }
 
+    /**
+     * Allow to wait for the thread to end. Once this method returns {@link #getRunningState()} will
+     * always return {@link RunningState#DEAD}. Useful since the future from
+     * {@link #die(boolean, Runnable, Callable)} returns when all tasks are finished but the
+     * {@link #getRunningState()} is still {@link RunningState#DYING} since the Thread takes a
+     * little time to die.
+     * 
+     * @throws InterruptedException if interrupted while waiting.
+     * @see Thread#join()
+     */
+    public final void join() throws InterruptedException {
+        this.tasksQueue.join();
+    }
+
+    public final void join(long millis, int nanos) throws InterruptedException {
+        this.tasksQueue.join(millis, nanos);
+    }
+
     public void addPropertyChangeListener(PropertyChangeListener l) {
         this.support.addPropertyChangeListener(l);
     }
@@ -351,14 +618,6 @@ public class SleepingQueue {
         private SingleThreadedExecutor() {
             super(SleepingQueue.this.name + System.currentTimeMillis());
             customizeThread(this);
-        }
-
-        protected <T> IFutureTask<T> newTaskFor(final Runnable task) {
-            return this.newTaskFor(task, null);
-        }
-
-        protected <T> IFutureTask<T> newTaskFor(final Runnable task, T value) {
-            return new IFutureTask<T>(task, value, " for {" + SleepingQueue.this.name + "}");
         }
 
         @Override
@@ -406,8 +665,13 @@ public class SleepingQueue {
         }
     }
 
+    @Override
     public String toString() {
-        return super.toString() + " Queue: " + this.tasksQueue + " run:" + this.getBeingRun();
+        return this.toString(true);
+    }
+
+    public String toString(final boolean includeCurrentTask) {
+        return super.toString() + " Queue: " + this.tasksQueue + (includeCurrentTask ? " run:" + this.getBeingRun() : "");
     }
 
 }

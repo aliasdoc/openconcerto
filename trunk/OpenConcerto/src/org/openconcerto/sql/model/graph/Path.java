@@ -23,9 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import net.jcip.annotations.Immutable;
@@ -54,25 +52,14 @@ public final class Path extends AbstractPath<Path> {
         return new PathBuilder(first).addTables(path.subList(1, path.size())).build();
     }
 
-    private static final int CACHE_INITIAL_CAPACITY = 8;
-    private static final float CACHE_LOAD_FACTOR = 0.75f;
-    private static final int CACHE_MAX_SIZE = (int) (CACHE_LOAD_FACTOR * CACHE_INITIAL_CAPACITY * 8);
-    static private final Map<SQLTable, Path> EMPTY_PATHS = new LinkedHashMap<SQLTable, Path>(CACHE_INITIAL_CAPACITY, CACHE_LOAD_FACTOR, true) {
-        @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<SQLTable, Path> eldest) {
-            return size() > CACHE_MAX_SIZE;
-        }
-    };
-
     static public Path get(SQLTable first) {
-        synchronized (EMPTY_PATHS) {
-            Path res = EMPTY_PATHS.get(first);
-            if (res == null) {
-                res = new Path(first);
-                EMPTY_PATHS.put(first, res);
-            }
-            return res;
-        }
+        // We used to cache these paths, but our attribute prevented the DBStructureItem tree to be
+        // garbage collected. So we should have listened to dropped events of system roots to clear
+        // the cache. But at this point we should have done one lookup with system root plus one
+        // with the table to find the cached path. Since single item paths are generally
+        // short-lived (mostly used when building a longer path) and by definition small this doesn't
+        // seem worthwhile.
+        return new Path(first);
     }
 
     /**
@@ -102,26 +89,26 @@ public final class Path extends AbstractPath<Path> {
     }
 
     private final List<SQLTable> tables;
-    private final List<Step> fields;
+    private final List<Step> steps;
     // after profiling: doing getStep().iterator().next() costs a lot
     private final List<SQLField> singleFields;
 
     public Path(SQLTable start) {
         this.tables = Collections.singletonList(start);
-        this.fields = Collections.emptyList();
+        this.steps = Collections.emptyList();
         this.singleFields = Collections.emptyList();
     }
 
     public Path(Step step) {
         this.tables = Arrays.asList(step.getFrom(), step.getTo());
-        this.fields = Collections.singletonList(step);
+        this.steps = Collections.singletonList(step);
         this.singleFields = Collections.singletonList(step.getSingleField());
     }
 
     // arguments not checked for coherence, nor immutability
     private Path(final List<SQLTable> tables, final List<Step> steps, final List<SQLField> singleFields) {
         this.tables = tables;
-        this.fields = steps;
+        this.steps = steps;
         this.singleFields = singleFields;
     }
 
@@ -130,7 +117,7 @@ public final class Path extends AbstractPath<Path> {
     }
 
     public final Path reverse() {
-        final int stepsCount = this.fields.size();
+        final int stepsCount = this.steps.size();
         if (stepsCount == 0)
             return this;
 
@@ -139,7 +126,7 @@ public final class Path extends AbstractPath<Path> {
         final List<SQLField> singleFields = new ArrayList<SQLField>(stepsCount);
 
         for (int i = stepsCount - 1; i >= 0; i--) {
-            final Step reversedStep = this.fields.get(i).reverse();
+            final Step reversedStep = this.steps.get(i).reverse();
             tables.add(reversedStep.getFrom());
             steps.add(reversedStep);
             singleFields.add(reversedStep.getSingleField());
@@ -149,7 +136,7 @@ public final class Path extends AbstractPath<Path> {
     }
 
     public Path minusFirst() {
-        return this.subPath(1, this.length());
+        return this.subPath(1);
     }
 
     public Path minusLast() {
@@ -157,7 +144,7 @@ public final class Path extends AbstractPath<Path> {
     }
 
     public Path minusLast(final int count) {
-        return this.subPath(0, this.length() - count);
+        return this.subPath(0, -count);
     }
 
     public Path subPath(int fromIndex) {
@@ -175,11 +162,11 @@ public final class Path extends AbstractPath<Path> {
      * @return the specified range within this path
      */
     public Path subPath(int fromIndex, int toIndex) {
-        fromIndex = CollectionUtils.getValidIndex(this.fields, fromIndex);
-        toIndex = CollectionUtils.getValidIndex(this.fields, toIndex);
+        fromIndex = CollectionUtils.getValidIndex(this.steps, fromIndex, true);
+        toIndex = CollectionUtils.getValidIndex(this.steps, toIndex, true);
         if (fromIndex == 0 && toIndex == this.length())
             return this;
-        return new Path(this.tables.subList(fromIndex, toIndex + 1), this.fields.subList(fromIndex, toIndex), this.singleFields.subList(fromIndex, toIndex));
+        return new Path(this.tables.subList(fromIndex, toIndex + 1), this.steps.subList(fromIndex, toIndex), this.singleFields.subList(fromIndex, toIndex));
     }
 
     public Path justFirst() {
@@ -215,8 +202,8 @@ public final class Path extends AbstractPath<Path> {
         // subList() since the last table will be added from p
         tables.addAll(this.tables.subList(0, thisLength));
         tables.addAll(p.tables);
-        steps.addAll(this.fields);
-        steps.addAll(p.fields);
+        steps.addAll(this.steps);
+        steps.addAll(p.steps);
         singleFields.addAll(this.singleFields);
         singleFields.addAll(p.singleFields);
 
@@ -224,13 +211,13 @@ public final class Path extends AbstractPath<Path> {
     }
 
     @Override
-    final Path add(Step step) {
+    public final Path add(Step step) {
         return this.append(new Path(step));
     }
 
     @Override
     public final List<Step> getSteps() {
-        return this.fields;
+        return this.steps;
     }
 
     @Override
@@ -257,7 +244,7 @@ public final class Path extends AbstractPath<Path> {
      * @return the requested step.
      */
     public final Step getStep(int i) {
-        return this.fields.get(CollectionUtils.getValidIndex(this.fields, i, true));
+        return this.steps.get(CollectionUtils.getValidIndex(this.steps, i, true));
     }
 
     /**
@@ -273,13 +260,13 @@ public final class Path extends AbstractPath<Path> {
 
     /**
      * Return the field connecting the table i to i+1, or <code>null</code> if there is more than
-     * one (ie {@link #isSingleLink()} is <code>false</code>).
+     * one (ie {@link #isSingleField()} is <code>false</code>).
      * 
      * @param i the step asked, from 0 to {@link #length()} -1.
      * @return the field connecting the table i to i+1, or <code>null</code> if there is more than
      *         one.
      */
-    public SQLField getSingleStep(int i) {
+    public SQLField getSingleField(int i) {
         return this.singleFields.get(i);
     }
 
@@ -287,9 +274,9 @@ public final class Path extends AbstractPath<Path> {
      * Return the fields connecting the tables.
      * 
      * @return a list of fields and <code>null</code>s.
-     * @see #getSingleStep(int)
+     * @see #getSingleField(int)
      */
-    public final List<SQLField> getSingleSteps() {
+    public final List<SQLField> getSingleFields() {
         return this.singleFields;
     }
 
@@ -298,7 +285,7 @@ public final class Path extends AbstractPath<Path> {
      * 
      * @return <code>true</code> if there's exactly 1 field between each table.
      */
-    public boolean isSingleLink() {
+    public boolean isSingleField() {
         for (final SQLField step : this.singleFields) {
             if (step == null)
                 return false;
@@ -306,13 +293,31 @@ public final class Path extends AbstractPath<Path> {
         return true;
     }
 
+    /**
+     * Whether this path contains only {@link Step#isSingleLink() single link} steps.
+     * 
+     * @return <code>true</code> if all steps are single link, <code>false</code> otherwise.
+     */
+    public boolean isSingleLink() {
+        for (final Step step : this.steps) {
+            if (!step.isSingleLink())
+                return false;
+        }
+        return true;
+    }
+
+    /**
+     * Return one path per single link.
+     * 
+     * @return a set of paths which are {@link #isSingleLink() single link}.
+     */
     public final Set<Path> getSingleLinkPaths() {
-        if (this.length() == 0)
+        if (this.isSingleLink())
             return Collections.singleton(this);
 
         final Set<Path> res = new HashSet<Path>();
         for (final Path p : this.subPath(1).getSingleLinkPaths()) {
-            for (final Step s : this.getStep(0).getSingleSteps()) {
+            for (final Step s : this.getStep(0).getSingleLinkSteps()) {
                 res.add(new PathBuilder(s).append(p).build());
             }
         }
@@ -341,8 +346,8 @@ public final class Path extends AbstractPath<Path> {
      * @see Step#getDirection()
      */
     public final Direction getDirection() {
-        final Set<Direction> directions = new HashSet<Link.Direction>(this.fields.size());
-        for (final Step s : this.fields) {
+        final Set<Direction> directions = new HashSet<Link.Direction>(this.steps.size());
+        for (final Step s : this.steps) {
             directions.add(s.getDirection());
         }
         return CollectionUtils.getSole(directions);
@@ -387,7 +392,7 @@ public final class Path extends AbstractPath<Path> {
     // don't expose null since it could be confused as meaning "all steps have mixed directions"
     private final Boolean isSingleDirection(final Boolean foreign) {
         Boolean dir = foreign;
-        for (final Step s : this.fields) {
+        for (final Step s : this.steps) {
             final Boolean stepIsForeign = s.isForeign();
             if (stepIsForeign == null)
                 return null;
@@ -399,8 +404,25 @@ public final class Path extends AbstractPath<Path> {
         return true;
     }
 
+    @Override
     public String toString() {
-        return "Path\n\tTables: " + this.tables + "\n\tLinks:" + this.fields;
+        return this.toString(true);
+    }
+
+    public String toString(final boolean includeClassName) {
+        final StringBuilder sb = new StringBuilder(128);
+        if (includeClassName) {
+            sb.append(this.getClass().getSimpleName());
+            sb.append(" ");
+        }
+        sb.append(this.getFirst());
+        for (final Step step : this.steps) {
+            sb.append(" ");
+            step.linksToString(sb);
+            sb.append(" ");
+            sb.append(step.getTo());
+        }
+        return sb.toString();
     }
 
     @Override
@@ -409,7 +431,7 @@ public final class Path extends AbstractPath<Path> {
             final Path o = (Path) obj;
             // no need to compare tables, starting from the same point the same fields lead to the
             // same table
-            return this.getFirst().equals(o.getFirst()) && this.fields.equals(o.fields);
+            return this.getFirst().equals(o.getFirst()) && this.steps.equals(o.steps);
         } else
             return false;
     }
@@ -423,7 +445,7 @@ public final class Path extends AbstractPath<Path> {
      */
     @Override
     public int hashCode() {
-        return this.fields.hashCode();
+        return this.steps.hashCode();
     }
 
     public boolean startsWith(Path other) {

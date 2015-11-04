@@ -13,9 +13,6 @@
  
  package org.openconcerto.sql.view.list;
 
-import java.util.Collections;
-import java.util.Set;
-
 /**
  * A column with sensible default methods.
  * 
@@ -37,11 +34,6 @@ public abstract class BaseSQLTableModelColumn extends SQLTableModelColumn {
     @Override
     public String getIdentifier() {
         return this.getName();
-    }
-
-    @Override
-    public Set<String> getUsedCols() {
-        return Collections.emptySet();
     }
 
     @Override

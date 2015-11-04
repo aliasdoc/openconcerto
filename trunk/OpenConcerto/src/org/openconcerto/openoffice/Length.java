@@ -245,9 +245,13 @@ public class Length implements Comparable<Length> {
             return other;
         else if (other.isZero())
             return this;
-        final List2<Number> amounts = this.getSameUnitAmounts(other);
-        final Number thisAmount = amounts.get0();
-        final Number oAmount = amounts.get1();
+        final List2<Length> amounts = this.getSameUnitLengths(other);
+        final Length thisLength = amounts.get0();
+        final Length oLength = amounts.get1();
+        assert thisLength.getUnit() == oLength.getUnit();
+
+        final Number thisAmount = thisLength.getAmount();
+        final Number oAmount = oLength.getAmount();
         final Class<? extends Number> widerClass = NumberUtils.getWiderClass(thisAmount, oAmount);
         // MAYBE check for overflow
         final Number amount;
@@ -262,7 +266,7 @@ public class Length implements Comparable<Length> {
         } else {
             amount = NumberConvertor.toBigDecimal(thisAmount).add(NumberConvertor.toBigDecimal(oAmount));
         }
-        return Length.create(amount, this.getUnit());
+        return Length.create(amount, thisLength.getUnit());
     }
 
     public final Length subtract(Length other) {
@@ -307,9 +311,9 @@ public class Length implements Comparable<Length> {
             throw new IllegalArgumentException("Cannot divide " + this + " and " + other);
         if (this == other)
             return 1;
-        final List2<Number> amounts = this.getSameUnitAmounts(other);
-        final Number thisAmount = amounts.get0();
-        final Number oAmount = amounts.get1();
+        final List2<Length> amounts = this.getSameUnitLengths(other);
+        final Number thisAmount = amounts.get0().getAmount();
+        final Number oAmount = amounts.get1().getAmount();
         final Class<? extends Number> widerClass = NumberUtils.getWiderClass(thisAmount, oAmount);
         final Number res;
         if (widerClass == Double.class) {
@@ -381,17 +385,17 @@ public class Length implements Comparable<Length> {
             return 0;
         } else {
             // same non-zero sign
-            final List2<Number> amounts = getSameUnitAmounts(o);
-            return NumberUtils.compare(amounts.get0(), amounts.get1());
+            final List2<Length> amounts = getSameUnitLengths(o);
+            return NumberUtils.compare(amounts.get0().getAmount(), amounts.get1().getAmount());
         }
     }
 
     // ATTN doesn't check for isNone()
-    private final List2<Number> getSameUnitAmounts(Length o) {
+    private final List2<Length> getSameUnitLengths(Length o) {
         final LengthUnit commonUnit = this.getUnit().getCommonUnit(o.getUnit());
-        final Number thisN = this.convertTo(commonUnit).getAmount();
-        final Number oN = o.convertTo(commonUnit).getAmount();
-        return new List2<Number>(thisN, oN);
+        final Length thisN = this.convertTo(commonUnit);
+        final Length oN = o.convertTo(commonUnit);
+        return new List2<Length>(thisN, oN);
     }
 
     @Override

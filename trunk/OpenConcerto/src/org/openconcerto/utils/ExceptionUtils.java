@@ -69,8 +69,15 @@ public class ExceptionUtils {
     }
 
     static public String getStackTrace(Throwable cause) {
-        final StringWriter res = new StringWriter();
-        cause.printStackTrace(new PrintWriter(res));
+        final StringWriter res = new StringWriter(128);
+        final PrintWriter pw = new PrintWriter(res);
+        try {
+            cause.printStackTrace(pw);
+        } finally {
+            pw.close();
+        }
+        if (pw.checkError())
+            Log.get().warning("Error while writing " + cause);
         return res.toString();
     }
 }

@@ -26,9 +26,9 @@ abstract public class CellDynamicModifier {
         values.put(row, value);
     }
 
-    public Object getValueFrom(final SQLRowValues row) {
+    public Object getValueFrom(final SQLRowValues row, SQLTableElement source) {
         if (!values.containsKey(row)) {
-            setValueFrom(row, computeValueFrom(row));
+            setValueFrom(row, computeValueFrom(row, source));
         }
         return values.get(row);
     }
@@ -37,6 +37,6 @@ abstract public class CellDynamicModifier {
         this.values.clear();
     }
 
-    public abstract Object computeValueFrom(final SQLRowValues row);
+    public abstract Object computeValueFrom(final SQLRowValues row, SQLTableElement source);
 
 }

@@ -13,12 +13,14 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
+
 import java.io.PrintStream;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LightUILine implements Serializable {
+public class LightUILine implements Transferable {
 
     public static final int ALIGN_GRID = 0;
     public static final int ALIGN_LEFT = 1;
@@ -28,22 +30,31 @@ public class LightUILine implements Serializable {
     private int weightY;
     private boolean fillHeight;
     private int gridAlignment = ALIGN_GRID;
+    private boolean footer = false;
 
     private List<LightUIElement> elements = new ArrayList<LightUIElement>();
 
     public int getSize() {
-        return elements.size();
+        return this.elements.size();
     }
 
     public void add(LightUIElement element) {
-        elements.add(element);
+        this.elements.add(element);
+    }
+    
+    public void setFooter(boolean footer) {
+        this.footer = footer;
+    }
+    
+    public boolean getFooter() {
+        return this.footer;
     }
 
     public void dump(PrintStream out) {
-        int size = elements.size();
-        out.println("LightUILine " + size + " elements, weightY: " + weightY + " fillHeight: " + fillHeight);
+        int size = this.elements.size();
+        out.println("LightUILine " + size + " elements, weightY: " + this.weightY + " fillHeight: " + this.fillHeight);
         for (int i = 0; i < size; i++) {
-            LightUIElement element = elements.get(i);
+            LightUIElement element = this.elements.get(i);
             out.print("Element " + i + " : ");
             element.dump(out);
         }
@@ -51,15 +62,15 @@ public class LightUILine implements Serializable {
 
     public int getWidth() {
         int w = 0;
-        final int size = elements.size();
+        final int size = this.elements.size();
         for (int i = 0; i < size; i++) {
-            w += elements.get(i).getGridWidth();
+            w += this.elements.get(i).getGridWidth();
         }
         return w;
     }
 
     public int getWeightY() {
-        return weightY;
+        return this.weightY;
     }
 
     public void setWeightY(int weightY) {
@@ -67,7 +78,7 @@ public class LightUILine implements Serializable {
     }
 
     public boolean isFillHeight() {
-        return fillHeight;
+        return this.fillHeight;
     }
 
     public void setFillHeight(boolean fillHeight) {
@@ -75,14 +86,28 @@ public class LightUILine implements Serializable {
     }
 
     public LightUIElement getElement(int i) {
-        return elements.get(i);
+        return this.elements.get(i);
     }
 
     public int getGridAlignment() {
-        return gridAlignment;
+        return this.gridAlignment;
     }
 
     public void setGridAlignment(int gridAlignment) {
         this.gridAlignment = gridAlignment;
+    }
+    
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+        
+        result.append("\"weightY\":" + JSONconverter.getJSON(this.weightY) + ",");
+        result.append("\"fillHeight\":" + JSONconverter.getJSON(this.fillHeight) + ",");
+        result.append("\"gridAlignment\":" + JSONconverter.getJSON(this.gridAlignment) + ",");
+        result.append("\"footer\":" + JSONconverter.getJSON(this.footer) + ",");
+        result.append("\"elements\":" + JSONconverter.getJSON(this.elements));
+        
+        result.append("}");
+        return result.toString();
     }
 }

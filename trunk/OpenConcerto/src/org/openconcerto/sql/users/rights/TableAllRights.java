@@ -19,6 +19,7 @@ import org.openconcerto.sql.users.rights.UserRightsManager.RightTuple;
 import org.openconcerto.utils.CompareUtils.Equalizer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class TableAllRights extends MacroRight {
@@ -30,6 +31,10 @@ public class TableAllRights extends MacroRight {
     public static final String ADD_ROW_TABLE = "INSERT_ROW";
     public static final String VIEW_ROW_TABLE = "SELECT_ROW";
     public static final String SAVE_ROW_TABLE = "SAVE_ROW";
+
+    public static final List<String> getCodes() {
+        return Arrays.asList(CODE, CODE_MODIF, DELETE_ROW_TABLE, MODIFY_ROW_TABLE, ADD_ROW_TABLE, VIEW_ROW_TABLE, SAVE_ROW_TABLE);
+    }
 
     public static RightTuple createRight(final SQLTable t, final boolean b) {
         return createRight(CODE, t, b);

@@ -151,7 +151,14 @@ class UnmodifiableCollectionMap<K, C extends Collection<V>, V> extends AbstractM
             });
         }
 
-        protected abstract C toUnmodifiable(C coll);
+        protected final C toUnmodifiable(C coll) {
+            if (coll == null)
+                return null;
+            else
+                return this.nonNullToUnmodifiable(coll);
+        }
+
+        protected abstract C nonNullToUnmodifiable(C coll);
     }
 
     private final CollectionMap2Itf<K, C, V> del;

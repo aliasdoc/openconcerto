@@ -15,11 +15,13 @@
 
 import java.awt.Color;
 import java.io.PrintStream;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LightUIElement implements Serializable {
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
+
+public class LightUIElement implements Transferable {
     /**
      * 
      */
@@ -35,6 +37,8 @@ public class LightUIElement implements Serializable {
     public static final int TYPE_COMBOBOX_ELEMENT = 7;
     public static final int TYPE_DESCRIPTOR = 8;
     public static final int TYPE_TREE = 9;
+    public static final int TYPE_TEXT = 10;
+    public static final int TYPE_SCROLLABLE = 11;
     public static final int TYPE_BUTTON = 20;
     public static final int TYPE_BUTTON_WITH_CONTEXT = 21;
     public static final int TYPE_BUTTON_CANCEL = 22;
@@ -60,7 +64,7 @@ public class LightUIElement implements Serializable {
     private String id;
     private String label;
     private String value;
-    private Serializable rawContent;
+    private TableSpec rawContent;
     private int valueType;
     private int commitMode;
     private String valuePrecision;// "(6,2)" 999999.99 is the max
@@ -80,7 +84,7 @@ public class LightUIElement implements Serializable {
     private boolean horizontalyResizable;
 
     public int getType() {
-        return type;
+        return this.type;
     }
 
     public void setType(int type) {
@@ -88,7 +92,7 @@ public class LightUIElement implements Serializable {
     }
 
     public int getGridWidth() {
-        return gridWidth;
+        return this.gridWidth;
     }
 
     public void setGridWidth(int gridWidth) {
@@ -96,7 +100,7 @@ public class LightUIElement implements Serializable {
     }
 
     public boolean isFillWidth() {
-        return fillWidth;
+        return this.fillWidth;
     }
 
     public void setFillWidth(boolean fillWidth) {
@@ -104,7 +108,7 @@ public class LightUIElement implements Serializable {
     }
 
     public Color getColor() {
-        return color;
+        return this.color;
     }
 
     public void setColor(Color color) {
@@ -112,7 +116,7 @@ public class LightUIElement implements Serializable {
     }
 
     public String getIcon() {
-        return icon;
+        return this.icon;
     }
 
     public void setIcon(String icon) {
@@ -120,7 +124,7 @@ public class LightUIElement implements Serializable {
     }
 
     public String getId() {
-        return id;
+        return this.id;
     }
 
     public void setId(String id) {
@@ -128,7 +132,7 @@ public class LightUIElement implements Serializable {
     }
 
     public String getLabel() {
-        return label;
+        return this.label;
     }
 
     public void setLabel(String label) {
@@ -136,11 +140,11 @@ public class LightUIElement implements Serializable {
     }
 
     public String getValue() {
-        return value;
+        return this.value;
     }
 
     public int getCommitMode() {
-        return commitMode;
+        return this.commitMode;
     }
 
     public void setCommitMode(int commitMode) {
@@ -148,7 +152,7 @@ public class LightUIElement implements Serializable {
     }
 
     public String getDisplayPrecision() {
-        return displayPrecision;
+        return this.displayPrecision;
     }
 
     public void setDisplayPrecision(String displayPrecision) {
@@ -156,7 +160,7 @@ public class LightUIElement implements Serializable {
     }
 
     public String getValuePrecision() {
-        return valuePrecision;
+        return this.valuePrecision;
     }
 
     public void setValuePrecision(String valuePrecision) {
@@ -164,7 +168,7 @@ public class LightUIElement implements Serializable {
     }
 
     public String getValueRange() {
-        return valueRange;
+        return this.valueRange;
     }
 
     public void setValueRange(String valueRange) {
@@ -176,7 +180,7 @@ public class LightUIElement implements Serializable {
     }
 
     public int getValueType() {
-        return valueType;
+        return this.valueType;
     }
 
     public void setValueType(int valueType) {
@@ -184,7 +188,7 @@ public class LightUIElement implements Serializable {
     }
 
     public int getMinInputSize() {
-        return minInputSize;
+        return this.minInputSize;
     }
 
     public void setMinInputSize(int minInputSize) {
@@ -192,7 +196,7 @@ public class LightUIElement implements Serializable {
     }
 
     public boolean isRequired() {
-        return required;
+        return this.required;
     }
 
     public void setRequired(boolean required) {
@@ -200,11 +204,11 @@ public class LightUIElement implements Serializable {
     }
 
     public List<LightUIDescriptor> getTabs() {
-        return tabs;
+        return this.tabs;
     }
 
     public String getToolTip() {
-        return toolTip;
+        return this.toolTip;
     }
 
     public void setToolTip(String toolTip) {
@@ -219,7 +223,7 @@ public class LightUIElement implements Serializable {
     }
 
     public final boolean isVerticalyResizable() {
-        return verticalyResizable;
+        return this.verticalyResizable;
     }
 
     public final void setVerticalyResizable(boolean verticalyResizable) {
@@ -227,7 +231,7 @@ public class LightUIElement implements Serializable {
     }
 
     public final boolean isHorizontalyResizable() {
-        return horizontalyResizable;
+        return this.horizontalyResizable;
     }
 
     public final void setHorizontalyResizable(boolean horizontalyResizable) {
@@ -274,24 +278,24 @@ public class LightUIElement implements Serializable {
             valueType = "decimal";
         }
 
-        String str = "LightUIElement" + " " + type + " id:" + this.id + " w:" + gridWidth + " fill:" + fillWidth;
-        str += " value:" + value + "(" + valueType + ")";
-        if (valueRange != null) {
-            str += "range: " + valueRange;
+        String str = "LightUIElement" + " " + type + " id:" + this.id + " w:" + this.gridWidth + " fill:" + this.fillWidth;
+        str += " value:" + this.value + "(" + valueType + ")";
+        if (this.valueRange != null) {
+            str += "range: " + this.valueRange;
         }
-        if (valuePrecision != null) {
-            str += "precision: " + valuePrecision;
+        if (this.valuePrecision != null) {
+            str += "precision: " + this.valuePrecision;
         }
-        if (displayPrecision != null) {
-            str += "display prec.: " + displayPrecision;
+        if (this.displayPrecision != null) {
+            str += "display prec.: " + this.displayPrecision;
         }
-        if (label != null) {
-            str += " label:" + label;
+        if (this.label != null) {
+            str += " label:" + this.label;
         }
-        if (horizontalyResizable) {
+        if (this.horizontalyResizable) {
             str += "|- H ->";
         }
-        if (verticalyResizable) {
+        if (this.verticalyResizable) {
             str += "|- V ->";
         }
         out.println(str);
@@ -300,15 +304,49 @@ public class LightUIElement implements Serializable {
 
     @Override
     public String toString() {
-        return super.toString() + " " + id;
+        return super.toString() + " " + this.id;
     }
 
-    public Serializable getRawContent() {
-        return rawContent;
+    public TableSpec getRawContent() {
+        return this.rawContent;
     }
 
-    public void setRawContent(Serializable rawContent) {
+    public void setRawContent(TableSpec rawContent) {
         this.rawContent = rawContent;
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+
+        result.append("\"id\":" + JSONconverter.getJSON(this.id) + ",");
+        if (this.color == null) {
+            result.append("\"color\":null,");
+        } else {
+            result.append("\"color\":{\"r\":" + String.valueOf(this.color.getRed()) + ", \"g\":" + String.valueOf(this.color.getGreen()) + ",\"b\":" + String.valueOf(this.color.getBlue()) + "},");
+        }
+        result.append("\"commitMode\":" + JSONconverter.getJSON(this.commitMode) + ",");
+        result.append("\"displayPrecision\":" + JSONconverter.getJSON(this.displayPrecision) + ",");
+        result.append("\"fillWidth\":" + JSONconverter.getJSON(this.fillWidth) + ",");
+        result.append("\"gridWidth\":" + JSONconverter.getJSON(this.gridWidth) + ",");
+        result.append("\"horizontalyResizable\":" + JSONconverter.getJSON(this.horizontalyResizable) + ",");
+        result.append("\"verticalyResizable\":" + JSONconverter.getJSON(this.verticalyResizable) + ",");
+        result.append("\"icon\":" + JSONconverter.getJSON(this.icon) + ",");
+        result.append("\"label\":" + JSONconverter.getJSON(this.label) + ",");
+        result.append("\"minInputSize\":" + JSONconverter.getJSON(this.minInputSize) + ",");
+        result.append("\"rawContent\":" + JSONconverter.getJSON(this.rawContent) + ",");
+        result.append("\"required\":" + JSONconverter.getJSON(this.required) + ",");
+        result.append("\"tabs\":" + JSONconverter.getJSON(this.tabs) + ",");
+        result.append("\"toolTip\":" + JSONconverter.getJSON(this.toolTip) + ",");
+        result.append("\"type\":" + JSONconverter.getJSON(this.type) + ",");
+        result.append("\"value\":" + JSONconverter.getJSON(this.value) + ",");
+        result.append("\"valuePrecision\":" + JSONconverter.getJSON(this.valuePrecision) + ",");
+        result.append("\"valueRange\":" + JSONconverter.getJSON(this.valueRange) + ",");
+        result.append("\"valueType\":" + JSONconverter.getJSON(this.valueType));
+
+        result.append("}");
+
+        return result.toString();
     }
 
 }

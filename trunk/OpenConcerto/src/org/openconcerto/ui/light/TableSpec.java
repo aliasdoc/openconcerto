@@ -13,9 +13,10 @@
  
  package org.openconcerto.ui.light;
 
-import java.io.Serializable;
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
 
-public class TableSpec implements Serializable {
+public class TableSpec implements Transferable {
     private String id;
     private ColumnsSpec columns;
     private TableContent content;
@@ -24,7 +25,7 @@ public class TableSpec implements Serializable {
     }
 
     public String getId() {
-        return id;
+        return this.id;
     }
 
     public void setId(String id) {
@@ -32,7 +33,7 @@ public class TableSpec implements Serializable {
     }
 
     public ColumnsSpec getColumns() {
-        return columns;
+        return this.columns;
     }
 
     public void setColumns(ColumnsSpec columns) {
@@ -40,11 +41,23 @@ public class TableSpec implements Serializable {
     }
 
     public TableContent getContent() {
-        return content;
+        return this.content;
     }
 
     public void setContent(TableContent content) {
         this.content = content;
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+        
+        result.append("\"id\":" + JSONconverter.getJSON(this.id) + ",");
+        result.append("\"columns\":" + JSONconverter.getJSON(this.columns) + ",");
+        result.append("\"content\":" + JSONconverter.getJSON(this.content));
+
+        result.append("}");
+        return result.toString();
     }
     
 }

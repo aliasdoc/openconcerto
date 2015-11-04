@@ -260,7 +260,7 @@ public abstract class ChangeTable<T extends ChangeTable<T>> {
             final List<String> primaryKey = createTable.getPrimaryKey();
             if (primaryKey.size() != 1)
                 throw new IllegalArgumentException("Not exactly one field in the foreign primary key : " + primaryKey);
-            return new ForeignColSpec(null, new SQLName(createTable.getName()), primaryKey.get(0), null);
+            return new ForeignColSpec(null, new SQLName(createTable.getRootName(), createTable.getName()), primaryKey.get(0), null);
         }
 
         static public ForeignColSpec fromTable(SQLTable foreignTable) {

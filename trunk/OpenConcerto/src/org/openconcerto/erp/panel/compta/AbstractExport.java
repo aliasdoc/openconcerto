@@ -34,8 +34,6 @@ import java.util.Date;
 
 public abstract class AbstractExport {
 
-    static private final DateFormat FILE_DF = new SimpleDateFormat("yyyyMMdd");
-    static private final DateFormat UNIQUE_DF = new SimpleDateFormat("yyyyMMdd_HHmmss");
     private final DBRoot rootSociete;
     private final String type;
     private final String extension;
@@ -152,7 +150,9 @@ public abstract class AbstractExport {
         final Date now = new Date();
         // ExportOC_20131101-20131127_koala.144356.txt
         // MAYBE only include generation date if necessary
-        final File fOut = new File(selectedFile, "ExportOC_" + FILE_DF.format(from) + "-" + FILE_DF.format(to) + "_" + this.type + "." + UNIQUE_DF.format(now) + this.extension);
+        final DateFormat fileDateFormat = new SimpleDateFormat("yyyyMMdd");
+        final DateFormat uniqueDateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+        final File fOut = new File(selectedFile, "ExportOC_" + fileDateFormat.format(from) + "-" + fileDateFormat.format(to) + "_" + this.type + "." + uniqueDateFormat.format(now) + this.extension);
         final BufferedOutputStream bufOut = new BufferedOutputStream(new FileOutputStream(fOut.getAbsolutePath()));
         try {
             this.export(bufOut);

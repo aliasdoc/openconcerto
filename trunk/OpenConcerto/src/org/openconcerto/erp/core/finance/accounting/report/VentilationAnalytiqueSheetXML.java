@@ -263,8 +263,9 @@ public class VentilationAnalytiqueSheetXML extends AbstractListeSheetXml {
                     setTitle = true;
                     setCumuls = true;
                 } else {
-                    long cred = rowEcr.getLong("CREDIT");
-                    long deb = rowEcr.getLong("DEBIT");
+                    long l = sqlRowValuesAnalytique.getLong("MONTANT");
+                    long cred = (l >= 0 ? 0 : -l);
+                    long deb = (l <= 0 ? 0 : l);
                     // Centralisation fournisseur
 
                     ooLine.put("DATE", dateFormatEcr.format((Date) rowEcr.getObject("DATE")));

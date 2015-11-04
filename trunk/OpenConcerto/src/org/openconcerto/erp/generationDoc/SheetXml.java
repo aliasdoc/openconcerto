@@ -51,6 +51,9 @@ import org.jopendocument.model.OpenDocument;
 
 public abstract class SheetXml {
 
+    // INSTEAD USE THE PREF IN L.O. CALC --> Formules, toujours recalculer
+    private boolean refreshFormulasRequired = false;
+
     // return null to keep default value
     public interface StorageDirs {
         public File getDocumentOutputDirectory(SheetXml sheet);
@@ -507,6 +510,14 @@ public abstract class SheetXml {
 
     public String getPrinter() {
         return this.printer;
+    }
+
+    public void setRefreshFormulasRequired(boolean refreshFormulasRequired) {
+        this.refreshFormulasRequired = refreshFormulasRequired;
+    }
+
+    public boolean isRefreshFormulasRequired() {
+            return refreshFormulasRequired;
     }
 
 }

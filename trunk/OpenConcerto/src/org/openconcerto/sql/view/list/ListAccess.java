@@ -13,15 +13,17 @@
  
  package org.openconcerto.sql.view.list;
 
-
 import java.util.Collection;
 import java.util.List;
+
+import net.jcip.annotations.ThreadSafe;
 
 /**
  * Proxy to access the list of the ITableModel.
  * 
  * @author Sylvain
  */
+@ThreadSafe
 public final class ListAccess {
     private final ITableModel model;
 
@@ -30,8 +32,8 @@ public final class ListAccess {
         this.model = model;
     }
 
-    public void setList(List<ListSQLLine> liste) {
-        this.model.setList(liste);
+    public void setList(List<ListSQLLine> liste, SQLTableModelColumns columns) {
+        this.model.setList(liste, columns);
     }
 
     public void addToList(ListSQLLine modifiedLine) {
@@ -48,5 +50,9 @@ public final class ListAccess {
 
     public final ITableModel getModel() {
         return this.model;
+    }
+
+    public final UpdateQueue getUpdateQ() {
+        return this.model.getUpdateQ();
     }
 }

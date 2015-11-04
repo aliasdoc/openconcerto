@@ -14,20 +14,33 @@
  package org.openconcerto.ui.light;
 
 import java.io.PrintStream;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LightUIDescriptor extends LightUIElement implements Serializable {
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
+
+public class LightUIDescriptor extends LightUIElement implements Transferable {
+
+    public static final int TYPE_DIV = 0;
+    public static final int TYPE_TABLE = 1;
 
     private static final long serialVersionUID = -3399395824294128572L;
-    private List<LightUILine> lines = new ArrayList<LightUILine>();
 
+    private String uUID;
     private String title;
+    private int descriptorType = 0;
+    private List<LightUILine> lines = new ArrayList<LightUILine>();
     private List<LightControler> controlers = new ArrayList<LightControler>();
 
     public LightUIDescriptor(String id) {
         this.setId(id);
+        this.setType(TYPE_DESCRIPTOR);
+    }
+
+    public LightUIDescriptor(String id, int counterId) {
+        this.setId(id);
+        this.setUUID(id + ".list" + counterId);
         this.setType(TYPE_DESCRIPTOR);
     }
 
@@ -36,25 +49,37 @@ public class LightUIDescriptor extends LightUIElement implements Serializable {
     }
 
     public LightUILine getLastLine() {
-        if (lines.size() == 0) {
+        if (this.lines.size() == 0) {
             final LightUILine l = new LightUILine();
-            lines.add(l);
+            this.lines.add(l);
             return l;
         }
-        return lines.get(lines.size() - 1);
+        return this.lines.get(this.lines.size() - 1);
     }
 
     public void dump(PrintStream out) {
-        final int size = lines.size();
-        out.println(getId() + " : " + title);
-        out.println("LightUIDescriptor " + size + " lines ");
+        final int size = this.lines.size();
+        out.println("------LightUIDescriptor-----");
+        out.println("ID : " + this.getId());
+        out.println("UUID : " + this.uUID);
+        out.println("Title : " + this.title);
+        out.println(getId() + " : " + this.title);
+        out.println("Line count : " + size + " lines ");
         for (int i = 0; i < size; i++) {
-            LightUILine line = lines.get(i);
+            LightUILine line = this.lines.get(i);
             out.println("LightUIDescriptor line " + i);
             line.dump(out);
             out.println();
         }
+        out.println("------------------------");
+    }
 
+    public int getDescriptorType() {
+        return this.descriptorType;
+    }
+
+    public void setDescriptorType(final int descriptorType) {
+        this.descriptorType = descriptorType;
     }
 
     public LightUILine getLine(int i) {
@@ -62,15 +87,23 @@ public class LightUIDescriptor extends LightUIElement implements Serializable {
     }
 
     public int getSize() {
-        return lines.size();
+        return this.lines.size();
+    }
+
+    public String getUUID() {
+        return this.uUID;
     }
 
     public String getTitle() {
-        return title;
+        return this.title;
     }
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public void setUUID(String uUID) {
+        this.uUID = uUID;
     }
 
     public void addControler(LightControler controler) {
@@ -78,7 +111,7 @@ public class LightUIDescriptor extends LightUIElement implements Serializable {
     }
 
     public List<LightControler> getControlers() {
-        return controlers;
+        return this.controlers;
     }
 
     public void dumpControllers(PrintStream out) {
@@ -87,18 +120,18 @@ public class LightUIDescriptor extends LightUIElement implements Serializable {
 
     public void dumpControllers(PrintStream out, int depth) {
         addSpacer(out, depth);
-        out.println("Contollers for id:" + this.getId() + " title: " + title);
+        out.println("Contollers for id:" + this.getId() + " title: " + this.title);
         for (LightControler controler : this.controlers) {
             addSpacer(out, depth);
             out.println(controler);
         }
-        final int size = lines.size();
+        final int size = this.lines.size();
         addSpacer(out, depth);
-        out.println(getId() + " : " + title);
+        out.println(getId() + " : " + this.title);
         addSpacer(out, depth);
         out.println("LightUIDescriptor " + size + " lines ");
         for (int i = 0; i < size; i++) {
-            final LightUILine line = lines.get(i);
+            final LightUILine line = this.lines.get(i);
             for (int j = 0; j < line.getSize(); j++) {
                 final LightUIElement e = line.getElement(j);
                 if (e instanceof LightUIDescriptor) {
@@ -116,4 +149,20 @@ public class LightUIDescriptor extends LightUIElement implements Serializable {
 
     }
 
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+
+        result.append("\"id\":" + JSONconverter.getJSON(this.getId()) + ",");
+        result.append("\"uuid\":" + JSONconverter.getJSON(this.getId()) + ",");
+        result.append("\"type\":" + JSONconverter.getJSON(this.getType()) + ",");
+        result.append("\"title\":" + JSONconverter.getJSON(this.title) + ",");
+        result.append("\"lines\":" + JSONconverter.getJSON(this.lines) + ",");
+        result.append("\"controlers\":" + JSONconverter.getJSON(this.controlers) + ",");
+        result.append("\"descriptorType\":" + JSONconverter.getJSON(this.descriptorType) + ",");
+        result.append("\"element\":" + super.toJSON());
+
+        result.append("}");
+        return result.toString();
+    }
 }

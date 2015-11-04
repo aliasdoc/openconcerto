@@ -104,11 +104,11 @@ public class BonDeLivraisonSQLElement extends ComptaSQLConfElement {
                 sel.setWhere(w.and(w2));
 
                 @SuppressWarnings("unchecked")
-                List<Number[]> l = (List<Number[]>) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
+                List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
                 if (l != null) {
                     for (int i = 0; i < l.size(); i++) {
-                        Number[] tmp = l.get(i);
-                        eltMvtStock.archive(tmp[0].intValue());
+                        Object[] tmp = (Object[]) l.get(i);
+                        eltMvtStock.archive(((Number) tmp[0]).intValue());
                     }
                 }
             }

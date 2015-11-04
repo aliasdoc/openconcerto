@@ -190,8 +190,9 @@ public class GenerationMvtReglementAvoir extends GenerationEcritures implements 
 
     }
 
-    public GenerationMvtReglementAvoir(int idAvoir, int idMvt) {
-        this.idAvoir = idAvoir;
+    public GenerationMvtReglementAvoir(SQLRow rowAvoir, int idMvt) {
+        setRowAnalytiqueSource(rowAvoir);
+        this.idAvoir = rowAvoir.getID();
         this.idPere = idMvt;
         new Thread(GenerationMvtReglementAvoir.this).start();
     }

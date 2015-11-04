@@ -17,6 +17,7 @@ import org.openconcerto.erp.core.humanresources.payroll.report.LivrePayeSheet;
 import org.openconcerto.erp.generationDoc.SpreadSheetGeneratorCompta;
 
 import java.awt.event.ActionEvent;
+import java.util.Date;
 
 public class ImpressionLivrePayePanel extends ImpressionPayePanel {
 
@@ -26,7 +27,7 @@ public class ImpressionLivrePayePanel extends ImpressionPayePanel {
 
     public void actionPerformed(ActionEvent e) {
         final LivrePayeSheet bSheet = new LivrePayeSheet(selMoisDeb.getSelectedId(), selMoisEnd.getSelectedId(), textAnnee.getText());
-        new SpreadSheetGeneratorCompta(bSheet, "LivrePaye", checkImpr.isSelected(), checkVisu.isSelected());
+        new SpreadSheetGeneratorCompta(bSheet, "LivrePaye" + new Date().getTime(), checkImpr.isSelected(), checkVisu.isSelected());
     }
 
 }

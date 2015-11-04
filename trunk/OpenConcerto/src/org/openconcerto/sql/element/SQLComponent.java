@@ -22,6 +22,7 @@ import org.openconcerto.sql.model.graph.SQLKey;
 import org.openconcerto.sql.request.SQLRowItemView;
 import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.utils.AlterTable;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.cc.ConstantFactory;
 import org.openconcerto.utils.cc.IFactory;
 import org.openconcerto.utils.checks.ValidObject;
@@ -151,7 +152,12 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
         this.mode = m;
     }
 
-    public abstract void setEditable(boolean b);
+    public final void setEditable(boolean b) {
+        // maintain old contract (there was no READ_ONLY)
+        this.setEditable(b ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+    }
+
+    public abstract void setEditable(InteractionMode b);
 
     public abstract int insert();
 

@@ -46,6 +46,7 @@ public abstract class ChequeSQLElement extends ComptaSQLConfElement implements C
         req.setWhere(new Where(this.getTable().getField(this.getDoneFieldName()), "=", Boolean.FALSE).and(w));
 
         final SQLTableModelSourceOnline res = new SQLTableModelSourceOnline(req);
+        res.init();
         res.getColumn(getTable().getField(getMinDateFieldName())).setRenderer(new GestionChequesRenderer());
 
         // TODO a check box column to ease multi-selection

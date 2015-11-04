@@ -13,30 +13,12 @@
  
  package org.openconcerto.erp.core.common.element;
 
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-
-import org.openconcerto.erp.config.Log;
-
-import org.openconcerto.erp.config.Gestion;
-
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.PropsConfiguration;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.DBRoot;
-import org.openconcerto.sql.ui.light.GroupToLightUIConvertor;
-import org.openconcerto.sql.view.list.SQLTableModelColumn;
-import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
-import org.openconcerto.ui.AutoHideListener;
-import org.openconcerto.ui.group.Group;
-import org.openconcerto.ui.light.LightUIDescriptor;
-import org.openconcerto.ui.table.TableCellRendererUtils;
-import org.openconcerto.utils.GestionDevise;
-import org.openconcerto.utils.convertor.ValueConvertor;
-
 import java.awt.Component;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -44,6 +26,28 @@ import javax.swing.JTable;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
+
+import org.openconcerto.erp.config.Gestion;
+import org.openconcerto.erp.config.Log;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.PropsConfiguration;
+import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.sql.ui.light.GroupToLightUIConvertor;
+import org.openconcerto.sql.view.list.SQLTableModelColumn;
+import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
+import org.openconcerto.task.config.ComptaBasePropsConfiguration;
+import org.openconcerto.ui.AutoHideListener;
+import org.openconcerto.ui.group.Group;
+import org.openconcerto.ui.light.ColumnSpec;
+import org.openconcerto.ui.light.ColumnsSpec;
+import org.openconcerto.ui.light.LightUIDescriptor;
+import org.openconcerto.ui.light.LightUIElement;
+import org.openconcerto.ui.light.LightUILine;
+import org.openconcerto.ui.light.TableSpec;
+import org.openconcerto.ui.table.TableCellRendererUtils;
+import org.openconcerto.utils.GestionDevise;
+import org.openconcerto.utils.convertor.ValueConvertor;
 
 /**
  * SQLElement de la base société
@@ -74,7 +78,7 @@ public abstract class ComptaSQLConfElement extends SQLElement {
 
     private static DBRoot getBaseSociete() {
         if (baseSociete == null)
-            baseSociete = ((ComptaPropsConfiguration) Configuration.getInstance()).getRootSociete();
+            baseSociete = ((ComptaBasePropsConfiguration) Configuration.getInstance()).getRootSociete();
         return baseSociete;
     }
 
@@ -172,6 +176,86 @@ public abstract class ComptaSQLConfElement extends SQLElement {
                 col.setRenderer(CURRENCY_RENDERER);
             }
         }
+    }
+
+    public LightUIDescriptor getUIDescriptorForList(final int counterId) {
+        LightUIElement e = new LightUIElement();
+        e.setId("list_" + this.getCode());
+        e.setType(LightUIElement.TYPE_LIST);
+        List<String> columnsIds = new ArrayList<String>();
+
+        List<String> visibleIds = new ArrayList<String>();
+        List<String> sortedIds = new ArrayList<String>();
+
+        SQLTableModelSourceOnline source = this.getTableSource();
+        List<SQLTableModelColumn> columns = source.getColumns();
+
+        List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
+
+        for (SQLTableModelColumn column : columns) {
+            // TODO : creer la notion d'ID un peu plus dans le l'esprit sales.invoice.amount
+            String columnId = column.getIdentifier();
+            columnsIds.add(columnId);
+
+            visibleIds.add(columnId);
+            // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
+            int width = column.getName().length() * 20 + 20;
+
+            ColumnSpec spec = new ColumnSpec(columnId, column.getValueClass(), column.getName(), null, width, false, null);
+            columnsSpec.add(spec);
+        }
+
+        // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
+        sortedIds.add(columnsIds.get(0));
+        String lid = this.getCode();
+
+        ColumnsSpec cSpec = new ColumnsSpec(lid, columnsSpec, visibleIds, sortedIds);
+        TableSpec tSpec = new TableSpec();
+        tSpec.setColumns(cSpec);
+        e.setRawContent(tSpec);
+
+        final LightUIDescriptor desc = new LightUIDescriptor(this.getCode(), counterId);
+        LightUILine listLine = new LightUILine();
+        listLine.add(e);
+        desc.addLine(listLine);
+        return desc;
+    }
+
+    public LightUIElement getUIElementForList() {
+        final LightUIElement element = new LightUIElement();
+        element.setId("list_" + this.getCode());
+        element.setType(LightUIElement.TYPE_LIST);
+        final List<String> columnsIds = new ArrayList<String>();
+        final List<String> visibleIds = new ArrayList<String>();
+        final List<String> sortedIds = new ArrayList<String>();
+
+        final SQLTableModelSourceOnline source = this.getTableSource();
+        final List<SQLTableModelColumn> columns = source.getColumns();
+        final List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
+
+        for (SQLTableModelColumn column : columns) {
+            // TODO : creer la notion d'ID un peu plus dans le l'esprit sales.invoice.amount
+            final String columnId = column.getIdentifier();
+            columnsIds.add(columnId);
+
+            visibleIds.add(columnId);
+            // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
+            final int width = column.getName().length() * 20 + 20;
+
+            final ColumnSpec spec = new ColumnSpec(columnId, column.getValueClass(), column.getName(), null, width, false, null);
+            columnsSpec.add(spec);
+        }
+
+        // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
+        sortedIds.add(columnsIds.get(0));
+        final String lid = this.getCode();
+
+        final ColumnsSpec cSpec = new ColumnsSpec(lid, columnsSpec, visibleIds, sortedIds);
+        final TableSpec tSpec = new TableSpec();
+        tSpec.setColumns(cSpec);
+        element.setRawContent(tSpec);
+
+        return element;
     }
 
     public LightUIDescriptor getUIDescriptorForCreation(PropsConfiguration configuration) {

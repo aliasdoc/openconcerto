@@ -13,12 +13,15 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONconverter;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-public class RowSpec implements Externalizable {
+public class RowSpec implements Externalizable, JSONAble {
     private String tableId;
     private String[] columnIds;
 
@@ -32,7 +35,7 @@ public class RowSpec implements Externalizable {
     }
 
     public String[] getIds() {
-        return columnIds;
+        return this.columnIds;
     }
 
     public void setIds(String[] columnIds) {
@@ -44,17 +47,17 @@ public class RowSpec implements Externalizable {
     }
 
     public String getTableId() {
-        return tableId;
+        return this.tableId;
     }
 
     @Override
     public String toString() {
-        String r = "RowSpec:" + tableId + " : ";
-        for (int i = 0; i < columnIds.length; i++) {
-            if (i < columnIds.length - 1) {
-                r += columnIds[i] + ", ";
+        String r = "RowSpec:" + this.tableId + " : ";
+        for (int i = 0; i < this.columnIds.length; i++) {
+            if (i < this.columnIds.length - 1) {
+                r += this.columnIds[i] + ", ";
             } else {
-                r += columnIds[i];
+                r += this.columnIds[i];
             }
         }
         return r;
@@ -63,8 +66,8 @@ public class RowSpec implements Externalizable {
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         try {
-            out.writeUTF(tableId);
-            out.writeObject(columnIds);
+            out.writeUTF(this.tableId);
+            out.writeObject(this.columnIds);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -74,9 +77,20 @@ public class RowSpec implements Externalizable {
 
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        tableId = in.readUTF();
-        columnIds = (String[]) in.readObject();
+        this.tableId = in.readUTF();
+        this.columnIds = (String[]) in.readObject();
 
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+        
+        result.append("\"tableId\":" + JSONconverter.getJSON(this.tableId) + ",");
+        result.append("\"columnIds\":" + JSONconverter.getJSON(this.columnIds));
+
+        result.append("}");
+        return result.toString();
     }
 
 }

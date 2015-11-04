@@ -16,7 +16,9 @@
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.ui.DeviseCellEditor;
 import org.openconcerto.erp.core.common.ui.MultiLineTableCellEditor;
+import org.openconcerto.erp.core.common.ui.RowValuesMultiLineEditTable;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
+import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLBase;
@@ -83,8 +85,21 @@ public class SaisieKmItemTable extends JPanel implements MouseListener {
         final SQLTableElement tableElementNomCompte = new SQLTableElement(tableElement.getField("NOM"));
         list.add(tableElementNomCompte);
 
+        if (tableElement.getTable().contains("NOM_PIECE")) {
+            final SQLTableElement tableElementNomPiece = new SQLTableElement(tableElement.getField("NOM_PIECE"));
+            list.add(tableElementNomPiece);
+        }
+
         final SQLTableElement tableElementNomEcriture = new SQLTableElement(tableElement.getField("NOM_ECRITURE"));
         list.add(tableElementNomEcriture);
+
+        if (!DefaultNXProps.getInstance().getBooleanValue("HideAnalytique")) {
+            final AnalytiqueItemTable analytiqueAssocTable = new AnalytiqueItemTable(true);
+            SQLTableElement eltPourcentAnalytique = new SQLTableElement(tableElement.getField("ANALYTIQUE"), String.class, new MultiLineTableCellEditor(
+                    (RowValuesMultiLineEditTable) analytiqueAssocTable.getTable(), analytiqueAssocTable));
+            list.add(eltPourcentAnalytique);
+        }
+        //
 
         this.debit = new SQLTableElement(tableElement.getField("DEBIT"), Long.class, this.deviseCellEditor);
         list.add(this.debit);
@@ -180,6 +195,10 @@ public class SaisieKmItemTable extends JPanel implements MouseListener {
 
         m.put("NUMERO", compteRow.getString("NUMERO"));
         m.put("NOM", compteRow.getString("NOM"));
+
+        if (ecrRow.getTable().contains("NOM_PIECE")) {
+            m.put("NOM_PIECE", compteRow.getString("NOM_PIECE"));
+        }
 
         if (contrePasser) {
             m.put("NOM_ECRITURE", "Contrepassation - " + ecrRow.getString("NOM"));

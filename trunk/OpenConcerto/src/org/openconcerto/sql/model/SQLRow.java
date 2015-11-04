@@ -24,6 +24,7 @@ import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.utils.ReOrder;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.SetMap;
 
 import java.math.BigDecimal;
 import java.sql.ResultSet;
@@ -39,6 +40,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.commons.collections.CollectionUtils;
@@ -457,14 +459,17 @@ public class SQLRow extends SQLRowAccessor {
      *         que l'on n'en veut pas (mode.wantExisting() == <code>true</code>).
      */
     public SQLRow getForeignRow(String field, SQLRowMode mode) {
-        if (!this.getTable().contains(field)) {
-            throw new IllegalArgumentException(field + " is not a field of " + this.getTable());
-        }
         final SQLField f = this.getTable().getField(field);
-        if (!this.getTable().getForeignKeys().contains(f)) {
+        final Link foreignLink = this.getTable().getDBSystemRoot().getGraph().getForeignLink(f);
+        if (foreignLink == null)
             throw new IllegalArgumentException(field + " is not a foreign key of " + this.getTable());
-        }
-        return this.getUncheckedForeignRow(this.getTable().getBase().getGraph().getForeignLink(f), mode);
+        return this.getUncheckedForeignRow(foreignLink, mode);
+    }
+
+    public SQLRow getForeignRow(Link foreignLink, SQLRowMode mode) {
+        if (!foreignLink.getSource().equals(this.getTable()))
+            throw new IllegalArgumentException(foreignLink + " is not a foreign key of " + this.getTable());
+        return this.getUncheckedForeignRow(foreignLink, mode);
     }
 
     private SQLRow getUncheckedForeignRow(Link foreignLink, SQLRowMode mode) {
@@ -651,8 +656,12 @@ public class SQLRow extends SQLRowAccessor {
         final SQLTable lastTable = p.getLast();
         select.addSelect(lastTable.getKey());
 
+        select.setWhere(where);
+        // determinist order even if there's no order field or invalid values in it
+        select.addOrderSilent(lastTable.getName());
+        select.addFieldOrder(lastTable.getKey());
+
         // on ajoute une SQLRow pour chaque ID trouvé
-        select.setWhere(where).addOrderSilent(lastTable.getName());
         sysRoot.getDataSource().execute(select.asString(), new ResultSetHandler() {
 
             public Object handle(ResultSet rs) throws SQLException {
@@ -700,6 +709,18 @@ public class SQLRow extends SQLRowAccessor {
         return this.getReferentRows(tables, SQLSelect.UNARCHIVED);
     }
 
+    private final SetMap<SQLTable, Link> getReferentLinks(Set<SQLTable> tables) {
+        final Set<Link> links = this.getTable().getBase().getGraph().getReferentLinks(this.getTable());
+        final SetMap<SQLTable, Link> byTable = new SetMap<SQLTable, Link>();
+        for (final Link l : links) {
+            final SQLTable src = l.getSource();
+            if (tables == null || tables != null && tables.contains(src)) {
+                byTable.add(src, l);
+            }
+        }
+        return byTable;
+    }
+
     /**
      * Returns the rows of tables that points to this row.
      * 
@@ -709,7 +730,12 @@ public class SQLRow extends SQLRowAccessor {
      * @return a List of SQLRow that points to this.
      */
     public final List<SQLRow> getReferentRows(Set<SQLTable> tables, ArchiveMode archived) {
-        return new ArrayList<SQLRow>(this.getReferentRowsByLink(tables, archived).allValues());
+        final SetMap<SQLTable, Link> byTable = getReferentLinks(tables);
+        final Set<SQLRow> res = new LinkedHashSet<SQLRow>();
+        for (final Entry<SQLTable, Set<Link>> e : byTable.entrySet()) {
+            res.addAll(this.getReferentRows(e.getValue(), archived, null));
+        }
+        return new ArrayList<SQLRow>(res);
     }
 
     public final ListMap<Link, SQLRow> getReferentRowsByLink() {
@@ -723,11 +749,17 @@ public class SQLRow extends SQLRowAccessor {
     public final ListMap<Link, SQLRow> getReferentRowsByLink(Set<SQLTable> tables, ArchiveMode archived) {
         // List since getReferentRows() is ordered
         final ListMap<Link, SQLRow> res = new ListMap<Link, SQLRow>();
-        final Set<Link> links = this.getTable().getBase().getGraph().getReferentLinks(this.getTable());
-        for (final Link l : links) {
-            final SQLTable src = l.getSource();
-            if (tables == null || tables != null && tables.contains(src)) {
-                res.addAll(l, this.getReferentRows(l.getLabel(), archived));
+        final SetMap<SQLTable, Link> byTable = getReferentLinks(tables);
+        for (final Entry<SQLTable, Set<Link>> e : byTable.entrySet()) {
+            final Set<Link> links = e.getValue();
+            final List<SQLRow> rows = this.getReferentRows(links, archived, null);
+            for (final Link l : links) {
+                // put all referent links, even if there's no referent row
+                res.put(l, Collections.<SQLRow> emptyList());
+                for (final SQLRow r : rows) {
+                    if (r.getForeignID(l.getLabel().getName()) == this.getID())
+                        res.add(l, r);
+                }
             }
         }
         return res;
@@ -756,21 +788,38 @@ public class SQLRow extends SQLRowAccessor {
      * @return a List of SQLRow that points to this, eg [BATIMENT[123], BATIMENT[124]].
      */
     public List<SQLRow> getReferentRows(final SQLField refField, final ArchiveMode archived, final Collection<String> fields) {
-        final SQLTable foreignTable = refField.getTable().getBase().getGraph().getForeignTable(refField);
-        if (!foreignTable.equals(this.getTable())) {
-            throw new IllegalArgumentException(refField + " doesn't point to " + this.getTable());
+        return getReferentRows(Collections.singleton(refField.getTable().getDBSystemRoot().getGraph().getForeignLink(refField)), archived, fields);
+    }
+
+    // fetch all rows from the same table at once : less requests than one per link and thus rows
+    // are ordered across links.
+    private List<SQLRow> getReferentRows(final Set<Link> links, final ArchiveMode archived, final Collection<String> fields) {
+        if (links.isEmpty())
+            return Collections.emptyList();
+
+        SQLTable src = null;
+        Where w = null;
+        for (final Link l : links) {
+            if (src == null) {
+                src = l.getSource();
+            } else if (!l.getSource().equals(src)) {
+                throw new IllegalArgumentException(l + " doesn't come from " + src);
+            }
+            if (!l.getTarget().equals(this.getTable())) {
+                throw new IllegalArgumentException(l + " doesn't point to " + this.getTable());
+            }
+            w = new Where(l.getLabel(), "=", this.getID()).or(w);
         }
 
-        final SQLTable src = refField.getTable();
         final SQLSelect sel = new SQLSelect();
-        if (fields == null)
+        if (fields == null) {
             sel.addSelectStar(src);
-        else {
+        } else {
             sel.addSelect(src.getKey());
             for (final String f : fields)
                 sel.addSelect(src.getField(f));
         }
-        sel.setWhere(new Where(refField, "=", this.getID()));
+        sel.setWhere(w);
         sel.setArchivedPolicy(archived);
         sel.addOrderSilent(src.getName());
         // - if some other criteria need to be applied, we could pass an SQLRowMode (instead of

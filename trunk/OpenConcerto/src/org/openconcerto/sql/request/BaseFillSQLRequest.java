@@ -17,6 +17,7 @@ import org.openconcerto.sql.FieldExpander;
 import org.openconcerto.sql.model.FieldRef;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValues.CreateMode;
 import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSearchMode;
 import org.openconcerto.sql.model.SQLSelect;
@@ -24,6 +25,7 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.beans.PropertyChangeListener;
@@ -41,8 +43,10 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
 
-public abstract class BaseFillSQLRequest extends BaseSQLRequest {
+@ThreadSafe
+public abstract class BaseFillSQLRequest extends BaseSQLRequest implements Cloneable {
 
     private final static Pattern QUERY_SPLIT_PATTERN = Pattern.compile("\\s+");
     private static boolean DEFAULT_SELECT_LOCK = true;
@@ -50,6 +54,9 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
     /**
      * Whether to use "FOR SHARE" in list requests (preventing roles with just SELECT right from
      * seeing the list).
+     * 
+     * @return <code>true</code> if select should obtain a lock.
+     * @see SQLSelect#setWaitPreviousWriteTX(boolean)
      */
     public static final boolean getDefaultLockSelect() {
         return DEFAULT_SELECT_LOCK;
@@ -68,17 +75,41 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
         fetcher.setReferentsOrdered(true, true);
     }
 
+    static public final void addToFetch(final SQLRowValues input, final Path p, final Collection<String> fields) {
+        // don't back track : e.g. if path is SITE -> CLIENT <- SITE we want the siblings of SITE,
+        // if we want fields of the primary SITE we pass the path SITE
+        final SQLRowValues r = p == null ? input : input.followPathToOne(p, CreateMode.CREATE_ONE, false);
+        for (final String f : fields) {
+            // don't overwrite foreign rows
+            if (!r.getFields().contains(f))
+                r.put(f, null);
+        }
+    }
+
     private final SQLTable primaryTable;
+    @GuardedBy("this")
     private Where where;
     @GuardedBy("this")
     private Map<SQLField, SQLSearchMode> searchFields;
     @GuardedBy("this")
     private List<String> searchQuery;
+    @GuardedBy("this")
     private ITransformer<SQLSelect, SQLSelect> selTransf;
+    @GuardedBy("this")
     private boolean lockSelect;
 
+    @GuardedBy("this")
     private SQLRowValues graph;
+    @GuardedBy("this")
     private SQLRowValues graphToFetch;
+
+    @GuardedBy("this")
+    private SQLRowValuesListFetcher frozen;
+
+    {
+        // a new instance is never frozen
+        this.frozen = null;
+    }
 
     private final PropertyChangeSupport supp = new PropertyChangeSupport(this);
 
@@ -99,16 +130,84 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
     public BaseFillSQLRequest(final BaseFillSQLRequest req) {
         super();
         this.primaryTable = req.getPrimaryTable();
-        this.where = req.where;
-        this.searchFields = req.searchFields;
-        this.searchQuery = req.searchQuery;
-        this.selTransf = req.selTransf;
-        this.lockSelect = req.lockSelect;
-        // TODO copy
-        // use methods since they're both lazy
-        this.graph = req.getGraph();
-        this.graphToFetch = req.getGraphToFetch();
+        synchronized (req) {
+            this.where = req.where;
+            this.searchFields = req.searchFields;
+            this.searchQuery = req.searchQuery;
+            this.selTransf = req.selTransf;
+            this.lockSelect = req.lockSelect;
+            // use methods since they're both lazy
+            this.graph = req.getGraph();
+            this.graphToFetch = req.getGraphToFetch();
+        }
     }
+
+    public synchronized final boolean isFrozen() {
+        return this.frozen != null;
+    }
+
+    public final void freeze() {
+        this.freeze(this);
+    }
+
+    private final synchronized void freeze(final BaseFillSQLRequest from) {
+        if (!this.isFrozen()) {
+            // compute the fetcher once and for all
+            this.frozen = from.getFetcher();
+            assert this.frozen.isFrozen();
+            this.wasFrozen();
+        }
+    }
+
+    protected void wasFrozen() {
+    }
+
+    protected final void checkFrozen() {
+        if (this.isFrozen())
+            throw new IllegalStateException("this has been frozen: " + this);
+    }
+
+    // not final so we can narrow down the return type
+    public BaseFillSQLRequest toUnmodifiable() {
+        return this.toUnmodifiableP(this.getClass());
+    }
+
+    // should be passed the class created by cloneForFreeze(), i.e. not this.getClass() or this
+    // won't support anonymous classes
+    protected final <T extends BaseFillSQLRequest> T toUnmodifiableP(final Class<T> clazz) {
+        final Class<? extends BaseFillSQLRequest> thisClass = this.getClass();
+        if (clazz != thisClass && !(thisClass.isAnonymousClass() && clazz == thisClass.getSuperclass()))
+            throw new IllegalArgumentException("Passed class isn't our class : " + clazz + " != " + thisClass);
+        final BaseFillSQLRequest res;
+        synchronized (this) {
+            if (this.isFrozen()) {
+                res = this;
+            } else {
+                res = this.clone(true);
+                if (res.getClass() != clazz)
+                    throw new IllegalStateException("Clone class mismatch : " + res.getClass() + " != " + clazz);
+                // freeze before releasing lock (even if not recommended, allow to modify the state
+                // of getSelectTransf() while holding our lock)
+                // pass ourselves so that if we are an anonymous class the fetcher created with our
+                // overloaded methods is used
+                res.freeze(this);
+            }
+        }
+        assert res.getClass() == clazz || res.getClass().getSuperclass() == clazz;
+        @SuppressWarnings("unchecked")
+        final T casted = (T) res;
+        return casted;
+    }
+
+    @Override
+    public BaseFillSQLRequest clone() {
+        synchronized (this) {
+            return this.clone(false);
+        }
+    }
+
+    // must be called with our lock
+    protected abstract BaseFillSQLRequest clone(boolean forFreeze);
 
     private final SQLRowValues computeGraph() {
         if (this.getFields() == null)
@@ -118,74 +217,123 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
         for (final SQLField f : this.getFields()) {
             vals.put(f.getName(), null);
         }
-        // keep order field in graph (not only in graphToFetch) so that a debug column is created
-        for (final Path orderP : this.getOrder()) {
-            final SQLRowValues orderVals = vals.followPath(orderP);
-            if (orderVals != null && orderVals.getTable().isOrdered()) {
-                orderVals.put(orderVals.getTable().getOrderField().getName(), null);
-            }
-        }
+
         this.getShowAs().expand(vals);
-        return vals;
+        return vals.toImmutable();
     }
 
     /**
      * The graph computed by expanding {@link #getFields()} by {@link #getShowAs()}.
      * 
-     * @return the expanded graph.
+     * @return the expanded frozen graph.
      */
     public final SQLRowValues getGraph() {
-        if (this.graph == null)
-            this.graph = this.computeGraph();
-        return this.graph;
+        synchronized (this) {
+            if (this.graph == null) {
+                assert !this.isFrozen() : "no computation should take place after frozen()";
+                this.graph = this.computeGraph();
+            }
+            return this.graph;
+        }
     }
 
     // should be called if getFields(), getOrder() or getShowAs() change
     protected final void clearGraph() {
-        this.graph = null;
-        this.graphToFetch = null;
+        synchronized (this) {
+            checkFrozen();
+            this.graph = null;
+            this.graphToFetch = null;
+        }
     }
 
     /**
-     * The graph to fetch, should be a superset of {@link #getGraph()}.
+     * The graph to fetch, should be a superset of {@link #getGraph()}. To modify it, see
+     * {@link #addToGraphToFetch(Path, Set)} and {@link #changeGraphToFetch(IClosure)}.
      * 
-     * @return the graph to fetch, can be modified.
+     * @return the graph to fetch, frozen.
      */
     public final SQLRowValues getGraphToFetch() {
-        if (this.graphToFetch == null && this.getGraph() != null) {
-            this.graphToFetch = this.getGraph().deepCopy();
-            this.customizeToFetch(this.graphToFetch);
+        synchronized (this) {
+            if (this.graphToFetch == null && this.getGraph() != null) {
+                assert !this.isFrozen() : "no computation should take place after frozen()";
+                final SQLRowValues tmp = this.getGraph().deepCopy();
+                this.customizeToFetch(tmp);
+                // fetch order fields, so that consumers can order an updated row in an existing
+                // list
+                for (final Path orderP : this.getOrder()) {
+                    final SQLRowValues orderVals = tmp.followPath(orderP);
+                    if (orderVals != null && orderVals.getTable().isOrdered()) {
+                        orderVals.put(orderVals.getTable().getOrderField().getName(), null);
+                    }
+                }
+                this.graphToFetch = tmp.toImmutable();
+            }
+            return this.graphToFetch;
         }
-        return this.graphToFetch;
+    }
+
+    public final void addToGraphToFetch(final Collection<String> fields) {
+        this.addToGraphToFetch(null, fields);
+    }
+
+    /**
+     * Make sure that the fields at the end of the path are fetched.
+     * 
+     * @param p a path.
+     * @param fields fields to fetch.
+     */
+    public final void addToGraphToFetch(final Path p, final Collection<String> fields) {
+        this.changeGraphToFetch(new IClosure<SQLRowValues>() {
+            @Override
+            public void executeChecked(SQLRowValues input) {
+                addToFetch(input, p, fields);
+            }
+        });
+    }
+
+    public final void changeGraphToFetch(IClosure<SQLRowValues> cl) {
+        synchronized (this) {
+            checkFrozen();
+            final SQLRowValues tmp = this.getGraphToFetch().deepCopy();
+            cl.executeChecked(tmp);
+            this.graphToFetch = tmp.toImmutable();
+        }
     }
 
     protected void customizeToFetch(final SQLRowValues graphToFetch) {
     }
 
-    protected final SQLRowValuesListFetcher getFetcher(final Where w) {
+    protected synchronized final SQLRowValuesListFetcher getFetcher() {
+        if (this.isFrozen())
+            return this.frozen;
         // graphToFetch can be modified freely so don't the use the simple constructor
         final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(getGraphToFetch(), false);
-        return setupFetcher(fetcher, w);
+        return setupFetcher(fetcher);
     }
 
     // allow to pass fetcher since they are mostly immutable (and for huge graphs they are slow to
     // create)
-    protected final SQLRowValuesListFetcher setupFetcher(final SQLRowValuesListFetcher fetcher, final Where w) {
+    protected final SQLRowValuesListFetcher setupFetcher(final SQLRowValuesListFetcher fetcher) {
         final String tableName = getPrimaryTable().getName();
         setupForeign(fetcher);
-        fetcher.setOrder(getOrder());
-        final ITransformer<SQLSelect, SQLSelect> origSelTransf = fetcher.getSelTransf();
-        fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
-            @Override
-            public SQLSelect transformChecked(SQLSelect sel) {
-                if (origSelTransf != null)
-                    sel = origSelTransf.transformChecked(sel);
-                sel = transformSelect(sel);
-                if (isLockSelect())
-                    sel.addWaitPreviousWriteTXTable(tableName);
-                return sel.andWhere(getWhere()).andWhere(w);
-            }
-        });
+        synchronized (this) {
+            fetcher.setOrder(getOrder());
+            fetcher.setReturnedRowsUnmodifiable(true);
+            final ITransformer<SQLSelect, SQLSelect> origSelTransf = fetcher.getSelTransf();
+            fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+                @Override
+                public SQLSelect transformChecked(SQLSelect sel) {
+                    if (origSelTransf != null)
+                        sel = origSelTransf.transformChecked(sel);
+                    sel = transformSelect(sel);
+                    if (isLockSelect())
+                        sel.addWaitPreviousWriteTXTable(tableName);
+                    return sel.andWhere(getWhere());
+                }
+            });
+            // freeze to execute setSelTransf() before leaving the synchronized block
+            fetcher.freeze();
+        }
         return fetcher;
     }
 
@@ -194,11 +342,14 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
     }
 
     public final void setWhere(final Where w) {
-        this.where = w;
+        synchronized (this) {
+            checkFrozen();
+            this.where = w;
+        }
         fireWhereChange();
     }
 
-    public final Where getWhere() {
+    public synchronized final Where getWhere() {
         return this.where;
     }
 
@@ -229,6 +380,8 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
      * @see #setSearch(String)
      */
     public final void setSearchFields(Map<SQLField, SQLSearchMode> searchFields) {
+        // can be outside the synchronized block, since it can't be reverted
+        checkFrozen();
         searchFields = new HashMap<SQLField, SQLSearchMode>(searchFields);
         final Iterator<Entry<SQLField, SQLSearchMode>> iter = searchFields.entrySet().iterator();
         while (iter.hasNext()) {
@@ -263,23 +416,27 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
     public boolean setSearch(String s) {
         // no need to trim() since trailing empty strings are not returned
         final List<String> split = Arrays.asList(QUERY_SPLIT_PATTERN.split(s));
+        boolean res = false;
         synchronized (this) {
+            checkFrozen();
             if (!split.equals(this.searchQuery)) {
                 this.searchQuery = split;
                 if (!this.getSearchFields().isEmpty()) {
-                    this.fireWhereChange();
-                    return true;
+                    res = true;
                 }
             }
-            return false;
         }
+        if (res)
+            this.fireWhereChange();
+        return res;
     }
 
-    public final void setLockSelect(boolean lockSelect) {
+    public final synchronized void setLockSelect(boolean lockSelect) {
+        checkFrozen();
         this.lockSelect = lockSelect;
     }
 
-    public final boolean isLockSelect() {
+    public final synchronized boolean isLockSelect() {
         return this.lockSelect;
     }
 
@@ -287,7 +444,7 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
     public final Collection<SQLField> getAllFields() {
         // don't rely on the expansion of our fields, since our fetcher can be arbitrary modified
         // (eg by adding a where on a field of a non-displayed table)
-        return this.getFetcher(null).getReq().getFields();
+        return this.getFetcher().getReq().getFields();
     }
 
     protected abstract Collection<SQLField> getFields();
@@ -323,24 +480,28 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
         if (!matchScore.isEmpty())
             sel.getOrder().add(0, CollectionUtils.join(matchScore, " + ") + " DESC");
 
-        return this.selTransf == null ? sel : this.selTransf.transformChecked(sel);
+        final ITransformer<SQLSelect, SQLSelect> transf = this.getSelectTransf();
+        return transf == null ? sel : transf.transformChecked(sel);
     }
 
     protected String createWhere(final FieldRef selF, final SQLSearchMode mode, final String searchQuery) {
         return "lower(" + selF.getFieldRef() + ") " + mode.generateSQL(selF.getField().getDBRoot(), searchQuery.toLowerCase());
     }
 
-    public final ITransformer<SQLSelect, SQLSelect> getSelectTransf() {
+    public final synchronized ITransformer<SQLSelect, SQLSelect> getSelectTransf() {
         return this.selTransf;
     }
 
     /**
      * Allows to transform the SQLSelect returned by getFillRequest().
      * 
-     * @param transf the transformer to apply.
+     * @param transf the transformer to apply, needs to be thread-safe.
      */
     public final void setSelectTransf(final ITransformer<SQLSelect, SQLSelect> transf) {
-        this.selTransf = transf;
+        synchronized (this) {
+            checkFrozen();
+            this.selTransf = transf;
+        }
         this.fireWhereChange();
     }
 
@@ -351,6 +512,8 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest {
     }
 
     protected final void fireWhereChange() {
+        // don't call unknown code with our lock
+        assert !Thread.holdsLock(this);
         this.supp.firePropertyChange("where", null, null);
     }
 

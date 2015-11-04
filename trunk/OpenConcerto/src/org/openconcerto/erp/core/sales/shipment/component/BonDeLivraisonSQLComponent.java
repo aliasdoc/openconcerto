@@ -19,16 +19,19 @@ import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseType;
+import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.sales.invoice.element.SaisieVenteFactureItemSQLElement;
 import org.openconcerto.erp.core.sales.shipment.element.BonDeLivraisonItemSQLElement;
-import org.openconcerto.erp.core.sales.shipment.element.BonDeLivraisonSQLElement;
 import org.openconcerto.erp.core.sales.shipment.report.BonLivraisonXmlSheet;
 import org.openconcerto.erp.core.sales.shipment.ui.BonDeLivraisonItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
-import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.Type;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLRow;
@@ -64,6 +67,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -71,6 +75,8 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
@@ -85,9 +91,14 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
     private final DeviseField textTotalTTC = new DeviseField(6);
     private final JTextField textPoidsTotal = new JTextField(6);
     private final JTextField textNom = new JTextField(25);
+    private final JDate date = new JDate(true);
+    private final boolean displayDpt;
+    private final ElementComboBox comboDpt = new ElementComboBox();
 
     public BonDeLivraisonSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("BON_DE_LIVRAISON"));
+        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        this.displayDpt = prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false);
     }
 
     @Override
@@ -99,14 +110,27 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
     protected SQLRowValues createDefaults() {
         this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(getElement().getClass()));
         this.tableBonItem.getModel().clearRows();
-        return super.createDefaults();
+        SQLRowValues rowVals = super.createDefaults();
+        if (rowVals == null) {
+            rowVals = new SQLRowValues(getTable());
+        }
+        if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
+            rowVals.put("CREATE_VIRTUAL_STOCK", Boolean.TRUE);
+        }
+        if (getTable().contains("ID_TAXE_PORT")) {
+            SQLRow taxeDefault = TaxeCache.getCache().getFirstTaxe();
+            rowVals.put("ID_TAXE_PORT", taxeDefault.getID());
+        }
+        return rowVals;
     }
 
     public void addViews() {
         this.textTotalHT.setOpaque(false);
         this.textTotalTVA.setOpaque(false);
         this.textTotalTTC.setOpaque(false);
-
+        if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
+            this.addView(new JCheckBox(), "CREATE_VIRTUAL_STOCK");
+        }
         this.selectCommande = new ElementComboBox();
 
         this.setLayout(new GridBagLayout());
@@ -143,12 +167,21 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         c.weightx = 0;
         this.add(new JLabel(getLabelFor("DATE"), SwingConstants.RIGHT), c);
 
-        JDate date = new JDate(true);
         c.gridx++;
         c.weightx = 0;
         c.weighty = 0;
         c.fill = GridBagConstraints.NONE;
         this.add(date, c);
+
+        this.date.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (!isFilling() && date.getValue() != null) {
+                    tableBonItem.setDateDevise(date.getValue());
+                }
+            }
+        });
 
         // Reference
         c.gridy++;
@@ -188,6 +221,66 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         c.fill = GridBagConstraints.NONE;
         this.comboClient = new ElementComboBox();
         this.add(this.comboClient, c);
+        this.addRequiredSQLObject(this.comboClient, "ID_CLIENT");
+
+        if (this.displayDpt) {
+            c.gridx++;
+            c.gridwidth = 1;
+            final JLabel labelDpt = new JLabel(getLabelFor("ID_CLIENT_DEPARTEMENT"));
+            labelDpt.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelDpt, c);
+
+            c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.weighty = 0;
+            c.fill = GridBagConstraints.NONE;
+            this.add(this.comboDpt, c);
+            DefaultGridBagConstraints.lockMinimumSize(this.comboDpt);
+            addSQLObject(this.comboDpt, "ID_CLIENT_DEPARTEMENT");
+
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                        final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                        comboDpt.getRequest().setWhere(new Where(comboDpt.getRequest().getPrimaryTable().getField("ID_CLIENT"), "=", rowClient.getID()));
+                    } else {
+                        comboDpt.getRequest().setWhere(null);
+                    }
+                }
+            });
+
+        }
+
+        final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+        final AddressChoiceUI addressUI = new AddressChoiceUI();
+        addressUI.addToUI(this, c);
+        comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                int wantedID = comboClient.getWantedID();
+                System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                    addressUI.getComboAdrF().getRequest()
+                            .setWhere(new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                    addressUI.getComboAdrL().getRequest()
+                            .setWhere(new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                } else {
+                    addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                    addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                }
+            }
+        });
+
         if (getTable().contains("SPEC_LIVRAISON")) {
             // Date livraison
             c.gridx++;
@@ -201,6 +294,50 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             c.weighty = 0;
             this.add(specLivraison, c);
             this.addView(specLivraison, "SPEC_LIVRAISON");
+        }
+
+        if (getTable().contains("ID_CONTACT")) {
+            // Contact Client
+            c.gridx = 0;
+            c.gridy++;
+            c.gridwidth = 1;
+            final JLabel labelContact = new JLabel(getLabelFor("ID_CONTACT"));
+            labelContact.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelContact, c);
+
+            final ElementComboBox comboContact = new ElementComboBox();
+            c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.weighty = 0;
+            c.fill = GridBagConstraints.NONE;
+            this.add(comboContact, c);
+            final SQLElement contactElement = getElement().getForeignElement("ID_CONTACT");
+            comboContact.init(contactElement, contactElement.getComboRequest(true));
+            comboContact.getRequest().setWhere(Where.FALSE);
+            DefaultGridBagConstraints.lockMinimumSize(comboContact);
+            this.addView(comboContact, "ID_CONTACT");
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                        final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                        int idClient = rowClient.getID();
+                        comboContact.getRequest().setWhere(new Where(contactElement.getTable().getField("ID_CLIENT"), "=", idClient));
+                    } else {
+                        comboContact.getRequest().setWhere(Where.FALSE);
+                        // DevisSQLComponent.this.table.setTarif(null, false);
+                    }
+                }
+            });
+
         }
 
         final ElementComboBox boxTarif = new ElementComboBox();
@@ -260,10 +397,11 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             c.weightx = 0;
             c.weighty = 0;
             c.gridwidth = 1;
-            this.add(new JLabel("Tarif à appliquer"), c);
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(new JLabel(getLabelFor("ID_TARIF"), SwingUtilities.RIGHT), c);
             c.gridx++;
             c.gridwidth = 1;
-
+            c.fill = GridBagConstraints.NONE;
             c.weightx = 1;
             this.add(boxTarif, c);
             this.addView(boxTarif, "ID_TARIF");
@@ -310,6 +448,27 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         reconfigure(this.textTotalTVA);
         reconfigure(this.textTotalTTC);
 
+        DeviseField textPortHT = new DeviseField(5);
+        DeviseField textRemiseHT = new DeviseField();
+
+        // Total
+        DeviseField fieldDevise = new DeviseField();
+        DeviseField fieldService = new DeviseField();
+        DeviseField fieldHA = new DeviseField();
+        fieldHA.setOpaque(false);
+        fieldService.setOpaque(false);
+        if (getTable().contains("TOTAL_DEVISE")) {
+            addSQLObject(fieldDevise, "TOTAL_DEVISE");
+            addRequiredSQLObject(fieldService, "TOTAL_SERVICE");
+        }
+        if (getTable().contains("PREBILAN")) {
+            addSQLObject(fieldHA, "PREBILAN");
+        } else if (getTable().contains("T_HA")) {
+            addSQLObject(fieldHA, "T_HA");
+        }
+
+        SQLRequestComboBox boxTaxePort = new SQLRequestComboBox(false, 8);
+
         // Poids Total
         c.gridy++;
         c.gridx = 1;
@@ -322,8 +481,75 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         this.addRequiredSQLObject(this.textTotalHT, "TOTAL_HT");
         this.addRequiredSQLObject(this.textTotalTVA, "TOTAL_TVA");
         this.addRequiredSQLObject(this.textTotalTTC, "TOTAL_TTC");
-        TotalPanel panelTotal = new TotalPanel(tableBonItem, textTotalHT, textTotalTVA, textTotalTTC, new DeviseField(), new DeviseField(), new DeviseField(), new DeviseField(), new DeviseField(),
-                textPoidsTotal, null);
+        final TotalPanel panelTotal = new TotalPanel(tableBonItem, textTotalHT, textTotalTVA, textTotalTTC, textPortHT, textRemiseHT, fieldService, fieldHA, fieldDevise, this.textPoidsTotal, null,
+                (getTable().contains("ID_TAXE_PORT") ? boxTaxePort : null));
+
+        // if (b) {
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints cFrais = new DefaultGridBagConstraints();
+        panel.add(new JLabel(getLabelFor("TOTAL_POIDS")), cFrais);
+
+        this.textPoidsTotal.setEnabled(false);
+        this.textPoidsTotal.setHorizontalAlignment(JTextField.RIGHT);
+        this.textPoidsTotal.setDisabledTextColor(Color.BLACK);
+        cFrais.gridx++;
+        panel.add(this.textPoidsTotal, cFrais);
+
+        panel.setOpaque(false);
+        DefaultGridBagConstraints.lockMinimumSize(panel);
+
+        DefaultGridBagConstraints.lockMinimumSize(textPortHT);
+        addSQLObject(textPortHT, "PORT_HT");
+        DefaultGridBagConstraints.lockMinimumSize(textRemiseHT);
+        addSQLObject(textRemiseHT, "REMISE_HT");
+
+        // Frais de port
+
+        if (getTable().contains("ID_TAXE_PORT")) {
+
+            JLabel labelPortHT = new JLabel(getLabelFor("PORT_HT"));
+            labelPortHT.setHorizontalAlignment(SwingConstants.RIGHT);
+            cFrais.gridx = 0;
+            cFrais.gridy++;
+            panel.add(labelPortHT, cFrais);
+            cFrais.gridx++;
+            panel.add(textPortHT, cFrais);
+
+            JLabel labelTaxeHT = new JLabel(getLabelFor("ID_TAXE_PORT"));
+            labelTaxeHT.setHorizontalAlignment(SwingConstants.RIGHT);
+            cFrais.gridx = 0;
+            cFrais.gridy++;
+            panel.add(labelTaxeHT, cFrais);
+            cFrais.gridx++;
+            panel.add(boxTaxePort, cFrais);
+            this.addView(boxTaxePort, "ID_TAXE_PORT", REQ);
+
+            boxTaxePort.addValueListener(new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    panelTotal.updateTotal();
+                }
+            });
+        }
+
+        // Remise
+        JLabel labelRemiseHT = new JLabel(getLabelFor("REMISE_HT"));
+        labelRemiseHT.setHorizontalAlignment(SwingConstants.RIGHT);
+        cFrais.gridy++;
+        cFrais.gridx = 0;
+        panel.add(labelRemiseHT, cFrais);
+        cFrais.gridx++;
+        panel.add(textRemiseHT, cFrais);
+
+        c.gridx = 1;
+        c.weightx = 0;
+        c.weighty = 0;
+        c.gridwidth = 1;
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.NORTHEAST;
+        this.add(panel, c);
+
         c.gridx = 2;
         c.gridwidth = GridBagConstraints.REMAINDER;
         c.weightx = 0;
@@ -342,7 +568,7 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         c.fill = GridBagConstraints.HORIZONTAL;
         c.gridx = 0;
         c.gridy++;
-        TitledSeparator sep = new TitledSeparator("Informations complémentaires");
+        TitledSeparator sep = new TitledSeparator(getLabelFor("INFOS"));
         c.insets = new Insets(10, 2, 1, 2);
         this.add(sep, c);
         c.insets = new Insets(2, 2, 1, 2);
@@ -380,10 +606,36 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         this.addSQLObject(this.selectCommande, "ID_COMMANDE_CLIENT");
         this.addRequiredSQLObject(this.textNumeroUnique, "NUMERO");
 
-        this.addRequiredSQLObject(this.comboClient, "ID_CLIENT");
-
         // Doit etre locké a la fin
         DefaultGridBagConstraints.lockMinimumSize(comboClient);
+
+        textPortHT.getDocument().addDocumentListener(new DocumentListener() {
+            public void changedUpdate(DocumentEvent e) {
+                panelTotal.updateTotal();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                panelTotal.updateTotal();
+            }
+
+            public void insertUpdate(DocumentEvent e) {
+                panelTotal.updateTotal();
+            }
+        });
+
+        textRemiseHT.getDocument().addDocumentListener(new DocumentListener() {
+            public void changedUpdate(DocumentEvent e) {
+                panelTotal.updateTotal();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                panelTotal.updateTotal();
+            }
+
+            public void insertUpdate(DocumentEvent e) {
+                panelTotal.updateTotal();
+            }
+        });
 
     }
 
@@ -413,7 +665,7 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             bSheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
 
             // incrémentation du numéro auto
-            if (NumerotationAutoSQLElement.getNextNumero(BonDeLivraisonSQLElement.class).equalsIgnoreCase(this.textNumeroUnique.getText().trim())) {
+            if (NumerotationAutoSQLElement.getNextNumero(getElement().getClass()).equalsIgnoreCase(this.textNumeroUnique.getText().trim())) {
                 SQLRowValues rowVals = new SQLRowValues(this.tableNum);
                 int val = this.tableNum.getRow(2).getInt("BON_L_START");
                 val++;
@@ -598,10 +850,17 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
                 public String getLabel(SQLRowAccessor rowOrigin, SQLRowAccessor rowElt) {
                     return getLibelleStock(rowOrigin, rowElt);
                 }
-            }, row, row.getReferentRows(getTable().getTable("BON_DE_LIVRAISON_ELEMENT")), Type.REAL_DELIVER);
+            }, row, row.getReferentRows(getTable().getTable("BON_DE_LIVRAISON_ELEMENT")),
+                    getTable().contains("CREATE_VIRTUAL_STOCK") && row.getBoolean("CREATE_VIRTUAL_STOCK") ? TypeStockUpdate.REAL_VIRTUAL_DELIVER : TypeStockUpdate.REAL_DELIVER);
 
             stockUpdater.update();
         }
+    }
+
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor rSource) {
+
+        tableBonItem.setDateDevise(date.getValue());
     }
 
 }

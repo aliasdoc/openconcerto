@@ -29,7 +29,6 @@ import org.openconcerto.xml.JDOMUtils;
 import org.openconcerto.xml.SimpleXMLPath;
 
 import java.awt.Point;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -364,26 +363,25 @@ public class Table<D extends ODDocument> extends TableCalcNode<TableStyle, D> {
                         // we must use height to compute new values for end-cell-address and end-y
 
                         // find the height of the shape
-                        final LengthUnit unit = LengthUnit.MM;
-                        final BigDecimal[] coordinates = getODDocument().getFormatVersion().getXML().getCoordinates(endCellParentElem, unit, false, true);
+                        final Length[] coordinates = getODDocument().getFormatVersion().getXML().getCoordinates(endCellParentElem, false, true);
                         if (coordinates == null)
                             throw new IllegalStateException("Couldn't find the height of the shape : " + JDOMUtils.output(endCellParentElem));
-                        final BigDecimal endYFromAnchor = coordinates[3];
+                        final Length endYFromAnchor = coordinates[3];
                         assert endYFromAnchor != null : "getCoordinates() should never return null BigDecimal (unless requested by horizontal/vertical)";
                         // find the end row
                         int rowIndex = startRowIndex;
-                        BigDecimal cellEndYFromAnchor = getRow(rowIndex).getStyle().getTableRowProperties().getHeight(unit);
+                        Length cellEndYFromAnchor = getRow(rowIndex).getStyle().getTableRowProperties().getHeight();
                         while (endYFromAnchor.compareTo(cellEndYFromAnchor) > 0) {
                             rowIndex++;
-                            cellEndYFromAnchor = cellEndYFromAnchor.add(getRow(rowIndex).getStyle().getTableRowProperties().getHeight(unit));
+                            cellEndYFromAnchor = cellEndYFromAnchor.add(getRow(rowIndex).getStyle().getTableRowProperties().getHeight());
                         }
                         // find the end-y
-                        final BigDecimal cellStartYFromAnchor = cellEndYFromAnchor.subtract(getRow(rowIndex).getStyle().getTableRowProperties().getHeight(unit));
-                        final BigDecimal endY = endYFromAnchor.subtract(cellStartYFromAnchor);
+                        final Length cellStartYFromAnchor = cellEndYFromAnchor.subtract(getRow(rowIndex).getStyle().getTableRowProperties().getHeight());
+                        final Length endY = endYFromAnchor.subtract(cellStartYFromAnchor);
                         assert endY.signum() >= 0;
 
                         newEndY = rowIndex;
-                        endCellParentElem.setAttribute("end-y", unit.format(endY), getTABLE());
+                        endCellParentElem.setAttribute("end-y", endY.format(), getTABLE());
                     }
                     endCellAttr.setValue(SpreadSheet.formatSheetName(endCellSheet.getName()) + "." + Table.getAddress(new Point(endCellPoint.x, newEndY)));
                 }
@@ -633,6 +631,10 @@ public class Table<D extends ODDocument> extends TableCalcNode<TableStyle, D> {
 
     // *** get count
 
+    // not public since Row represent the physical (XML) row, i.e. it can represent many logical
+    // rows. Ideally two classes should be created (as Cell/MutableCell), but this would only be
+    // useful for changing style (e.g. setHeight()).
+
     final Row<D> getRow(int index) {
         return this.rows.get(index);
     }
@@ -647,8 +649,18 @@ public class Table<D extends ODDocument> extends TableCalcNode<TableStyle, D> {
         }
     }
 
+    // OK to use immutable row since for now RowStyle has no setter (except for raw methods in super
+    // classes)
+    public final RowStyle getRowStyle(int index) {
+        return this.getRow(index).getStyle();
+    }
+
     public final Column<D> getColumn(int i) {
         return this.cols.get(i);
+    }
+
+    public final ColumnStyle getColumnStyle(int index) {
+        return this.getColumn(index).getStyle();
     }
 
     public final int getRowCount() {

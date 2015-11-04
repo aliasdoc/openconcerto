@@ -421,7 +421,7 @@ public class SaisieAchatSQLComponent extends BaseSQLComponent {
             }
         }
 
-        new GenerationMvtSaisieAchat(id);
+        new GenerationMvtSaisieAchat(getTable().getRow(id));
 
         return id;
     }
@@ -530,7 +530,7 @@ public class SaisieAchatSQLComponent extends BaseSQLComponent {
             eltEcr.archiveMouvementProfondeur(idMvt, false);
 
             // regenere les ecritures
-            new GenerationMvtSaisieAchat(this.getSelectedID(), idMvt);
+            new GenerationMvtSaisieAchat(row, idMvt);
         }
     }
 

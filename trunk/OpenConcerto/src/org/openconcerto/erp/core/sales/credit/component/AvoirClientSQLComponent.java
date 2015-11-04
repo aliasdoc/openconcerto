@@ -14,45 +14,6 @@
  package org.openconcerto.erp.core.sales.credit.component;
 
 import static org.openconcerto.utils.CollectionUtils.createSet;
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.core.common.component.SocieteCommonSQLElement;
-import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
-import org.openconcerto.erp.core.common.element.BanqueSQLElement;
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
-import org.openconcerto.erp.core.common.ui.AbstractArticleItemTable;
-import org.openconcerto.erp.core.common.ui.DeviseField;
-import org.openconcerto.erp.core.common.ui.TotalPanel;
-import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
-import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
-import org.openconcerto.erp.core.finance.payment.component.ModeDeReglementSQLComponent;
-import org.openconcerto.erp.core.sales.credit.element.AvoirClientSQLElement;
-import org.openconcerto.erp.core.sales.credit.ui.AvoirItemTable;
-import org.openconcerto.erp.core.sales.invoice.component.SaisieVenteFactureSQLComponent;
-import org.openconcerto.erp.generationDoc.gestcomm.AvoirClientXmlSheet;
-import org.openconcerto.erp.generationEcritures.GenerationMvtAvoirClient;
-import org.openconcerto.erp.model.ISQLCompteSelector;
-import org.openconcerto.erp.panel.PanelOOSQLComponent;
-import org.openconcerto.erp.preferences.DefaultNXProps;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.element.ElementSQLObject;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLSelect;
-import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.Where;
-import org.openconcerto.sql.sqlobject.ElementComboBox;
-import org.openconcerto.sql.sqlobject.JUniqueTextField;
-import org.openconcerto.sql.view.EditFrame;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.ui.FormLayouter;
-import org.openconcerto.ui.JDate;
-import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.checks.ValidState;
 
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
@@ -78,6 +39,49 @@ import javax.swing.event.DocumentListener;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.component.SocieteCommonSQLElement;
+import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
+import org.openconcerto.erp.core.common.element.BanqueSQLElement;
+import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
+import org.openconcerto.erp.core.common.ui.AbstractArticleItemTable;
+import org.openconcerto.erp.core.common.ui.DeviseField;
+import org.openconcerto.erp.core.common.ui.TotalPanel;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseType;
+import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
+import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
+import org.openconcerto.erp.core.finance.payment.component.ModeDeReglementSQLComponent;
+import org.openconcerto.erp.core.sales.credit.ui.AvoirItemTable;
+import org.openconcerto.erp.generationDoc.gestcomm.AvoirClientXmlSheet;
+import org.openconcerto.erp.generationEcritures.GenerationMvtAvoirClient;
+import org.openconcerto.erp.model.ISQLCompteSelector;
+import org.openconcerto.erp.panel.PanelOOSQLComponent;
+import org.openconcerto.erp.preferences.DefaultNXProps;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.element.ElementSQLObject;
+import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.SQLField;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.preferences.SQLPreferences;
+import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.sqlobject.JUniqueTextField;
+import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.FormLayouter;
+import org.openconcerto.ui.JDate;
+import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.checks.ValidState;
+
 public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implements ActionListener {
 
     protected PanelOOSQLComponent panelGestDoc;
@@ -93,13 +97,14 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
     private ElementComboBox comboPole = new ElementComboBox();
     private ElementComboBox comboCommercial = new ElementComboBox();
     private ElementComboBox comboVerificateur = new ElementComboBox();
-    private final ElementComboBox comboAdresse = new ElementComboBox();
     private final ElementComboBox comboBanque = new ElementComboBox();
     private final ElementComboBox selectContact = new ElementComboBox();
     private JLabel labelCompteServ;
     private ISQLCompteSelector compteSelService;
     private static final SQLTable TABLE_PREFS_COMPTE = Configuration.getInstance().getBase().getTable("PREFS_COMPTE");
     private static final SQLRow ROW_PREFS_COMPTE = TABLE_PREFS_COMPTE.getRow(2);
+    private final boolean displayDpt;
+    private final ElementComboBox comboDpt = new ElementComboBox();
 
     private SQLRowValues defaultContactRowValues;
 
@@ -161,21 +166,8 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                     }
                 }
 
-                    Where w = new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row.getInt("ID_ADRESSE"));
-
-                    w = w.or(new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row.getInt("ID_ADRESSE_L")));
-                    w = w.or(new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row.getInt("ID_ADRESSE_F")));
-                    List<SQLRow> list = row.getReferentRows(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getField("ID_CLIENT"));
-                    for (SQLRow row2 : list) {
-                        w = w.or(new Where(SaisieVenteFactureSQLComponent.TABLE_ADRESSE.getKey(), "=", row2.getID()));
-                    }
-
-                    comboAdresse.getRequest().setWhere(w);
             } else {
-                    comboAdresse.getRequest().setWhere(null);
-
                 selectContact.getRequest().setWhere(Where.FALSE);
-
             }
             // }
         }
@@ -191,7 +183,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
     protected SQLRowValues createDefaults() {
         SQLRowValues vals = new SQLRowValues(this.getTable());
         vals.put("A_DEDUIRE", Boolean.TRUE);
-        this.eltModeRegl.setEditable(false);
+        this.eltModeRegl.setEditable(InteractionMode.DISABLED);
         this.eltModeRegl.setCreated(false);
 
 
@@ -204,7 +196,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                 e.printStackTrace();
             }
         }
-        vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(AvoirClientSQLElement.class, new Date()));
+        vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(getElement().getClass(), new Date()));
         vals.put("MONTANT_TTC", Long.valueOf(0));
         vals.put("MONTANT_SERVICE", Long.valueOf(0));
         vals.put("MONTANT_HT", Long.valueOf(0));
@@ -216,6 +208,8 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
 
     public AvoirClientSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("AVOIR_CLIENT"));
+        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        this.displayDpt = prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false);
     }
 
     public void addViews() {
@@ -242,7 +236,9 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                 @Override
                 public void propertyChange(PropertyChangeEvent evt) {
                     fireValidChange();
-
+                    if (!isFilling() && date.getValue() != null) {
+                        table.setDateDevise(date.getValue());
+                    }
                 }
             });
 
@@ -297,7 +293,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
         c.weightx = 0;
         this.add(new JLabel(getLabelFor("MOTIF"), SwingConstants.RIGHT), c);
         c.gridx++;
-        c.gridwidth = 3;
+        c.gridwidth = 1;
         // c.weightx = 1;
 
         JTextField textMotif = new JTextField();
@@ -306,33 +302,83 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
         // Client
         c.gridx = 0;
         c.gridy++;
-        // c.weightx = 0;
+        c.weightx = 0;
         c.gridwidth = 1;
         this.add(new JLabel(getLabelFor("ID_CLIENT"), SwingConstants.RIGHT), c);
         c.gridx++;
-        c.gridwidth = 3;
-        // c.weightx = 1;
+        c.gridwidth = 1;
+        c.weightx = 1;
         c.fill = GridBagConstraints.NONE;
         this.add(this.comboClient, c);
-            // Adresse spe
-            c.gridx = 0;
-            c.gridy++;
-            c.fill = GridBagConstraints.HORIZONTAL;
-            // c.weightx = 0;
+        this.addRequiredSQLObject(this.comboClient, "ID_CLIENT");
+
+        if (this.displayDpt) {
+            c.gridx++;
             c.gridwidth = 1;
-            this.add(new JLabel(getLabelFor("ID_ADRESSE"), SwingConstants.RIGHT), c);
+            c.weightx = 0;
+            final JLabel labelDpt = new JLabel(getLabelFor("ID_CLIENT_DEPARTEMENT"));
+            labelDpt.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelDpt, c);
 
             c.gridx++;
-            c.gridwidth = 3;
-            // c.weightx = 1;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.weighty = 0;
             c.fill = GridBagConstraints.NONE;
-            this.add(this.comboAdresse, c);
+            this.add(this.comboDpt, c);
+            DefaultGridBagConstraints.lockMinimumSize(this.comboDpt);
+            addSQLObject(this.comboDpt, "ID_CLIENT_DEPARTEMENT");
+
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                        final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                        comboDpt.getRequest().setWhere(new Where(comboDpt.getRequest().getPrimaryTable().getField("ID_CLIENT"), "=", rowClient.getID()));
+                    } else {
+                        comboDpt.getRequest().setWhere(null);
+                    }
+                }
+            });
+
+        }
+
+            // Adresse spe
+            final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+            final AddressChoiceUI addressUI = new AddressChoiceUI();
+            addressUI.addToUI(this, c);
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                        addressUI.getComboAdrF().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI.getComboAdrL().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                    } else {
+                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                    }
+                }
+            });
+
         final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
 
         // Contact
         c.gridx = 0;
         c.gridy++;
         c.gridwidth = 1;
+        c.weightx = 0;
         c.fill = GridBagConstraints.HORIZONTAL;
         // c.weightx = 0;
         final JLabel labelContact = new JLabel(getLabelFor("ID_CONTACT"), SwingConstants.RIGHT);
@@ -340,12 +386,11 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
 
         c.gridx++;
         c.gridwidth = 3;
-        // c.weightx = 1;
-        c.fill = GridBagConstraints.NONE;
-
+        c.weightx = 1;
         this.add(selectContact, c);
         final SQLElement contactElement = getElement().getForeignElement("ID_CONTACT");
         selectContact.init(contactElement, contactElement.getComboRequest(true));
+        selectContact.getRequest().setWhere(Where.FALSE);
         this.addView(selectContact, "ID_CONTACT");
         this.defaultContactRowValues = new SQLRowValues(selectContact.getRequest().getPrimaryTable());
         selectContact.getAddComp().setDefaults(this.defaultContactRowValues);
@@ -361,13 +406,13 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
         c.gridy++;
         c.gridx = 0;
         c.gridwidth = 1;
-        // c.weightx = 0;
+        c.weightx = 0;
         this.labelCompteServ.setHorizontalAlignment(SwingConstants.RIGHT);
         this.add(this.labelCompteServ, c);
 
         c.gridx++;
         c.gridwidth = GridBagConstraints.REMAINDER;
-        // c.weightx = 1;
+        c.weightx = 1;
         this.add(this.compteSelService, c);
 
         this.addRequiredSQLObject(this.compteSelService, "ID_COMPTE_PCE_SERVICE");
@@ -462,18 +507,14 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
         }
         this.addSQLObject(this.boxAdeduire, "A_DEDUIRE");
         this.addSQLObject(textMotif, "MOTIF");
-            this.addSQLObject(this.comboAdresse, "ID_ADRESSE");
 
         this.addRequiredSQLObject(this.textNumero, "NUMERO");
         this.addRequiredSQLObject(this.date, "DATE");
-        this.addRequiredSQLObject(this.comboClient, "ID_CLIENT");
-
         this.boxAdeduire.addActionListener(this);
 
         this.comboClient.addModelListener("wantedID", this.listenerModeReglDefaut);
         this.comboClient.addModelListener("wantedID", this.changeClientListener);
         DefaultGridBagConstraints.lockMinimumSize(comboClient);
-        DefaultGridBagConstraints.lockMinimumSize(this.comboAdresse);
         DefaultGridBagConstraints.lockMinimumSize(this.comboBanque);
         DefaultGridBagConstraints.lockMinimumSize(comboCommercial);
 
@@ -667,9 +708,9 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                 final SQLRow row = getTable().getRow(id);
 
                 // incrémentation du numéro auto
-                if (NumerotationAutoSQLElement.getNextNumero(AvoirClientSQLElement.class, row.getDate("DATE").getTime()).equalsIgnoreCase(this.textNumero.getText().trim())) {
+                if (NumerotationAutoSQLElement.getNextNumero(getElement().getClass(), row.getDate("DATE").getTime()).equalsIgnoreCase(this.textNumero.getText().trim())) {
                     SQLRowValues rowVals = new SQLRowValues(tableNum);
-                    String label = NumerotationAutoSQLElement.getLabelNumberFor(AvoirClientSQLElement.class);
+                    String label = NumerotationAutoSQLElement.getLabelNumberFor(getElement().getClass());
                     int val = tableNum.getRow(2).getInt(label);
                     val++;
                     rowVals.put(label, Integer.valueOf(val));
@@ -692,7 +733,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
 
                 // updateStock(id);
 
-                GenerationMvtAvoirClient gen = new GenerationMvtAvoirClient(id);
+                GenerationMvtAvoirClient gen = new GenerationMvtAvoirClient(row);
                 gen.genereMouvement();
 
                 // generation du document
@@ -788,7 +829,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                 EcritureSQLElement eltEcr = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
                 eltEcr.archiveMouvementProfondeur(idMvt, false);
 
-                GenerationMvtAvoirClient gen = new GenerationMvtAvoirClient(getSelectedID(), idMvt);
+                GenerationMvtAvoirClient gen = new GenerationMvtAvoirClient(row, idMvt);
                 gen.genereMouvement();
 
                 createAvoirClient(row);
@@ -833,9 +874,15 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == this.boxAdeduire) {
             if (this.eltModeRegl != null) {
-                this.eltModeRegl.setEditable(!this.boxAdeduire.isSelected());
-                this.eltModeRegl.setCreated(!this.boxAdeduire.isSelected());
+                boolean b = this.boxAdeduire.isSelected();
+                this.eltModeRegl.setEditable((!b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+                this.eltModeRegl.setCreated(!b);
             }
         }
+    }
+
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor rSource) {
+        table.setDateDevise(date.getValue());
     }
 }

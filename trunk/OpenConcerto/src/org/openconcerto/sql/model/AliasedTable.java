@@ -20,6 +20,19 @@
  */
 public class AliasedTable implements SQLItem, TableRef {
 
+    // SQLTable isn't primarily a TableRef so equals() always return false for an AliasedTable
+    // this method allow to compare TableRef properties
+    public static final boolean equals(final TableRef t1, final TableRef t2) {
+        if (t1 == null || t2 == null)
+            return false;
+        return t1.getTable().equals(t2.getTable()) && t1.getAlias().equals(t2.getAlias());
+    }
+
+    // only create instance if needed
+    static TableRef getTableRef(final SQLTable t, final String alias) {
+        return alias == null ? t : new AliasedTable(t, alias);
+    }
+
     private final SQLTable t;
     private final String alias;
 
@@ -68,11 +81,9 @@ public class AliasedTable implements SQLItem, TableRef {
 
     @Override
     public String getSQL() {
-        // always use fullname, otherwise must check the datasource's
-        // default schema
-        final String tableName = this.getTable().getSQLName().quote();
-        final String qAlias = SQLBase.quoteIdentifier(getAlias());
-        return tableName + (qAlias.equals(tableName) ? "" : " " + qAlias);
+        // use SQLTable.getSQL() to have the same result if we have no alias
+        final String tableName = this.getTable().getSQL();
+        return tableName + (getAlias().equals(this.getTable().getName()) ? "" : " " + SQLBase.quoteIdentifier(getAlias()));
     }
 
     @Override

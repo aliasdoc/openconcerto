@@ -14,6 +14,7 @@
  package org.openconcerto.sql.view.list;
 
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.ui.list.selection.ListSelection;
 import org.openconcerto.utils.CollectionUtils;
@@ -79,7 +80,7 @@ public interface IListeAction {
         }
 
         private final IListe list;
-        private final List<SQLRowAccessor> selection;
+        private final List<SQLRowValues> selection;
 
         IListeEvent(final IListe list) {
             super();
@@ -92,7 +93,7 @@ public interface IListeAction {
             return CollectionUtils.getFirst(this.getSelectedRows());
         }
 
-        public final List<SQLRowAccessor> getSelectedRows() {
+        public final List<SQLRowValues> getSelectedRows() {
             return this.selection;
         }
 

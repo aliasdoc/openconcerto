@@ -20,6 +20,7 @@ import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLType;
 import org.openconcerto.sql.request.RowItemDesc;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.JLabelBold;
@@ -37,6 +38,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -66,10 +68,29 @@ public class GroupSQLComponent extends BaseSQLComponent {
     private int tabDepth;
     private JTabbedPane pane;
     private final List<String> tabsGroupIDs = new ArrayList<String>();
+    private Group additionnalFieldsGroup;
+    private final boolean hasAdditionnalFields;
+
+    public GroupSQLComponent(final SQLElement element) {
+        this(element, element.getDefaultGroup());
+    }
 
     public GroupSQLComponent(final SQLElement element, final Group group) {
         super(element);
         this.group = group;
+        this.hasAdditionnalFields = this.getElement().getAdditionalFields().size() > 0;
+        this.additionnalFieldsGroup = getAdditionalFieldsGroup(group.getDescendantItems());
+    }
+
+    private Group getAdditionalFieldsGroup(Collection<Item> items) {
+        for (Item item : items) {
+            if (item instanceof Group) {
+                if (item.getId().endsWith("additionalElementFields")) {
+                    return (Group) item;
+                }
+            }
+        }
+        return null;
     }
 
     protected final Group getGroup() {
@@ -87,6 +108,11 @@ public class GroupSQLComponent extends BaseSQLComponent {
         c.fill = GridBagConstraints.NONE;
         this.tabGroup = false;
         this.tabDepth = 0;
+        // On laisse la place en haut pour les additionnals fields
+        if (this.hasAdditionnalFields) {
+            c.gridy = this.getElement().getAdditionalFields().size() / 2 + 1;
+        }
+
         layout(this.group, 0, 0, 0, c, this);
     }
 
@@ -130,6 +156,15 @@ public class GroupSQLComponent extends BaseSQLComponent {
                     c.gridwidth = 4;
                     panel.add(getLabel(id), c);
                     c.gridy++;
+                }
+            }
+            if (this.hasAdditionnalFields) {
+                if ((currentGroup == this.group && this.additionnalFieldsGroup == null) || (currentGroup == this.additionnalFieldsGroup)) {
+                    final Map<String, JComponent> additionalFields = this.getElement().getAdditionalFields();
+                    for (String field : additionalFields.keySet()) {
+                        Item item = new Item(field);
+                        layout(item, 100, x, level + 1, c, panel);
+                    }
                 }
             }
             for (int i = 0; i < stop; i++) {
@@ -232,6 +267,9 @@ public class GroupSQLComponent extends BaseSQLComponent {
 
         }
         if (id.equals(startTabAfter)) {
+            if (tabGroup) {
+                throw new IllegalArgumentException("ID " + id + " already set as tab");
+            }
             tabGroup = true;
             tabDepth = level;
             pane = new JTabbedPane();
@@ -411,6 +449,11 @@ public class GroupSQLComponent extends BaseSQLComponent {
         JComponent label = this.labels.get(id);
         if (label == null) {
             label = createLabel(id);
+            if (!UserRightsManager.getCurrentUserRights().haveRight("GROUP_ITEM_SHOW", id)
+                    || !UserRightsManager.getCurrentUserRights().haveRight("GROUP_ITEM_SHOW", getElement().getTable().getName() + "." + id)) {
+                label.setVisible(false);
+            }
+
             this.labels.put(id, label);
             registerPopupMenu(label, id);
             final RowItemDesc rivDesc = getRIVDescForId(id);
@@ -420,12 +463,14 @@ public class GroupSQLComponent extends BaseSQLComponent {
     }
 
     private RowItemDesc getRIVDescForId(final String id) {
-        final FieldMapper fieldMapper = PropsConfiguration.getInstance().getFieldMapper();
-        String t = TranslationManager.getInstance().getTranslationForItem(id);
-        if (t != null) {
-            return new RowItemDesc(t, t);
+        if (TranslationManager.getInstance().getLocale() != null) {
+            final String t = TranslationManager.getInstance().getTranslationForItem(id);
+            if (t != null) {
+                return new RowItemDesc(t, t);
+            }
         }
         String fieldName = null;
+        final FieldMapper fieldMapper = PropsConfiguration.getInstance().getFieldMapper();
         if (fieldMapper != null) {
             final SQLField sqlFieldForItem = fieldMapper.getSQLFieldForItem(id);
             if (sqlFieldForItem != null) {
@@ -443,6 +488,10 @@ public class GroupSQLComponent extends BaseSQLComponent {
         JComponent editor = this.editors.get(id);
         if (editor == null) {
             editor = createEditor(id);
+            if (!UserRightsManager.getCurrentUserRights().haveRight("GROUP_ITEM_SHOW", id)
+                    || !UserRightsManager.getCurrentUserRights().haveRight("GROUP_ITEM_SHOW", getElement().getTable().getName() + "." + id)) {
+                editor.setVisible(false);
+            }
             this.editors.put(id, editor);
         }
         return editor;

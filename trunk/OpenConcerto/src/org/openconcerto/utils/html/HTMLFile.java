@@ -47,7 +47,7 @@ public class HTMLFile {
                 String line = reader.readLine();
                 if (line == null)
                     break;
-                content += line;
+                content += line + "\n";
             }
             reader.close();
 

@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
@@ -328,7 +329,7 @@ public class MouseSheetXmlListeListener {
             PredicateRowAction rowAction = new PredicateRowAction(new AbstractAction() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
-                    List<SQLRowAccessor> list = IListe.get(e).getSelectedRows();
+                    List<SQLRowValues> list = IListe.get(e).getSelectedRows();
                     ListeFastPrintFrame frame = new ListeFastPrintFrame(list, clazz);
                     frame.setVisible(true);
                 }
@@ -367,7 +368,7 @@ public class MouseSheetXmlListeListener {
         if (this.generateIsVisible) {
             l.add(new RowAction(new AbstractAction() {
                 public void actionPerformed(ActionEvent ev) {
-                    List<SQLRowAccessor> l = IListe.get(ev).getSelectedRows();
+                    List<SQLRowValues> l = IListe.get(ev).getSelectedRows();
 
                     if (l.size() == 1) {
                         createDocument(ev);
@@ -378,7 +379,7 @@ public class MouseSheetXmlListeListener {
             }, this.generateHeader, "document.create") {
 
                 @Override
-                public boolean enabledFor(List<SQLRowAccessor> selection) {
+                public boolean enabledFor(List<SQLRowValues> selection) {
                     return selection != null && selection.size() > 0;
                 }
 
@@ -388,7 +389,7 @@ public class MouseSheetXmlListeListener {
         return l;
     }
 
-    private void createDocuments(List<SQLRowAccessor> selection) {
+    private void createDocuments(List<? extends SQLRowAccessor> selection) {
         int a = JOptionPane.showConfirmDialog(null, "Voulez vous recréer l'ensemble des documents sélectionnés?", "Génération de documents", JOptionPane.YES_NO_OPTION);
         if (a == JOptionPane.YES_OPTION) {
             for (SQLRowAccessor sqlRowAccessor : selection) {
@@ -438,7 +439,7 @@ public class MouseSheetXmlListeListener {
             }
         }, false, false, "document.create") {
             @Override
-            public boolean enabledFor(List<SQLRowAccessor> selection) {
+            public boolean enabledFor(List<SQLRowValues> selection) {
                 return selection != null && selection.size() == 1;
             }
 

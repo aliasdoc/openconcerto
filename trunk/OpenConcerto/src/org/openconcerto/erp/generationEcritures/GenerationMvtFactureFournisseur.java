@@ -40,22 +40,20 @@ public class GenerationMvtFactureFournisseur extends GenerationEcritures impleme
     private static final SQLTable tableMvt = base.getTable("MOUVEMENT");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
 
-    public GenerationMvtFactureFournisseur(int idFacture, int idMvt) {
-        this.idFacture = idFacture;
+    public GenerationMvtFactureFournisseur(SQLRow row, int idMvt) {
+        setRowAnalytiqueSource(row);
+        this.idFacture = row.getID();
         this.idMvt = idMvt;
         (new Thread(GenerationMvtFactureFournisseur.this)).start();
     }
 
-    public GenerationMvtFactureFournisseur(int idFacture) {
-
-        this.idFacture = idFacture;
-        this.idMvt = 1;
-        (new Thread(GenerationMvtFactureFournisseur.this)).start();
+    public GenerationMvtFactureFournisseur(SQLRow row) {
+        this(row, 1);
     }
 
     public void genereMouvement() throws Exception {
 
-        SQLRow saisieRow = tableFacture.getRow(this.idFacture);
+        SQLRow saisieRow = getRowAnalytiqueSource();
         // SQLRow taxeRow = base.getTable("TAXE").getRow(saisieRow.getInt("ID_TAXE"));
 
         SQLRow rowFournisseur = tableFournisseur.getRow(saisieRow.getInt("ID_FOURNISSEUR"));
@@ -109,7 +107,7 @@ public class GenerationMvtFactureFournisseur extends GenerationEcritures impleme
                 this.mEcritures.put("CREDIT", Long.valueOf(0));
                 this.mEcritures.put("DEBIT", Long.valueOf(b));
                 SQLRow rowEcr = ajoutEcriture();
-                addAssocAnalytiqueFromProvider(rowEcr, saisieRow);
+                // addAssocAnalytiqueFromProvider(rowEcr, saisieRow);
             }
         }
 

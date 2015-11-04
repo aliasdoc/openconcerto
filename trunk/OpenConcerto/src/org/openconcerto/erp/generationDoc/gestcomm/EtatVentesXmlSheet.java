@@ -47,8 +47,6 @@ public class EtatVentesXmlSheet extends AbstractListeSheetXml {
 
     private static final String MODE1 = "mod1";
 
-    private static final DateFormat DATE_FORMAT = new SimpleDateFormat("dd/MM/yy");
-
     public static final String TEMPLATE_ID = "EtatVentes";
 
     public static final String TEMPLATE_PROPERTY_NAME = DEFAULT_PROPERTY_NAME;
@@ -349,12 +347,13 @@ public class EtatVentesXmlSheet extends AbstractListeSheetXml {
         values.put("TOTAL_PA", totalTPA);
         values.put("TOTAL_PV_TTC", totalTPVTTC);
         String periode = "";
+        final DateFormat dateFormat = new SimpleDateFormat("dd/MM/yy");
         if (this.du != null && this.au != null) {
-            periode = "Période du " + DATE_FORMAT.format(this.du) + " au " + DATE_FORMAT.format(this.au);
+            periode = "Période du " + dateFormat.format(this.du) + " au " + dateFormat.format(this.au);
         } else if (du == null && au != null) {
-            periode = "Période jusqu'au " + DATE_FORMAT.format(this.au);
-        } else if (du != null && du != null) {
-            periode = "Période depuis le " + DATE_FORMAT.format(this.du);
+            periode = "Période jusqu'au " + dateFormat.format(this.au);
+        } else if (du != null && au == null) {
+            periode = "Période depuis le " + dateFormat.format(this.du);
         }
 
         values.put("DATE", periode);

@@ -76,6 +76,7 @@ import java.awt.Component;
 import java.lang.reflect.Constructor;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -166,7 +167,7 @@ public abstract class SQLElement {
     private String parentFF;
     private Set<String> sharedFF;
     private Map<String, SQLElement> privateFF;
-    private final Map<String, ReferenceAction> actions;
+    private final Map<Link, ReferenceAction> actions;
     // referent fields
     private Set<SQLField> childRF;
     private Set<SQLField> privateParentRF;
@@ -205,7 +206,7 @@ public abstract class SQLElement {
         this.combo = null;
         this.list = null;
         this.rowActions = new ListChangeRecorder<IListeAction>(new ArrayList<IListeAction>());
-        this.actions = new HashMap<String, ReferenceAction>();
+        this.actions = new HashMap<Link, ReferenceAction>();
         this.resetRelationships();
 
         this.components = new LinkedListMap<String, ITransformer<Tuple2<SQLElement, String>, SQLComponent>>();
@@ -294,15 +295,16 @@ public abstract class SQLElement {
         this.sharedFF = tmpSharedFF;
 
         // MAYBE move required fields to SQLElement and use RESTRICT
-        this.actions.put(this.parentFF, ReferenceAction.CASCADE);
+        if (this.parentFF != null)
+            this.actions.put(getLinkFromFieldName(this.parentFF), ReferenceAction.CASCADE);
         for (final String s : this.privateFF.keySet()) {
-            this.actions.put(s, ReferenceAction.SET_EMPTY);
+            this.actions.put(getLinkFromFieldName(s), ReferenceAction.SET_EMPTY);
         }
         for (final String s : this.normalFF) {
-            this.actions.put(s, ReferenceAction.SET_EMPTY);
+            this.actions.put(getLinkFromFieldName(s), ReferenceAction.SET_EMPTY);
         }
         for (final String s : this.sharedFF) {
-            this.actions.put(s, ReferenceAction.RESTRICT);
+            this.actions.put(getLinkFromFieldName(s), ReferenceAction.RESTRICT);
         }
         this.ffInited();
     }
@@ -1064,7 +1066,7 @@ public abstract class SQLElement {
         }
     }
 
-    final Map<String, ReferenceAction> getActions() {
+    final Map<Link, ReferenceAction> getActions() {
         this.initFF();
         return this.actions;
     }
@@ -1082,7 +1084,11 @@ public abstract class SQLElement {
         if (action.compareTo(ReferenceAction.RESTRICT) < 0 && !this.getNormalForeignFields().contains(ff))
             // getField() checks if the field exists
             throw new IllegalArgumentException(getTable().getField(ff).getSQLName() + " is not a normal foreign field : " + this.getNormalForeignFields());
-        this.getActions().put(ff, action);
+        this.getActions().put(getLinkFromFieldName(ff), action);
+    }
+
+    private final Link getLinkFromFieldName(final String ff) {
+        return getTable().getDBSystemRoot().getGraph().getForeignLink(getTable(), Arrays.asList(ff));
     }
 
     // *** rf and ff
@@ -1785,7 +1791,22 @@ public abstract class SQLElement {
 
     // *** equals
 
-    public boolean equals(SQLRow row, SQLRow row2) throws SQLException {
+    public boolean equals(SQLRow row, SQLRow row2) {
+        return this.equals(row, row2, false);
+    }
+
+    /**
+     * Compare local values (excluding order and obviously primary key). This method doesn't cross
+     * links except for privates but it does compare the value of shared normal links.
+     * 
+     * @param row the first row.
+     * @param row2 the second row.
+     * @param ignoreNotDeepCopied if <code>true</code> ignores the rows that are
+     *        {@link #dontDeepCopy() not to be copied}. See also the <code>full</code> parameter of
+     *        {@link #createCopy(SQLRowAccessor, boolean, SQLRowAccessor)}.
+     * @return <code>true</code> if the two rows are equal.
+     */
+    public boolean equals(SQLRow row, SQLRow row2, boolean ignoreNotDeepCopied) {
         check(row);
         if (!row2.getTable().equals(this.getTable()))
             return false;
@@ -1806,7 +1827,7 @@ public abstract class SQLElement {
         for (final String prvt : this.getPrivateForeignFields()) {
             final SQLElement foreignElement = this.getForeignElement(prvt);
             // ne pas tester
-            if (!foreignElement.dontDeepCopy() && !foreignElement.equals(row.getForeignRow(prvt), row2.getForeignRow(prvt)))
+            if ((!ignoreNotDeepCopied || !foreignElement.dontDeepCopy()) && !foreignElement.equals(row.getForeignRow(prvt), row2.getForeignRow(prvt), ignoreNotDeepCopied))
                 return false;
         }
 
@@ -1814,35 +1835,16 @@ public abstract class SQLElement {
     }
 
     public boolean equalsRecursive(SQLRow row, SQLRow row2) throws SQLException {
+        return this.equalsRecursive(row, row2, false);
+    }
+
+    public boolean equalsRecursive(SQLRow row, SQLRow row2, boolean ignoreNotDeepCopied) throws SQLException {
         // if (!equals(row, row2))
         // return false;
-        return new SQLElementRowR(this, row).equals(new SQLElementRowR(this, row2));
+        return new SQLElementRowR(this, row).equals(new SQLElementRowR(this, row2), ignoreNotDeepCopied);
     }
 
-    @Override
-    public final boolean equals(Object obj) {
-        if (obj == this)
-            return true;
-        if (obj instanceof SQLElement) {
-            final SQLElement o = (SQLElement) obj;
-            // don't need to compare SQLField computed by initFF() & initRF() since they're function
-            // of this.table (and by extension its graph) & this.directory
-            final boolean parentEq = CompareUtils.equals(this.getParentFFName(), o.getParentFFName());
-            return this.getTable().equals(o.getTable()) && CompareUtils.equals(this.getDirectory(), o.getDirectory()) && parentEq && this.getPrivateFields().equals(o.getPrivateFields())
-                    && this.getChildren().equals(o.getChildren());
-        } else {
-            return false;
-        }
-    }
-
-    @Override
-    public synchronized int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + this.primaryTable.hashCode();
-        result = prime * result + ((this.directory == null) ? 0 : this.directory.hashCode());
-        return result;
-    }
+    // no need for equals()/hashCode() since there's only one SQLElement per table and directory
 
     @Override
     public String toString() {

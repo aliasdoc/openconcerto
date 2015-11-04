@@ -37,6 +37,14 @@ public abstract class Component {
     }
 
     /**
+     * Force le recalcul des formules. (Les formules ne sont plus actualisées à l'ouverture du
+     * document à partir de LO 4)
+     * 
+     * @throws Exception if the component couldn't be obtained or the refresh failed.
+     */
+    public abstract void refreshFormulas() throws Exception;
+
+    /**
      * Impression d'un document sur une imprimante spécifique
      * 
      * @param printProps Propriétés de l'imprimante (nom, ...) si null alors conserve les propriétés
@@ -44,6 +52,8 @@ public abstract class Component {
      * @param printOpt
      */
     public abstract void printDocument(final Map<String, ?> printProps, final Map<String, ?> printOpt);
+
+    public abstract Future<String> save();
 
     public final Future<File> saveToPDF(final File dest) {
         return saveToPDF(dest, "calc_pdf_Export");

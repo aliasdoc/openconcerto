@@ -39,6 +39,8 @@ public class TotalCalculator {
 
     private SQLRowAccessor rowDefaultCptProduit, rowDefaultCptService, rowDefaultCptTVACollecte, rowDefaultCptTVADeductible, rowDefaultCptAchat;
 
+    private SQLRowAccessor rowDefaultCptProduitStandard;
+
     private double totalPoids;
 
     private BigDecimal totalDevise, totalDeviseSel;
@@ -89,14 +91,19 @@ public class TotalCalculator {
             }
         }
 
-        this.rowDefaultCptProduit = rowPrefsCompte.getForeign("ID_COMPTE_PCE_VENTE_PRODUIT");
-        if (this.rowDefaultCptProduit == null || this.rowDefaultCptProduit.isUndefined()) {
-            try {
-                this.rowDefaultCptProduit = ComptePCESQLElement.getRowComptePceDefault("VentesProduits");
-            } catch (Exception e) {
-                e.printStackTrace();
+        if (defaultCompte == null || defaultCompte.isUndefined()) {
+            this.rowDefaultCptProduit = rowPrefsCompte.getForeign("ID_COMPTE_PCE_VENTE_PRODUIT");
+            if (this.rowDefaultCptProduit == null || this.rowDefaultCptProduit.isUndefined()) {
+                try {
+                    this.rowDefaultCptProduit = ComptePCESQLElement.getRowComptePceDefault("VentesProduits");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
+        } else {
+            this.rowDefaultCptProduit = defaultCompte;
         }
+        this.rowDefaultCptProduitStandard = this.rowDefaultCptProduit;
 
         this.rowDefaultCptTVACollecte = rowPrefsCompte.getForeign("ID_COMPTE_PCE_TVA_VENTE");
         if (this.rowDefaultCptTVACollecte == null || this.rowDefaultCptTVACollecte.isUndefined()) {
@@ -129,6 +136,14 @@ public class TotalCalculator {
             this.rowDefaultCptAchat = defaultCompte;
         }
 
+    }
+
+    public void setRowDefaultCptProduit(SQLRowAccessor rowDefaultCptProduit) {
+        this.rowDefaultCptProduit = rowDefaultCptProduit;
+    }
+
+    public void retoreRowDefaultCptProduit() {
+        this.rowDefaultCptProduit = rowDefaultCptProduitStandard;
     }
 
     /**

@@ -17,6 +17,7 @@ import org.openconcerto.map.model.Ville;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.sqlobject.itemview.VWRowItemView;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
 
 public class VilleRowItemView extends VWRowItemView<Ville> {
@@ -26,9 +27,10 @@ public class VilleRowItemView extends VWRowItemView<Ville> {
     }
 
     @Override
-    public void setEditable(boolean b) {
-        if (this.getComp() != null)
-            this.getComp().setEnabled(b);
+    public void setEditable(InteractionMode b) {
+        if (this.getComp() != null) {
+            this.getComp().setEnabled(b.isEnabled());
+        }
     }
 
     @Override

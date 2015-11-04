@@ -33,7 +33,7 @@ import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.view.list.RowValuesTableModel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
-import org.openconcerto.ui.TitledSeparator;
+import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.warning.JLabelWarning;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.GestionDevise;
@@ -58,9 +58,7 @@ import javax.swing.event.TableModelListener;
 public class ReglerMontantSQLComponent extends BaseSQLComponent {
 
     private RegleMontantTable table = new RegleMontantTable();
-
-    SQLElement eltEch = Configuration.getInstance().getDirectory().getElement("ECHEANCE_FOURNISSEUR");
-    private DeviseField montant = new DeviseField(15);
+    private DeviseField montant = new DeviseField(10);
     private JDate date;
     private JLabel labelWarning = new JLabelWarning();
     private JLabel labelWarningText = new JLabel("Le montant n'est pas valide!");
@@ -76,7 +74,7 @@ public class ReglerMontantSQLComponent extends BaseSQLComponent {
         // Echeance
         c.gridwidth = GridBagConstraints.REMAINDER;
         c.weightx = 1;
-        this.add(new TitledSeparator("Echéances"), c);
+        this.add(new JLabelBold("Echéances"), c);
         c.gridy++;
         c.weighty = 1;
         c.fill = GridBagConstraints.BOTH;
@@ -92,60 +90,43 @@ public class ReglerMontantSQLComponent extends BaseSQLComponent {
         c.gridx = 0;
         c.gridy++;
         c.weightx = 0;
-        this.add(new JLabel(getLabelFor("ID_FOURNISSEUR")), c);
+        this.add(new JLabel(getLabelFor("ID_FOURNISSEUR"), SwingConstants.RIGHT), c);
 
         c.gridx++;
         c.weightx = 1;
-        c.gridwidth = 3;
+        c.gridwidth = 1;
         this.add(comboFournisseur, c);
         this.addSQLObject(comboFournisseur, "ID_FOURNISSEUR");
-        c.gridwidth = 1;
 
         // Date
         this.date = new JDate(true);
-        c.gridx = GridBagConstraints.RELATIVE;
+        c.gridx++;
         c.weightx = 0;
         c.gridwidth = 1;
-        this.add(new JLabel("Date"), c);
-        // c.gridx++;
-        c.weightx = 1;
+        this.add(new JLabel("Date", SwingConstants.RIGHT), c);
+        c.gridx++;
+        c.weightx = 0;
         this.add(this.date, c);
 
         // Montant
         c.gridy++;
         c.gridx = 0;
         c.weightx = 0;
-        this.add(new JLabel("Montant réglé"), c);
-
+        this.add(new JLabel("Montant réglé", SwingConstants.RIGHT), c);
         c.gridx++;
         c.weightx = 0;
+        c.gridwidth = 1;
+        c.fill = GridBagConstraints.NONE;
         this.add(this.montant, c);
 
         // Warning
         c.gridx++;
+        c.gridwidth = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
         this.labelWarning.setHorizontalAlignment(SwingConstants.RIGHT);
         this.add(this.labelWarning, c);
         c.gridx++;
-        c.gridwidth = GridBagConstraints.REMAINDER;
         this.add(this.labelWarningText, c);
-
-        // this.montant.getDocument().addDocumentListener(new DocumentListener() {
-        //
-        // public void insertUpdate(DocumentEvent e) {
-        //
-        // fireValidChange();
-        // }
-        //
-        // public void removeUpdate(DocumentEvent e) {
-        //
-        // fireValidChange();
-        // }
-        //
-        // public void changedUpdate(DocumentEvent e) {
-        //
-        // fireValidChange();
-        // }
-        // });
 
         /***********************************************************************************
          * * MODE DE REGLEMENT
@@ -154,9 +135,8 @@ public class ReglerMontantSQLComponent extends BaseSQLComponent {
         c.gridx = 0;
         c.gridy++;
         c.weightx = 1;
-        TitledSeparator sep = new TitledSeparator("Mode de règlement");
         c.insets = new Insets(10, 2, 1, 2);
-        this.add(sep, c);
+        this.add(new JLabelBold("Mode de règlement"), c);
         c.insets = new Insets(2, 2, 1, 2);
 
         c.gridx = 0;

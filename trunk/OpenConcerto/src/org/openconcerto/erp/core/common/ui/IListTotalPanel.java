@@ -13,6 +13,8 @@
  
  package org.openconcerto.erp.core.common.ui;
 
+import org.openconcerto.erp.core.finance.accounting.model.Currency;
+import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.view.list.IListe;
@@ -20,7 +22,6 @@ import org.openconcerto.sql.view.list.ITableModel;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JLabelBold;
-import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.utils.Tuple2;
 
 import java.awt.GridBagConstraints;
@@ -42,6 +43,7 @@ import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 
 public class IListTotalPanel extends JPanel {
+    CurrencyConverter cc = new CurrencyConverter();
 
     public enum Type {
         // Pourcentage moyen d'une colonne
@@ -54,7 +56,9 @@ public class IListTotalPanel extends JPanel {
         // deuxieme
         MOYENNE_MARGE,
         // Requiert le field TTC
-        AVANCEMENT_TTC;
+        AVANCEMENT_TTC,
+        // TOTAL DES LIGNES
+        COUNT;
     };
 
     DecimalFormat decimalFormat = new DecimalFormat("##,##0.00");
@@ -80,13 +84,18 @@ public class IListTotalPanel extends JPanel {
         return lFinal;
     }
 
+    public IListTotalPanel(IListe l, final List<Tuple2<? extends SQLTableModelColumn, Type>> listField, final List<Tuple2<SQLField, ?>> filters, String title) {
+        this(l, listField, filters, null, title);
+    }
+
     /**
      * 
      * @param l
      * @param listField Liste des fields à totaliser
      * @param filters filtre ex : Tuple((SQLField)NATEXIER,(Boolean)FALSE)
      */
-    public IListTotalPanel(IListe l, final List<Tuple2<? extends SQLTableModelColumn, Type>> listField, final List<Tuple2<SQLField, ?>> filters, String title) {
+    public IListTotalPanel(IListe l, final List<Tuple2<? extends SQLTableModelColumn, Type>> listField, final List<Tuple2<SQLField, ?>> filters, final List<Tuple2<SQLField, ?>> filtersNot,
+            String title) {
         super(new GridBagLayout());
         this.list = l;
         this.setOpaque(false);
@@ -119,7 +128,7 @@ public class IListTotalPanel extends JPanel {
             this.add(textField, c);
             c.weightx = 0;
             if (field2.get1() == Type.SOMME || field2.get1() == Type.MOYENNE_DEVISE || field2.get1() == Type.AVANCEMENT_TTC) {
-                this.add(new JLabelBold("€"), c);
+                this.add(new JLabelBold(Currency.getSymbol(cc.getCompanyCurrencyCode())), c);
             } else if (field2.get1() == Type.MOYENNE_POURCENT || field2.get1() == Type.MOYENNE_MARGE) {
                 this.add(new JLabelBold("%"), c);
             }
@@ -132,6 +141,11 @@ public class IListTotalPanel extends JPanel {
                 Map<SQLTableModelColumn, BigDecimal> mapTotal = new HashMap<SQLTableModelColumn, BigDecimal>();
                 Map<SQLTableModelColumn, Double> mapPourcent = new HashMap<SQLTableModelColumn, Double>();
                 Map<SQLTableModelColumn, Integer> mapPourcentSize = new HashMap<SQLTableModelColumn, Integer>();
+                for (Tuple2<? extends SQLTableModelColumn, Type> field : listField) {
+                    if (field.get1() == Type.COUNT) {
+                        map.get(field.get0()).setText(String.valueOf(list.getRowCount()));
+                    }
+                }
 
                 for (int i = 0; i < list.getRowCount(); i++) {
 
@@ -148,6 +162,12 @@ public class IListTotalPanel extends JPanel {
                             if (filters != null) {
                                 for (Tuple2<SQLField, ?> tuple2 : filters) {
                                     in = in && rowAt.getObject(tuple2.get0().getName()).equals(tuple2.get1());
+                                }
+                            }
+
+                            if (filtersNot != null) {
+                                for (Tuple2<SQLField, ?> tuple2 : filtersNot) {
+                                    in = in && !rowAt.getObject(tuple2.get0().getName()).equals(tuple2.get1());
                                 }
                             }
 
@@ -173,22 +193,17 @@ public class IListTotalPanel extends JPanel {
                             BigDecimal ttc = BigDecimal.valueOf(((Number) list.getModel().getValueAt(i, list.getSource().getColumns().indexOf(columnTTC))).doubleValue());
 
                             BigDecimal av = BigDecimal.valueOf(((Number) list.getModel().getValueAt(i, list.getSource().getColumns().indexOf(field.get0()))).doubleValue());
-                            // if
-                            // (list.getSource().getPrimaryTable().getName().equalsIgnoreCase(field.get0().getFields()))
-                            // {
-                            // n2 = (Long) rowAt.getObject(field.getName());
-                            // } else {
-                            // SQLField fk = (SQLField)
-                            // rowAt.getTable().getForeignKeys(field.getTable()).toArray()[0];
-                            // n2 = (Long)
-                            // rowAt.getForeign(fk.getName()).getObject(field.getName());
-                            // }
 
                             boolean in = true;
 
                             if (filters != null) {
                                 for (Tuple2<SQLField, ?> tuple2 : filters) {
                                     in = in && rowAt.getObject(tuple2.get0().getName()).equals(tuple2.get1());
+                                }
+                            }
+                            if (filtersNot != null) {
+                                for (Tuple2<SQLField, ?> tuple2 : filtersNot) {
+                                    in = in && !rowAt.getObject(tuple2.get0().getName()).equals(tuple2.get1());
                                 }
                             }
 
@@ -199,26 +214,21 @@ public class IListTotalPanel extends JPanel {
                                     mapTotal.put(field.get0(), n.add(ttc.multiply(av).movePointLeft(2)));
                                 }
                             }
-                        } else if (field.get1() != Type.MOYENNE_MARGE) {
+                        } else if (field.get1() != Type.MOYENNE_MARGE && field.get1() != Type.COUNT) {
                             BigDecimal n = mapTotal.get(field.get0());
 
                             BigDecimal n2 = BigDecimal.valueOf(((Number) list.getModel().getValueAt(i, list.getSource().getColumns().indexOf(field.get0()))).doubleValue());
-                            // if
-                            // (list.getSource().getPrimaryTable().getName().equalsIgnoreCase(field.get0().getFields()))
-                            // {
-                            // n2 = (Long) rowAt.getObject(field.getName());
-                            // } else {
-                            // SQLField fk = (SQLField)
-                            // rowAt.getTable().getForeignKeys(field.getTable()).toArray()[0];
-                            // n2 = (Long)
-                            // rowAt.getForeign(fk.getName()).getObject(field.getName());
-                            // }
 
                             boolean in = true;
 
                             if (filters != null) {
                                 for (Tuple2<SQLField, ?> tuple2 : filters) {
                                     in = in && rowAt.getObject(tuple2.get0().getName()).equals(tuple2.get1());
+                                }
+                            }
+                            if (filtersNot != null) {
+                                for (Tuple2<SQLField, ?> tuple2 : filtersNot) {
+                                    in = in && !rowAt.getObject(tuple2.get0().getName()).equals(tuple2.get1());
                                 }
                             }
 
@@ -251,7 +261,7 @@ public class IListTotalPanel extends JPanel {
                         } else {
                             map.get(field.get0()).setText(decimalFormat.format(0));
                         }
-                    } else {
+                    } else if (field.get1() != Type.COUNT) {
                         BigDecimal l = mapTotal.get(field.get0());
                         if (l != null) {
                             map.get(field.get0()).setText(decimalFormat.format(l.doubleValue()));
@@ -275,7 +285,4 @@ public class IListTotalPanel extends JPanel {
         this.loadingListener.add(PropertyChangeListener.class, l);
     }
 
-    public JLabel getTotal(SQLField field) {
-        return this.map.get(field);
-    }
 }

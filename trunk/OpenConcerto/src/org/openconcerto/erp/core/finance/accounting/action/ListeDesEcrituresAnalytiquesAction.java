@@ -65,6 +65,8 @@ public class ListeDesEcrituresAnalytiquesAction extends CreateFrameAbstractActio
 
                     PanelFrame frameAssoc = new PanelFrame(new AssociationAnalytiquePanel(getListe().getSelectedRow().getForeign("ID_ECRITURE").asRow()), "Association analytique");
                     frameAssoc.setVisible(true);
+                } else {
+                    super.handleAction(source, evt);
                 }
             }
         };

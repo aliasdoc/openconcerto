@@ -37,9 +37,9 @@ public final class GenerationMvtAcompte extends GenerationEcritures implements R
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
 
-    public GenerationMvtAcompte(int idAcompte) throws SQLException {
-        this.idAcompte = idAcompte;
-        SQLRow rowAcompte = tableAcompte.getRow(idAcompte);
+    public GenerationMvtAcompte(SQLRow rowAcompte) throws SQLException {
+        this.idAcompte = rowAcompte.getID();
+        setRowAnalytiqueSource(rowAcompte);
         this.idSalarie = rowAcompte.getInt("ID_SALARIE");
         this.montant = GestionDevise.parseLongCurrency(String.valueOf(rowAcompte.getFloat("MONTANT")));
         SQLRow rowSal = tableSalarie.getRow(this.idSalarie);

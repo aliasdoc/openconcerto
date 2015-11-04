@@ -19,7 +19,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.dbutils.ResultSetHandler;
 
@@ -75,7 +77,7 @@ public final class SQLRowListRSH implements ResultSetHandler {
         return t;
     }
 
-    private static Tuple2<SQLTable, List<String>> getIndexes(SQLSelect sel, final TableRef passedTable, final boolean findTable) {
+    static Tuple2<SQLTable, List<String>> getIndexes(SQLSelect sel, final TableRef passedTable, final boolean findTable) {
         final List<FieldRef> selectFields = sel.getSelectFields();
         final int size = selectFields.size();
         if (size == 0)
@@ -119,6 +121,7 @@ public final class SQLRowListRSH implements ResultSetHandler {
      * 
      * @param sel the select that will produce the result set, must only have one table.
      * @return a handler creating a list of {@link SQLRow}.
+     * @deprecated use {@link SQLSelectHandlerBuilder}
      */
     static public ResultSetHandler createFromSelect(final SQLSelect sel) {
         return create(getIndexes(sel, null, true));
@@ -131,19 +134,69 @@ public final class SQLRowListRSH implements ResultSetHandler {
      * @param sel the select that will produce the result set.
      * @param t the table for which to create rows.
      * @return a handler creating a list of {@link SQLRow}.
+     * @deprecated use {@link SQLSelectHandlerBuilder}
      */
     static public ResultSetHandler createFromSelect(final SQLSelect sel, final TableRef t) {
         return create(getIndexes(sel, t, false));
     }
 
-    static private ResultSetHandler create(final Tuple2<SQLTable, List<String>> names) {
+    static ResultSetHandler create(final Tuple2<SQLTable, List<String>> names) {
         return new RSH(names);
     }
 
-    @SuppressWarnings("unchecked")
-    static public List<SQLRow> execute(final SQLSelect sel) {
-        final Tuple2<SQLTable, List<String>> indexes = getIndexes(sel, null, true);
-        return (List<SQLRow>) indexes.get0().getDBSystemRoot().getDataSource().execute(sel.asString(), create(indexes));
+    /**
+     * Execute the passed select and return rows. NOTE if there's more than one table in the query
+     * {@link #execute(SQLSelect, TableRef)} must be used.
+     * 
+     * @param sel the query to execute.
+     * @return rows.
+     * @throws IllegalArgumentException if there's more than one table in the query.
+     */
+    static public List<SQLRow> execute(final SQLSelect sel) throws IllegalArgumentException {
+        return execute(sel, true, true);
+    }
+
+    static public List<SQLRow> execute(final SQLSelect sel, final boolean readCache, final boolean writeCache) {
+        return new SQLSelectHandlerBuilder(sel).setReadCache(readCache).setWriteCache(writeCache).execute();
+    }
+
+    /**
+     * Execute the passed select and return rows of <code>t</code>. NOTE if there's only one table
+     * in the query {@link #execute(SQLSelect)} should be used.
+     * 
+     * @param sel the query to execute.
+     * @param t the table to use.
+     * @return rows of <code>t</code>.
+     * @throws NullPointerException if <code>t</code> is <code>null</code>.
+     */
+    static public List<SQLRow> execute(final SQLSelect sel, final TableRef t) throws NullPointerException {
+        return new SQLSelectHandlerBuilder(sel).setTableRef(t).execute();
+    }
+
+    static IResultSetHandler createFromSelect(final SQLSelect sel, final Tuple2<SQLTable, List<String>> indexes, final boolean readCache, final boolean writeCache) {
+        final Set<SQLTable> tables = new HashSet<SQLTable>();
+        // not just tables of the fields of the SELECT clause since inner joins can change the rows
+        // returned
+        for (final TableRef ref : sel.getTableRefs().values()) {
+            tables.add(ref.getTable());
+        }
+
+        return new IResultSetHandler(create(indexes)) {
+            @Override
+            public boolean readCache() {
+                return readCache;
+            }
+
+            @Override
+            public boolean writeCache() {
+                return writeCache;
+            }
+
+            @Override
+            public Set<? extends SQLData> getCacheModifiers() {
+                return tables;
+            }
+        };
     }
 
     private final SQLTable t;

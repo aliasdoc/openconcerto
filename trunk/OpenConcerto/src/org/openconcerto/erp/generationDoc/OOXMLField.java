@@ -153,7 +153,7 @@ public class OOXMLField extends OOXMLElement {
                         if (typeComp.equalsIgnoreCase("Devise")) {
 
                             BigDecimal result = calcul(o, o2, this.op);
-                            if (o instanceof Long) {
+                            if (o != null && o.getClass().isAssignableFrom(Long.class)) {
                                 long resultLong = Math.round(result.doubleValue());
                                 return Double.valueOf(GestionDevise.currencyToString(resultLong, false));
                             } else {
@@ -341,7 +341,7 @@ public class OOXMLField extends OOXMLElement {
 
                     if (result != null && scale != null && scale.trim().length() > 0) {
 
-                        return ((BigDecimal) result).setScale(Integer.valueOf(scale));
+                        return ((BigDecimal) result).setScale(Integer.valueOf(scale), RoundingMode.HALF_UP);
                     }
 
                     return result;
@@ -548,8 +548,7 @@ public class OOXMLField extends OOXMLElement {
             if (l0 != 0) {
                 BigDecimal d;
                 double coeff = ((double) lN) / ((double) l0);
-
-                d = new BigDecimal(0.15).add(new BigDecimal(0.85).multiply(new BigDecimal(coeff), DecimalUtils.HIGH_PRECISION));
+                d = new BigDecimal("0.15").add(new BigDecimal("0.85").multiply(new BigDecimal(coeff), DecimalUtils.HIGH_PRECISION));
                 p = d.multiply(p0, DecimalUtils.HIGH_PRECISION);
             } else {
                 p = p0;

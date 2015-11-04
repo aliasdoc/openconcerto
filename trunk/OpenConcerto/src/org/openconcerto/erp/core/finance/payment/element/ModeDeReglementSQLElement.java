@@ -97,7 +97,8 @@ public class ModeDeReglementSQLElement extends ComptaSQLConfElement {
 
         // on fixe le temps sur ToDay + Ajour
         cal.setTime(currentDate);
-        cal.set(Calendar.DATE, cal.get(Calendar.DATE) + aJ);
+
+            cal.set(Calendar.DATE, cal.get(Calendar.DATE) + aJ);
         if (nJ > 0) {
             int maxDay = cal.getActualMaximum(Calendar.DATE);
 

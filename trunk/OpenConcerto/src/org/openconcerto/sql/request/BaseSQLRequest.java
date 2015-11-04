@@ -21,6 +21,9 @@ import org.openconcerto.sql.model.SQLTableModifiedListener;
 import java.util.Collection;
 import java.util.Set;
 
+import net.jcip.annotations.ThreadSafe;
+
+@ThreadSafe
 abstract class BaseSQLRequest {
 
     public BaseSQLRequest() {

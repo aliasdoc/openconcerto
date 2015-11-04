@@ -123,6 +123,7 @@ public class JUniqueTextField extends JPanel implements ValueWrapper<String>, Do
         c.gridx++;
         c.weightx = 0;
         this.add(this.labelWarning, c);
+
         this.labelWarning.setToolTipText("Cette valeur est déjà affectée.");
         this.labelWarning.addMouseListener(this);
 
@@ -170,7 +171,7 @@ public class JUniqueTextField extends JPanel implements ValueWrapper<String>, Do
                 while (JUniqueTextField.this.loop) {
 
                     try {
-                        checkValidation();
+                        checkValidation(false);
                     } catch (RTInterruptedException e) {
                         // Arret normal si le texte a changé
                     }
@@ -188,13 +189,17 @@ public class JUniqueTextField extends JPanel implements ValueWrapper<String>, Do
         this.validationThread.start();
     }
 
+    public synchronized boolean checkValidation() throws RTInterruptedException {
+        return checkValidation(true);
+    }
+
     /**
      * Verifie que le numero est bien unique
      * 
      * @return true si unique
      * @throws RTInterruptedException
      */
-    public synchronized boolean checkValidation() throws RTInterruptedException {
+    public synchronized boolean checkValidation(boolean withCache) throws RTInterruptedException {
 
         // Set text to check
         String t = null;

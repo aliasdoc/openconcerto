@@ -67,8 +67,22 @@ public class GenerationEcritures {
     // Libelle de l'ecriture
     protected String nom;
 
+    private SQLRow rowAnalytiqueSource;
+
     // Map contenant les valeurs pour la SQLRowValues de la table Ecritures à ajouter
     public Map<String, Object> mEcritures = new HashMap<String, Object>();
+
+    // public GenerationEcritures(SQLRow rowSource) {
+    // this.rowAnalytiqueSource = rowSource;
+    // }
+
+    public void setRowAnalytiqueSource(SQLRow rowAnalytiqueSource) {
+        this.rowAnalytiqueSource = rowAnalytiqueSource;
+    }
+
+    public SQLRow getRowAnalytiqueSource() {
+        return this.rowAnalytiqueSource;
+    }
 
     /**
      * Ajout d'une écriture et maj des totaux du compte associé
@@ -153,6 +167,9 @@ public class GenerationEcritures {
             if (valEcriture.getInvalid() == null) {
                 // ajout de l'ecriture
                 SQLRow ecritureRow = valEcriture.insert();
+
+                // TODO Analytique
+                addAssocAnalytiqueFromProvider(ecritureRow, this.rowAnalytiqueSource);
                 return ecritureRow;
             } else {
                 System.err.println("GenerationEcritures.java :: Error in values for insert in table " + GenerationEcritures.ecritureTable.getName() + " : " + valEcriture.toString());
@@ -193,9 +210,35 @@ public class GenerationEcritures {
 
     public void addAssocAnalytiqueFromProvider(SQLRow rowEcr, SQLRow rowSource) throws SQLException {
 
-        Collection<AnalytiqueProvider> l = AnalytiqueProviderManager.getAll();
-        for (AnalytiqueProvider analytiqueProvider : l) {
-            analytiqueProvider.addAssociation(rowEcr, rowSource);
+        String numeroCpt = rowEcr.getString("COMPTE_NUMERO");
+        if (rowSource != null && !rowSource.getTable().getName().equalsIgnoreCase("SAISIE_KM") && (numeroCpt.startsWith("6") || numeroCpt.startsWith("7"))) {
+            for (SQLRow axe : AnalytiqueCache.getCache().getAxes()) {
+                // TODO Check if total = 100%
+                int assoc = 0;
+                Collection<AnalytiqueProvider> l = AnalytiqueProviderManager.getAll();
+                for (AnalytiqueProvider analytiqueProvider : l) {
+                    List<SQLRow> result = analytiqueProvider.addAssociation(axe, rowEcr, rowSource);
+                    if (result != null) {
+                        assoc += result.size();
+                    }
+                }
+
+                if (assoc == 0) {
+                    SQLRow poste = AnalytiqueCache.getCache().getDefaultPoste(axe.getID());
+                    if (poste != null) {
+                        if (tableAssoc == null) {
+                            tableAssoc = Configuration.getInstance().getDirectory().getElement("ASSOCIATION_ANALYTIQUE").getTable();
+                        }
+                        SQLRowValues rowVals = new SQLRowValues(tableAssoc);
+                        rowVals.put("ID_POSTE_ANALYTIQUE", poste.getID());
+                        rowVals.put("POURCENT", 100.0);
+                        rowVals.put("ID_ECRITURE", rowEcr.getID());
+                        rowVals.put("MONTANT", rowEcr.getLong("DEBIT") - rowEcr.getLong("CREDIT"));
+                        rowVals.put("GESTION_AUTO", Boolean.TRUE);
+                        rowVals.commit();
+                    }
+                }
+            }
         }
     }
 
@@ -330,8 +373,8 @@ public class GenerationEcritures {
 
         TotalCalculator calc = new TotalCalculator("T_PA_HT", fieldTotalHT, null, achat, defaultCompte);
         String val = DefaultNXProps.getInstance().getStringProperty("ArticleService");
-        Boolean bServiceActive = Boolean.valueOf(val); 
-                
+        Boolean bServiceActive = Boolean.valueOf(val);
+
         calc.setServiceActive(bServiceActive != null && bServiceActive);
         if (row.getTable().contains("ID_COMPTE_PCE_SERVICE") && !row.isForeignEmpty("ID_COMPTE_PCE_SERVICE")) {
             SQLRowAccessor serviceCompte = row.getForeign("ID_COMPTE_PCE_SERVICE");

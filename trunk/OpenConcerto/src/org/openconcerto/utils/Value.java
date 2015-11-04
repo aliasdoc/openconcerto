@@ -99,5 +99,28 @@ public abstract class Value<V> {
         return this.hasValue;
     }
 
-    public abstract V getValue();
+    /**
+     * Return our value if any.
+     * 
+     * @return our value if this {@link #hasValue()}, can be <code>null</code>.
+     * @throws IllegalStateException if not {@link #hasValue()}.
+     */
+    public abstract V getValue() throws IllegalStateException;
+
+    /**
+     * Return <code>null</code> if and only if this has no value.
+     * 
+     * @return non <code>null</code> {@link #getValue()} if {@link #hasValue()}, otherwise
+     *         <code>null</code>.
+     * @throws IllegalStateException if {@link #getValue()} is <code>null</code>.
+     * @see #fromNonNull(Object)
+     */
+    public final V toNonNull() throws IllegalStateException {
+        if (!this.hasValue())
+            return null;
+        final V res = this.getValue();
+        if (res == null)
+            throw new IllegalStateException("Null value");
+        return res;
+    }
 }

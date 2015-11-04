@@ -52,11 +52,9 @@ import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
 
 public class ListeDesEcheancesClientsPanel extends JPanel {
 
@@ -204,24 +202,9 @@ public class ListeDesEcheancesClientsPanel extends JPanel {
                 sqlComponent.resetValue();
                 sqlComponent.select(rowVals);
                 sqlComponent.loadEcheancesFromRows(selectedRows);
+                ListeDesEcheancesClientsPanel.this.editEncaisse.setTitle("Encaissement de factures clients");
                 ListeDesEcheancesClientsPanel.this.editEncaisse.pack();
                 ListeDesEcheancesClientsPanel.this.editEncaisse.setVisible(true);
-            }
-        });
-
-        // Bouton Fermer
-        c.gridx++;
-        c.weightx = 0;
-        JButton fermer = new JButton("fermer");
-        this.add(fermer, c);
-        fermer.addActionListener(new ActionListener() {
-
-            public void actionPerformed(ActionEvent e) {
-
-                JFrame tmpF = (JFrame) SwingUtilities.getRoot(ListeDesEcheancesClientsPanel.this);
-                tmpF.setVisible(false);
-                tmpF.dispose();
-
             }
         });
 

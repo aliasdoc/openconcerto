@@ -78,6 +78,17 @@ public class ContactItemTable extends JPanel {
         SQLTableElement tableElementMail = new SQLTableElement(elt.getTable().getField("EMAIL"));
         list.add(tableElementMail);
 
+        if (elt.getTable().contains("ENVOI_RAPPORT_MAIL")) {
+            SQLTableElement tableElementEnvoiMail = new SQLTableElement(elt.getTable().getField("ENVOI_RAPPORT_MAIL"));
+            list.add(tableElementEnvoiMail);
+
+        }
+
+        if (elt.getTable().contains("NO_MAILING")) {
+            SQLTableElement tableElementNoMailing = new SQLTableElement(elt.getTable().getField("NO_MAILING"));
+            list.add(tableElementNoMailing);
+        }
+
         final RowValuesTableModel model = new RowValuesTableModel(elt, list, elt.getTable().getField("NOM"), false, defaultRow);
 
         this.table = new RowValuesTable(model, new File(Configuration.getInstance().getConfDir(), "Table" + File.separator + "Table_Contact.xml"));

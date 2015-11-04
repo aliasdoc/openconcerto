@@ -30,10 +30,6 @@ public class PolyComboRIV extends VWRowItemView<SQLRow> {
         this.getPolyCombo().resetValue();
     }
 
-    public void setEditable(boolean b) {
-        this.getComp().setEnabled(b);
-    }
-
     public String describe() {
         return this.getComp().getClass().getName() + " on " + this.getFields();
     }

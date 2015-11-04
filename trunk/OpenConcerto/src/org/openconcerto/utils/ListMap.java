@@ -28,7 +28,7 @@ public class ListMap<K, V> extends ListAbstractMap<K, List<V>, V> implements Lis
         Unmodifiable(CollectionMap2Itf<K, List<V>, V> delegate) {
             super(delegate, new UnmodifiableCollectionMap.UnmodifiableMap<K, List<V>>(delegate) {
                 @Override
-                protected List<V> toUnmodifiable(List<V> coll) {
+                protected List<V> nonNullToUnmodifiable(List<V> coll) {
                     return Collections.unmodifiableList(coll);
                 }
             });

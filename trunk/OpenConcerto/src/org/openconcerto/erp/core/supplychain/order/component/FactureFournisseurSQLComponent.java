@@ -16,13 +16,11 @@
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
-import org.openconcerto.erp.core.supplychain.order.element.CommandeSQLElement;
 import org.openconcerto.erp.core.supplychain.order.ui.FactureFournisseurItemTable;
 import org.openconcerto.erp.generationEcritures.GenerationMvtFactureFournisseur;
 import org.openconcerto.erp.preferences.DefaultNXProps;
@@ -32,7 +30,10 @@ import org.openconcerto.sql.element.ElementSQLObject;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLBackgroundTableCache;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.view.list.RowValuesTable;
@@ -72,6 +73,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
     private ElementComboBox comptePCE = new ElementComboBox();
     private DefaultElementSQLObject compAdr;
     final JPanel panelAdrSpec = new JPanel(new GridBagLayout());
+    private JDate dateCommande = new JDate();
 
     public FactureFournisseurSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("FACTURE_FOURNISSEUR"));
@@ -105,10 +107,19 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         c.fill = GridBagConstraints.HORIZONTAL;
         this.add(labelDate, c);
 
-        JDate dateCommande = new JDate();
         c.gridx++;
         c.fill = GridBagConstraints.NONE;
         this.add(dateCommande, c);
+
+        this.dateCommande.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (!isFilling() && dateCommande.getValue() != null) {
+                    table.setDateDevise(dateCommande.getValue());
+                }
+            }
+        });
 
         // Fournisseur
         c.gridx = 0;
@@ -166,7 +177,13 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         c.weightx = 1;
         c.weighty = 0;
         c.fill = GridBagConstraints.NONE;
+
         this.add(this.comptePCE, c);
+
+        final SQLElement foreignElement = getElement().getForeignElement("ID_COMPTE_PCE");
+        final ComboSQLRequest comboRequest = foreignElement.getComboRequest(true);
+        comboRequest.setWhere(new Where(foreignElement.getTable().getField("NUMERO"), "LIKE", "6%"));
+        this.comptePCE.init(foreignElement, comboRequest);
         this.addView(this.comptePCE, "ID_COMPTE_PCE");
 
         // Reference
@@ -451,7 +468,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         // Création des articles
         this.table.createArticle(idFacture, this.getElement());
 
-        new GenerationMvtFactureFournisseur(idFacture);
+        new GenerationMvtFactureFournisseur(getTable().getRow(idFacture));
 
         return idFacture;
     }
@@ -471,9 +488,9 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         EcritureSQLElement eltEcr = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
         eltEcr.archiveMouvementProfondeur(idMvt, false);
         if (idMvt > 1) {
-            new GenerationMvtFactureFournisseur(row.getID(), idMvt);
+            new GenerationMvtFactureFournisseur(row, idMvt);
         } else {
-            new GenerationMvtFactureFournisseur(row.getID());
+            new GenerationMvtFactureFournisseur(row);
         }
     }
 
@@ -519,6 +536,14 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
     @Override
     public RowValuesTable getRowValuesTable() {
         return this.table.getRowValuesTable();
+    }
+
+    @Override
+    protected void refreshAfterSelect(SQLRowAccessor rSource) {
+        if (this.dateCommande.getValue() != null) {
+            this.table.setDateDevise(this.dateCommande.getValue());
+        }
+
     }
 
 }

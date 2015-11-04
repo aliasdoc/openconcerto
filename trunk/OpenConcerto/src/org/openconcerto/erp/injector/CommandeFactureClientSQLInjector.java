@@ -28,9 +28,41 @@ public class CommandeFactureClientSQLInjector extends SQLInjector {
         final SQLTable tableCommande = getSource();
         final SQLTable tableFacture = getDestination();
         map(tableCommande.getField("ID_CLIENT"), tableFacture.getField("ID_CLIENT"));
+        if (tableCommande.contains("ID_TAXE_PORT")) {
+            map(tableCommande.getField("ID_TAXE_PORT"), tableFacture.getField("ID_TAXE_PORT"));
+        }
+        if (tableCommande.contains("PORT_HT")) {
+            map(tableCommande.getField("PORT_HT"), tableFacture.getField("PORT_HT"));
+        }
+        if (tableCommande.contains("REMISE_HT")) {
+            map(tableCommande.getField("REMISE_HT"), tableFacture.getField("REMISE_HT"));
+        }
         if (tableCommande.getTable().contains("ID_POLE_PRODUIT")) {
             map(tableCommande.getField("ID_POLE_PRODUIT"), tableFacture.getField("ID_POLE_PRODUIT"));
         }
+
+        if (getSource().getTable().contains("ID_CONTACT")) {
+            map(getSource().getField("ID_CONTACT"), getDestination().getField("ID_CONTACT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
+        }
+        if (getSource().getTable().contains("ID_ADRESSE") && getDestination().contains("ID_ADRESSE")) {
+            map(getSource().getField("ID_ADRESSE"), getDestination().getField("ID_ADRESSE"));
+        }
+        if (getSource().getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            map(getSource().getField("ID_ADRESSE_LIVRAISON"), getDestination().getField("ID_ADRESSE_LIVRAISON"));
+        }
+
+        if (getSource().getTable().contains("MONTANT_REMISE") && getDestination().contains("MONTANT_REMISE")) {
+            map(getSource().getField("MONTANT_REMISE"), getDestination().getField("MONTANT_REMISE"));
+            map(getSource().getField("POURCENT_REMISE"), getDestination().getField("POURCENT_REMISE"));
+        }
+
+        if (tableFacture.contains("CREATE_VIRTUAL_STOCK")) {
+            mapDefaultValues(tableFacture.getField("CREATE_VIRTUAL_STOCK"), Boolean.FALSE);
+        }
+
     }
 
     @Override

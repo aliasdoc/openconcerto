@@ -36,6 +36,7 @@ import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.ISpinner;
 import org.openconcerto.ui.ISpinnerIntegerModel;
 import org.openconcerto.ui.JLabelBold;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.valuewrapper.TextValueWrapper;
 import org.openconcerto.ui.warning.JLabelWarning;
 import org.openconcerto.utils.CollectionMap;
@@ -84,6 +85,9 @@ public class UserCommonSQLElement extends ConfSQLElement {
         l.add("NOM");
         l.add("PRENOM");
         l.add("LOGIN");
+        if (getTable().contains("OUT")) {
+            l.add("OUT");
+        }
         return l;
     }
 
@@ -264,11 +268,30 @@ public class UserCommonSQLElement extends ConfSQLElement {
                     this.add(labelMail, c);
                     c.gridx++;
                     final JTextField textMail = new JTextField();
-                    c.gridwidth = GridBagConstraints.REMAINDER;
+                    c.gridwidth = 1;
                     c.weightx = 1;
 
                     this.add(textMail, c);
                     this.addView(textMail, "MAIL");
+                }
+                if (getTable().contains("OUT")) {
+                    c.gridx++;
+                    JCheckBox boxOut = new JCheckBox(getLabelFor("OUT"));
+                    c.gridwidth = 1;
+                    c.weightx = 1;
+                    c.gridwidth = GridBagConstraints.REMAINDER;
+                    this.add(boxOut, c);
+                    this.addView(boxOut, "OUT");
+                }
+                if (getTable().contains("CALENDAR_USER")) {
+                    c.gridy++;
+                    c.gridx = 2;
+                    JCheckBox boxCalUser = new JCheckBox(getLabelFor("CALENDAR_USER"));
+                    c.gridwidth = 1;
+                    c.weightx = 1;
+                    c.gridwidth = GridBagConstraints.REMAINDER;
+                    this.add(boxCalUser, c);
+                    this.addView(boxCalUser, "CALENDAR_USER");
                 }
 
                 boolean gestionHoraire = false;
@@ -331,9 +354,9 @@ public class UserCommonSQLElement extends ConfSQLElement {
                 this.addRequiredSQLObject(textLogin, "LOGIN");
                 this.addView(new SimpleRowItemView<String>(new TextValueWrapper(this.encryptedPass)) {
                     @Override
-                    public void setEditable(boolean b) {
-                        getPassField().setEnabled(b);
-                        getPassFieldConfirm().setEnabled(b);
+                    public void setEditable(final InteractionMode mode) {
+                        mode.applyTo(getPassField());
+                        mode.applyTo(getPassFieldConfirm());
                     };
                 }, "PASSWORD", REQ);
                 this.addSQLObject(textNom, "NOM");

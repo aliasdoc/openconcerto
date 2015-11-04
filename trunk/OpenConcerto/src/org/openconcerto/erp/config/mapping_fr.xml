@@ -4,6 +4,7 @@
 		<FIELD name="USER_COMMON" label="Utilisateur" />
 		<FIELD name="ID_SOCIETE_COMMON" label="Accés à la société" />
 	</TABLE>
+
 	<TABLE name="ADRESSE_COMMON">
 		<FIELD name="RAISON_SOCIALE" label="Raison sociale" />
 		<FIELD name="RUE" label="Rue" />
@@ -62,6 +63,8 @@
 		<FIELD name="LIBELLE" label="Libellé" />
 		<FIELD name="LIBELLE_CENT" label="Libellé des centimes" />
 		<FIELD name="TAUX" label="Taux" />
+		<FIELD name="TAUX_COMMERCIAL" label="Taux commercial" />
+		<FIELD name="SYMBOLE" label="Symbole" />
 	</TABLE>
 	<TABLE name="DISCIPLINE">
 		<FIELD name="NOM" label="Domaine" />

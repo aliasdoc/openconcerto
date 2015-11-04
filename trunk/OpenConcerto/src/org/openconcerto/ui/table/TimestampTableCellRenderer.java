@@ -42,8 +42,8 @@ public class TimestampTableCellRenderer implements TableCellRenderer {
     }
 
     Vector<TimeProp> cache = new Vector<TimeProp>();
-    private static final DateFormat formatterFull = DateFormat.getDateTimeInstance();
-    private static final DateFormat formatterDate = new SimpleDateFormat("dd MMM yyyy");
+    private final DateFormat formatterFull = DateFormat.getDateTimeInstance();
+    private final DateFormat formatterDate = new SimpleDateFormat("dd MMM yyyy");
 
     private Calendar calendar;
     private boolean highlight, showHour;

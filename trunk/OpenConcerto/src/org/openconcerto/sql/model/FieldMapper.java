@@ -13,8 +13,6 @@
  
  package org.openconcerto.sql.model;
 
-import org.openconcerto.utils.Log;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -30,10 +28,12 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import org.openconcerto.utils.Log;
+
 /**
  * Map ids to fields
  * 
- * */
+ */
 public class FieldMapper {
 
     private final List<Class<?>> classes = new ArrayList<Class<?>>();
@@ -43,6 +43,9 @@ public class FieldMapper {
     private DBRoot root;
 
     public FieldMapper(DBRoot root) {
+        if (root == null) {
+            throw new IllegalArgumentException("null root");
+        }
         this.root = root;
     }
 

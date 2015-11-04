@@ -13,33 +13,28 @@
  
  package org.openconcerto.sql.view.list;
 
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.utils.Value;
 import org.openconcerto.utils.cc.IPredicate;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.lang.ref.WeakReference;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.Future;
 
 // use SQLRowValues to allow graph
 public abstract class SQLTableModelLinesSource {
 
     private final ITableModel model;
-    // to notify of columns change, better than having one listener per line
-    private final List<WeakReference<ListSQLLine>> lines;
-    private final List<LineListener> lineListeners;
     private final List<PropertyChangeListener> listeners;
     private IPredicate<SQLRowValues> filter;
 
     {
-        this.lineListeners = new ArrayList<LineListener>();
         this.listeners = new ArrayList<PropertyChangeListener>();
-        this.lines = new ArrayList<WeakReference<ListSQLLine>>();
         this.filter = null;
     }
 
@@ -59,14 +54,23 @@ public abstract class SQLTableModelLinesSource {
     public abstract List<ListSQLLine> getAll();
 
     /**
-     * A row in the db has been changed, fetch its current value.
+     * A row in the DB has been changed, fetch its current value.
      * 
      * @param id a valid ID of a database row.
-     * @return the new value, <code>null</code> if the passed id is not part of this.
+     * @return if not {@link Value#hasValue()} the event should be ignored, otherwise the new value
+     *         for the passed ID, <code>null</code> if it is not part of this.
      */
-    public abstract ListSQLLine get(final int id);
+    public abstract Value<ListSQLLine> get(final int id);
 
     public abstract int compare(ListSQLLine l1, ListSQLLine l2);
+
+    public abstract Future<?> moveBy(final List<? extends SQLRowAccessor> rows, final int inc);
+
+    // take IDs :
+    // 1. no need to protect rows from modifications, just copy IDs
+    // 2. for non committed rows, i.e. without DB ID and thus without SQLRow, it's easier to handle
+    // (virtual) IDs than to use IdentitySet of SQLRowValues
+    public abstract Future<?> moveTo(final List<? extends Number> rows, final int rowIndex);
 
     public final void setFilter(final IPredicate<SQLRowValues> filter) {
         // always fire since for now there's no other way for the caller
@@ -97,52 +101,35 @@ public abstract class SQLTableModelLinesSource {
             l.propertyChange(evt);
     }
 
-    public final void addLineListener(LineListener l) {
-        this.lineListeners.add(l);
-    }
-
-    public final void rmLineListener(LineListener l) {
-        this.lineListeners.remove(l);
-    }
-
-    final void fireLineChanged(int id, ListSQLLine line, Set<Integer> colIndexes) {
-        for (final LineListener l : this.lineListeners)
-            l.lineChanged(id, line, colIndexes);
-        // update dependent columns unless they've just been all refreshed
-        if (line != null && colIndexes != null) {
-            // use set do refresh only once a column even if all its used columns are refreshed
-            final Set<Integer> dependantIndex = new HashSet<Integer>();
-            for (final int colIndex : colIndexes) {
-                final SQLTableModelColumn colChanged = this.getParent().getColumn(colIndex);
-                final String colID = colChanged.getIdentifier();
-                int i = 0;
-                for (final SQLTableModelColumn col : this.getParent().getColumns()) {
-                    if (col != colChanged && col.getUsedCols().contains(colID))
-                        dependantIndex.add(i);
-                    i++;
-                }
-            }
-            if (!dependantIndex.isEmpty())
-                line.updateValueAt(dependantIndex);
-        }
-    }
-
     protected final ListSQLLine createLine(final SQLRowValues v) {
-        if (v == null || (this.filter != null && !this.filter.evaluateChecked(v)))
-            return null;
-        final ListSQLLine res = new ListSQLLine(this, v, this.getID(v));
-        this.lines.add(new WeakReference<ListSQLLine>(res));
-        this.lineCreated(res);
-        return res;
+        return this.createLine(v, null);
     }
 
     /**
-     * A new ListSQLLine is being created.
+     * Create a line with the passed row.
      * 
-     * @param r the row.
-     * @return the ID to give to the new line.
+     * @param v the values.
+     * @param passedID the {@link ListSQLLine#getID() ID} of the result, <code>null</code> meaning
+     *        {@link SQLRowValues#getID()}.
+     * @return a new line.
+     * @throws IllegalArgumentException if <code>passedID</code> is <code>null</code> and
+     *         <code>v</code> {@link SQLRowValues#hasID() has no ID}.
      */
-    protected abstract int getID(SQLRowValues r);
+    protected final ListSQLLine createLine(final SQLRowValues v, final Number passedID) {
+        if (v == null || (this.filter != null && !this.filter.evaluateChecked(v)))
+            return null;
+        final int id;
+        if (passedID != null) {
+            id = passedID.intValue();
+        } else if (v.hasID()) {
+            id = v.getID();
+        } else {
+            throw new IllegalArgumentException("No ID for " + v);
+        }
+        final ListSQLLine res = new ListSQLLine(this, v, id, this.getModel().getUpdateQ().getState().getAllColumns());
+        this.lineCreated(res);
+        return res;
+    }
 
     /**
      * A new line has been created. This implementation does nothing.
@@ -152,18 +139,8 @@ public abstract class SQLTableModelLinesSource {
     protected void lineCreated(ListSQLLine res) {
     }
 
-    final void colsChanged() {
-        int i = 0;
-        while (i < this.lines.size()) {
-            final WeakReference<ListSQLLine> l = this.lines.get(i);
-            final ListSQLLine line = l.get();
-            if (line == null)
-                this.lines.remove(i);
-            else {
-                line.clearCache();
-                i++;
-            }
-        }
+    final void colsChanged(final SQLTableModelSourceState beforeState, final SQLTableModelSourceState afterState) {
+        this.model.getUpdateQ().stateChanged(beforeState, afterState);
     }
 
     /**

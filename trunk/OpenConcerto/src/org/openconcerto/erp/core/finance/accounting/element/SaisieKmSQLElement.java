@@ -154,6 +154,9 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
                 valsTmp.put("NUMERO", rowCompteTmp.getString("NUMERO"));
                 valsTmp.put("NOM", rowCompteTmp.getString("NOM"));
                 valsTmp.put("NOM_ECRITURE", rowEcrTmp.getString("NOM"));
+                if (ecrTable.contains("NOM_PIECE")) {
+                    valsTmp.put("NOM_PIECE", rowEcrTmp.getString("NOM_PIECE"));
+                }
                 valsTmp.put("DEBIT", rowEcrTmp.getObject("DEBIT"));
                 valsTmp.put("CREDIT", rowEcrTmp.getObject("CREDIT"));
                 valsTmp.put("ID_ECRITURE", new Integer(rowEcrTmp.getID()));
@@ -425,8 +428,8 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
                         return null;
                     }
                 });
+                this.updateEcriture(getTable().getRow(id));
             } catch (SQLException exn) {
-                // TODO Bloc catch auto-généré
                 ExceptionHandler.handle("Erreur lors de la création des écritures associées à la saisie au kilometre.", exn);
             }
             return id;
@@ -454,7 +457,7 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
             super.update();
             this.tableKm.updateField("ID_SAISIE_KM", getSelectedID());
             System.err.println("UPDATE ECRITURE");
-            this.updateEcriture();
+            this.updateEcriture(getElement().getTable().getRow(getSelectedID()));
         }
 
         private Date dTemp = null;
@@ -474,43 +477,46 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
             return rowVals;
         }
 
-        public void updateEcriture() {
+        public void updateEcriture(final SQLRow rowSaisieKm) {
             try {
                 SQLUtils.executeAtomic(Configuration.getInstance().getSystemRoot().getDataSource(), new SQLUtils.SQLFactory<Object>() {
                     @Override
                     public Object create() throws SQLException {
 
                         SQLTable ecritureTable = getTable().getBase().getTable("ECRITURE");
-                        final SQLRow rowSaisieKm = getElement().getTable().getRow(getSelectedID());
-                        List<SQLRow> myListDevisItem = rowSaisieKm.getReferentRows(getTable().getBase().getTable("SAISIE_KM_ELEMENT"));
+                        SQLElement assocElt = Configuration.getInstance().getDirectory().getElement("ASSOCIATION_ANALYTIQUE");
+                        final SQLTable tableElt = getTable().getBase().getTable("SAISIE_KM_ELEMENT");
+                        List<SQLRow> myListKmItem = rowSaisieKm.getReferentRows(tableElt);
 
                         List<SQLRow> listEcr = rowSaisieKm.getForeignRow("ID_MOUVEMENT").getReferentRows(ecritureTable);
 
-                        if (myListDevisItem != null) {
+                        if (myListKmItem != null) {
 
-                            for (SQLRow rowElement : myListDevisItem) {
+                            for (SQLRow rowKmElement : myListKmItem) {
 
-                                int idCpt = ComptePCESQLElement.getId(rowElement.getString("NUMERO"), rowElement.getString("NOM"));
+                                int idCpt = ComptePCESQLElement.getId(rowKmElement.getString("NUMERO"), rowKmElement.getString("NOM"));
 
-                                if (rowElement.getID() > 1) {
+                                if (rowKmElement.getID() > 1) {
                                     SQLRowValues vals = new SQLRowValues(ecritureTable);
                                     vals.put("ID_COMPTE_PCE", idCpt);
-                                    vals.put("COMPTE_NUMERO", rowElement.getString("NUMERO"));
-                                    vals.put("COMPTE_NOM", rowElement.getString("NOM"));
-                                    vals.put("DEBIT", rowElement.getObject("DEBIT"));
-                                    vals.put("CREDIT", rowElement.getObject("CREDIT"));
+                                    vals.put("COMPTE_NUMERO", rowKmElement.getString("NUMERO"));
+                                    vals.put("COMPTE_NOM", rowKmElement.getString("NOM"));
+                                    vals.put("DEBIT", rowKmElement.getObject("DEBIT"));
+                                    vals.put("CREDIT", rowKmElement.getObject("CREDIT"));
                                     vals.put("DATE", rowSaisieKm.getObject("DATE"));
                                     SQLRow rowJournal = rowSaisieKm.getForeignRow("ID_JOURNAL");
                                     vals.put("ID_JOURNAL", rowJournal.getID());
                                     vals.put("JOURNAL_NOM", rowJournal.getString("NOM"));
                                     vals.put("JOURNAL_CODE", rowJournal.getString("CODE"));
-                                    vals.put("NOM", rowElement.getObject("NOM_ECRITURE"));
-
-                                    if (rowElement.getInt("ID_ECRITURE") > 1) {
-                                        SQLRow rowTmp = ecritureTable.getRow(rowElement.getInt("ID_ECRITURE"));
+                                    vals.put("NOM", rowKmElement.getObject("NOM_ECRITURE"));
+                                    if (tableElt.contains("NOM_PIECE")) {
+                                        vals.put("NOM_PIECE", rowKmElement.getObject("NOM_PIECE"));
+                                    }
+                                    if (rowKmElement.getInt("ID_ECRITURE") > 1) {
+                                        SQLRow rowTmp = ecritureTable.getRow(rowKmElement.getInt("ID_ECRITURE"));
 
                                         if (!rowTmp.getBoolean("VALIDE")) {
-                                            vals.update(rowElement.getInt("ID_ECRITURE"));
+                                            vals.update(rowKmElement.getInt("ID_ECRITURE"));
                                         } else {
                                             System.err.println("Impossible de modifier une ecriture valide");
                                         }
@@ -521,16 +527,21 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
 
                                         if (MouvementSQLElement.isEditable(rowSaisieKm.getInt("ID_MOUVEMENT"))) {
                                             SQLRow rowEcr = vals.insert();
-                                            SQLRowValues rowElementVals = rowElement.createEmptyUpdateRow();
+                                            SQLRowValues rowElementVals = rowKmElement.createEmptyUpdateRow();
                                             rowElementVals.put("ID_ECRITURE", rowEcr.getID());
-                                            rowElement = rowElementVals.update();
+                                            rowKmElement = rowElementVals.update();
                                         }
 
                                     }
 
+                                    for (SQLRow sqlRow : rowKmElement.getReferentRows(assocElt.getTable())) {
+                                        SQLRowValues rowVals = sqlRow.asRowValues();
+                                        rowVals.put("ID_ECRITURE", rowKmElement.getInt("ID_ECRITURE"));
+                                        rowVals.commit();
+                                    }
                                     List<SQLRow> l = new ArrayList<SQLRow>(listEcr);
                                     for (SQLRow sqlRow : l) {
-                                        if (sqlRow.getID() == rowElement.getInt("ID_ECRITURE")) {
+                                        if (sqlRow.getID() == rowKmElement.getInt("ID_ECRITURE")) {
                                             listEcr.remove(sqlRow);
                                         }
                                     }
@@ -623,7 +634,6 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
                 totalCredWithNoValid += fTc;
 
                 totalDebWithNoValid += fTd;
-
                 final boolean emptyAmount = fTc == 0 && fTd == 0;
                 this.tableKm.setRowDeviseValidAt(!emptyAmount, i);
                 allLineValid &= !emptyAmount;

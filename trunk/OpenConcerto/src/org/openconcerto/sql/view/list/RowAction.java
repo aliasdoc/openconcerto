@@ -14,6 +14,7 @@
  package org.openconcerto.sql.view.list;
 
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.IPredicate;
 import org.openconcerto.utils.i18n.TranslationManager;
@@ -39,7 +40,7 @@ import javax.swing.JMenuItem;
  */
 public abstract class RowAction implements IListeAction {
 
-    public static Action createAction(String name, Icon icon, final IClosure<List<SQLRowAccessor>> action) {
+    public static Action createAction(String name, Icon icon, final IClosure<List<? extends SQLRowAccessor>> action) {
         return new AbstractAction(name, icon) {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -146,7 +147,7 @@ public abstract class RowAction implements IListeAction {
         return this.path;
     }
 
-    public boolean enabledFor(List<SQLRowAccessor> selection) {
+    public boolean enabledFor(List<SQLRowValues> selection) {
         throw new UnsupportedOperationException("Should overload this method or enabledFor(IListeEvent)");
     }
 

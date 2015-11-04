@@ -55,6 +55,21 @@ abstract class UpdateRunnable implements Runnable {
         return new UpdateOneRunnable(model, evt);
     }
 
+    static UpdateRunnable createColsChanged(ITableModel model) {
+        return new UpdateRunnable(model, null) {
+            @Override
+            public void run() {
+                final List<ListSQLLine> fullList = this.getUpdateQ().getFullList();
+                synchronized (fullList) {
+                    for (final ListSQLLine l : fullList) {
+                        l.clearCache();
+                    }
+                }
+                this.getSearchQ().fullListChanged();
+            }
+        };
+    }
+
     private final ITableModel model;
     private final SQLRow row;
 
@@ -78,6 +93,10 @@ abstract class UpdateRunnable implements Runnable {
 
     protected final SearchQueue getSearchQ() {
         return this.getModel().getSearchQueue();
+    }
+
+    protected final UpdateQueue getUpdateQ() {
+        return this.getModel().getUpdateQ();
     }
 
     protected final SQLRow getRow() {

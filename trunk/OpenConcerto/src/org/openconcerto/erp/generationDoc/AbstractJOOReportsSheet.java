@@ -42,9 +42,9 @@ import javax.swing.JOptionPane;
 
 public abstract class AbstractJOOReportsSheet {
     private static final String defaultLocationTemplate = SpreadSheetGenerator.defaultLocationTemplate;
-    protected static final DateFormat dateFormat = new SimpleDateFormat("dd MMMM yyyy");
-    protected static final DateFormat dateFormat2 = new SimpleDateFormat("dd/MM/yy");
-    protected static final DateFormat yearFormat = new SimpleDateFormat("yyyy");
+    protected final DateFormat dateFormat = new SimpleDateFormat("dd MMMM yyyy");
+    protected final DateFormat dateFormat2 = new SimpleDateFormat("dd/MM/yy");
+    protected final DateFormat yearFormat = new SimpleDateFormat("yyyy");
     private String year;
     protected String locationTemplate = TemplateNXProps.getInstance().getStringProperty("LocationTemplate");
     protected String templateId;
@@ -341,4 +341,7 @@ public abstract class AbstractJOOReportsSheet {
 
     }
 
+    public String getYear() {
+        return year;
+    }
 }

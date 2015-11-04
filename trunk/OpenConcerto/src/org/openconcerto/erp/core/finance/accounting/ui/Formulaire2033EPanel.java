@@ -16,6 +16,7 @@
 import org.openconcerto.erp.core.finance.accounting.report.Map2033E;
 import org.openconcerto.erp.core.finance.accounting.report.PdfGenerator_2033E;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.FileUtils;
 
 import java.awt.GridBagConstraints;
@@ -23,6 +24,7 @@ import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
+import java.io.IOException;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -60,7 +62,11 @@ public class Formulaire2033EPanel extends JPanel {
         buttonOuvrirDossier.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 File f = new File(dossierPath);
-                FileUtils.browseFile(f);
+                try {
+                    FileUtils.browseFile(f);
+                } catch (Exception ex) {
+                    ExceptionHandler.handle("Impossible de trouver le dossier " + f.getAbsolutePath(), ex);
+                }
             };
         });
 

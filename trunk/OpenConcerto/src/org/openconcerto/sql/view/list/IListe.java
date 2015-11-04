@@ -22,7 +22,6 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.SQLElementDirectory;
 import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLImmutableRowValues;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -39,8 +38,6 @@ import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.IListeAction.PopupBuilder;
 import org.openconcerto.sql.view.list.IListeAction.PopupEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
-import org.openconcerto.sql.view.search.ColumnSearchSpec;
-import org.openconcerto.sql.view.search.SearchList;
 import org.openconcerto.ui.FontUtils;
 import org.openconcerto.ui.FormatEditor;
 import org.openconcerto.ui.MenuUtils;
@@ -55,9 +52,11 @@ import org.openconcerto.ui.table.ColumnSizeAdjustor;
 import org.openconcerto.ui.table.TableColumnModelAdapter;
 import org.openconcerto.ui.table.TablePopupMouseListener;
 import org.openconcerto.ui.table.ViewTableModel;
+import org.openconcerto.ui.table.XTableColumnModel;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.FormatGroup;
+import org.openconcerto.utils.StringUtils;
 import org.openconcerto.utils.TableModelSelectionAdapter;
 import org.openconcerto.utils.TableSorter;
 import org.openconcerto.utils.Tuple2;
@@ -98,11 +97,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.EventObject;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.AbstractAction;
@@ -394,10 +395,45 @@ public final class IListe extends JPanel {
             }
 
             @Override
+            protected TableColumnModel createDefaultColumnModel() {
+                // allow to hide columns
+                return new XTableColumnModel();
+            }
+
+            // only load from XML once
+            private boolean stateLoaded = false;
+
+            @Override
             public void createDefaultColumnsFromModel() {
+                final XTableColumnModel cm = getColumnModel() instanceof XTableColumnModel ? (XTableColumnModel) getColumnModel() : null;
+                final Set<Object> invisibleCols = new HashSet<Object>();
+                if (cm != null) {
+                    // Remove any current columns, including invisible ones
+                    while (cm.getColumnCount(false) > 0) {
+                        final TableColumn col = cm.getColumn(0, false);
+                        if (!cm.isColumnVisible(col)) {
+                            if (!invisibleCols.add(col.getIdentifier()))
+                                throw new IllegalStateException("Duplicate identifier " + col.getIdentifier());
+                        }
+                        cm.removeColumn(col);
+                    }
+                }
                 super.createDefaultColumnsFromModel();
-                // only load when all columns are created
-                loadTableState();
+                final boolean stateLoadedByThisMethod;
+                // don't try to load state from XML, when e.g. the list is switching to debug
+                if (this.stateLoaded) {
+                    stateLoadedByThisMethod = false;
+                } else {
+                    // only load when all columns are created
+                    stateLoadedByThisMethod = loadTableState();
+                    this.stateLoaded = stateLoadedByThisMethod;
+                }
+                // don't overwrite state loaded by XML
+                if (!stateLoadedByThisMethod && cm != null) {
+                    for (final TableColumn col : new ArrayList<TableColumn>(cm.getColumns(false))) {
+                        cm.setColumnVisible(col, !invisibleCols.contains(col.getIdentifier()));
+                    }
+                }
             };
         };
         this.adjustVisible = true;
@@ -406,11 +442,6 @@ public final class IListe extends JPanel {
         this.filter.setEditable(false);
         this.debugFilter = false;
         this.filterWorker = null;
-
-        // DnD
-        this.jTable.setDragEnabled(true);
-        this.jTable.setDropMode(DropMode.INSERT_ROWS);
-        this.jTable.setTransferHandler(new IListeTransferHandler());
 
         // do not handle F2, let our application use it :
         // remove F2 keybinding, use space
@@ -711,6 +742,8 @@ public final class IListe extends JPanel {
 
         // active/désactive le mode DEBUG du tableModel en ALT-clickant sur les entêtes des colonnes
         this.jTable.getTableHeader().addMouseListener(new MouseAdapter() {
+
+            @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.isAltDown()) {
                     final boolean debug = IListe.this.getModel().isDebug();
@@ -719,15 +752,41 @@ public final class IListe extends JPanel {
                 }
             }
 
+            static private final String COL_INDEX_KEY = "tableColIndex";
+
             private final JPopupMenu popupMenu;
+            private final Action toggleWidth;
+            private final Action toggleVisibility;
+            private final Action setAllVisible;
+
             {
                 this.popupMenu = new JPopupMenu();
-                this.popupMenu.add(new JCheckBoxMenuItem(new AbstractAction(TM.tr("ilist.setColumnsWidth")) {
+                this.toggleWidth = new AbstractAction(TM.tr("ilist.setColumnsWidth")) {
                     @Override
                     public void actionPerformed(ActionEvent e) {
                         toggleAutoAdjust();
                     }
-                }));
+                };
+                this.toggleVisibility = new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        final XTableColumnModel colModel = (XTableColumnModel) getJTable().getColumnModel();
+                        final JComponent cb = (JComponent) e.getSource();
+                        final int columnIndex = ((Number) cb.getClientProperty(COL_INDEX_KEY)).intValue();
+                        final TableColumn col = colModel.getColumn(columnIndex, false);
+                        final boolean newValue = !colModel.isColumnVisible(col);
+                        // don't remove last column
+                        if (newValue || colModel.getColumnCount(true) > 1)
+                            colModel.setColumnVisible(col, newValue);
+                    }
+                };
+                this.setAllVisible = new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        final XTableColumnModel colModel = (XTableColumnModel) getJTable().getColumnModel();
+                        colModel.setAllColumnsVisible();
+                    }
+                };
             }
 
             @Override
@@ -741,9 +800,40 @@ public final class IListe extends JPanel {
             }
 
             private void maybeShowPopup(MouseEvent e) {
-                if (IListe.this.adjustVisible && e.isPopupTrigger()) {
-                    ((JCheckBoxMenuItem) this.popupMenu.getComponent(0)).setSelected(isAutoAdjusting());
-                    this.popupMenu.show((Component) e.getSource(), e.getX(), e.getY());
+                if (e.isPopupTrigger()) {
+                    this.popupMenu.removeAll();
+
+                    if (IListe.this.adjustVisible) {
+                        final JCheckBoxMenuItem cb = new JCheckBoxMenuItem(this.toggleWidth);
+                        cb.setSelected(isAutoAdjusting());
+                        this.popupMenu.add(cb);
+                    }
+
+                    if (getJTable().getColumnModel() instanceof XTableColumnModel) {
+                        if (this.popupMenu.getComponentCount() > 0)
+                            this.popupMenu.addSeparator();
+                        this.setAllVisible.putValue(Action.NAME, TM.tr("ilist.showAllColumns"));
+                        this.popupMenu.add(this.setAllVisible);
+
+                        final XTableColumnModel colModel = (XTableColumnModel) getJTable().getColumnModel();
+                        int i = 0;
+                        final boolean disableLastCol = colModel.getColumnCount(true) == 1;
+                        for (final TableColumn c : colModel.getColumns(false)) {
+                            final JCheckBoxMenuItem cb = new JCheckBoxMenuItem(this.toggleVisibility);
+                            // speed up display of menu
+                            cb.setText(StringUtils.Shortener.Ellipsis.getBoundedLengthString(String.valueOf(c.getHeaderValue()), 200));
+                            final boolean isVisible = colModel.isColumnVisible(c);
+                            cb.setSelected(isVisible);
+                            cb.setEnabled(!isVisible || !disableLastCol);
+                            if (!cb.isEnabled())
+                                cb.setToolTipText(TM.tr("ilist.lastCol"));
+                            cb.putClientProperty(COL_INDEX_KEY, i++);
+                            this.popupMenu.add(cb);
+                        }
+                    }
+
+                    if (this.popupMenu.getComponentCount() > 0)
+                        this.popupMenu.show((Component) e.getSource(), e.getX(), e.getY());
                 }
             }
 
@@ -803,18 +893,22 @@ public final class IListe extends JPanel {
         // TODO speed up like IListPanel buttons
         // works because "JTable.autoStartsEdit" is false
         // otherwise mets un + a la fin de la cellule courante
-        this.jTable.addKeyListener(new KeyAdapter() {
-            public void keyTyped(KeyEvent e) {
-                if (isSorted())
-                    return;
-
-                if (e.getKeyChar() == '+') {
-                    deplacerDe(1);
-                } else if (e.getKeyChar() == '-') {
-                    deplacerDe(-1);
+        if (this.getSource().getPrimaryTable().isOrdered()) {
+            this.jTable.addKeyListener(new KeyAdapter() {
+                public void keyTyped(KeyEvent e) {
+                    if (e.getKeyChar() == '+') {
+                        deplacerDe(1);
+                    } else if (e.getKeyChar() == '-') {
+                        deplacerDe(-1);
+                    }
                 }
-            }
-        });
+            });
+
+            // DnD
+            this.jTable.setDragEnabled(true);
+            this.jTable.setDropMode(DropMode.INSERT_ROWS);
+            this.jTable.setTransferHandler(new IListeTransferHandler());
+        }
 
         final JScrollPane scrollPane = new JScrollPane(this.jTable);
         scrollPane.setFocusable(false);
@@ -923,7 +1017,7 @@ public final class IListe extends JPanel {
 
     public void search(String s, String column, Runnable r) {
         // Determine sur quelle colonne on cherche
-        this.getModel().search(SearchList.singleton(ColumnSearchSpec.create(s, this.getModel().getColumnNames().indexOf(column))), r);
+        this.getModel().searchContains(s, this.getModel().getColumnNames().indexOf(column), r);
     }
 
     // Export en tableau OpenOffice
@@ -947,16 +1041,18 @@ public final class IListe extends JPanel {
     /**
      * Retourne le nombre de ligne de cette liste.
      * 
-     * @return le nombre de ligne de cette liste.
+     * @return le nombre de ligne de cette liste, -1 si {@link #isDead()}.
      */
     public int getRowCount() {
+        if (isDead()) {
+            return -1;
+        }
         return this.getTableModel().getRowCount();
     }
 
     public int getTotalRowCount() {
-        // happens when we're dead
         if (isDead()) {
-            return this.getRowCount();
+            return -1;
         }
         return this.getModel().getTotalRowCount();
     }
@@ -985,9 +1081,8 @@ public final class IListe extends JPanel {
                 qte = t.getFieldRaw("NB_ESSAI_DDR");
 
             if (qte != null) {
-                final SQLTableModelSource src = this.getModel().getReq();
                 int i = 0;
-                for (final SQLTableModelColumn col : src.getColumns()) {
+                for (final SQLTableModelColumn col : this.getModel().getCols()) {
                     if (CollectionUtils.getSole(col.getFields()) == qte)
                         fieldIndex = i;
                     i++;
@@ -1004,7 +1099,9 @@ public final class IListe extends JPanel {
     }
 
     public void deplacerDe(final int inc) {
-        this.getModel().moveBy(this.getSelectedRows(), inc);
+        if (isSorted())
+            return;
+        this.getModel().moveBy(this.getSelectedRows(), inc, true);
     }
 
     /**
@@ -1040,11 +1137,11 @@ public final class IListe extends JPanel {
         final SQLRowValues internalRow = this.getLine(index).getRow();
         final SQLRowAccessor toCast;
         if (clazz == SQLRowValues.class) {
-            toCast = internalRow.deepCopy();
+            toCast = internalRow.toImmutable();
         } else if (clazz == SQLRow.class) {
             toCast = internalRow.asRow();
         } else {
-            toCast = new SQLImmutableRowValues(internalRow);
+            throw new IllegalArgumentException("Not implemented : " + clazz);
         }
         return clazz.cast(toCast);
     }
@@ -1060,11 +1157,7 @@ public final class IListe extends JPanel {
         return this.fetchRow(this.getSelectedId());
     }
 
-    public SQLRowAccessor getSelectedRow() {
-        return this.getSelectedRow(SQLRowAccessor.class);
-    }
-
-    public SQLRowValues copySelectedRow() {
+    public SQLRowValues getSelectedRow() {
         return this.getSelectedRow(SQLRowValues.class);
     }
 
@@ -1082,11 +1175,7 @@ public final class IListe extends JPanel {
         return this.fetchRow(this.getSelection().getUserSelectedID());
     }
 
-    public final List<SQLRowAccessor> getSelectedRows() {
-        return iterateSelectedRows(SQLRowAccessor.class);
-    }
-
-    public final List<SQLRowValues> copySelectedRows() {
+    public final List<SQLRowValues> getSelectedRows() {
         return iterateSelectedRows(SQLRowValues.class);
     }
 
@@ -1262,6 +1351,7 @@ public final class IListe extends JPanel {
     }
 
     public TableModel getTableModel() {
+        assert SwingUtilities.isEventDispatchThread();
         return this.sorter.getTableModel();
     }
 
@@ -1307,8 +1397,9 @@ public final class IListe extends JPanel {
         final int stop = index < 0 ? columnModel.getColumnCount() : index + 1;
         for (int i = start; i < stop; i++) {
             final TableColumn col = columnModel.getColumn(i);
-            final SQLTableModelColumn srcCol = this.getSource().getColumn(i);
+            final SQLTableModelColumn srcCol = this.getSource().getColumn(col.getModelIndex());
             srcCol.install(col);
+            col.setIdentifier(srcCol.getIdentifier());
             if (FORCE_ALT_CELL_RENDERER)
                 AlternateTableCellRenderer.setRendererAndListen(col);
             else
@@ -1368,12 +1459,14 @@ public final class IListe extends JPanel {
         }
     }
 
-    private void loadTableState() {
+    private boolean loadTableState() {
         // - if configFile changes setConfigFile() calls us
         // - if the model changes, fireTableStructureChanged() is called and thus
         // JTable.createDefaultColumnsFromModel() which calls us
         if (this.getConfigFile() != null && this.getModel() != null)
-            this.tableStateManager.loadState();
+            return this.tableStateManager.loadState();
+        else
+            return false;
     }
 
     /**

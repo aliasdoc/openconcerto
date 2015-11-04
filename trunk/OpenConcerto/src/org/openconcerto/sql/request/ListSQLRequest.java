@@ -15,23 +15,27 @@
 
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.FieldExpander;
+import org.openconcerto.sql.ShowAs;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLRowValuesCluster.State;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
-import org.openconcerto.utils.cc.ITransformer;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 
+import net.jcip.annotations.ThreadSafe;
+
+@ThreadSafe
 public class ListSQLRequest extends FilteredFillSQLRequest {
 
     // les champs à afficher (avant expansion)
+    // immutable
     private final List<SQLField> listFields;
+
+    private final FieldExpander showAs;
 
     public ListSQLRequest(SQLTable table, List fieldss) {
         this(table, fieldss, null);
@@ -49,7 +53,7 @@ public class ListSQLRequest extends FilteredFillSQLRequest {
         if (cutAtAncestor == table)
             throw new IllegalArgumentException("the primaryTable: " + this.getPrimaryTable() + "is the same than cutAtAncestor");
 
-        this.listFields = new ArrayList<SQLField>();
+        final List<SQLField> tmpList = new ArrayList<SQLField>();
         for (final Object field : fieldss) {
             final SQLField f;
             if (field instanceof String)
@@ -63,33 +67,52 @@ public class ListSQLRequest extends FilteredFillSQLRequest {
             } else
                 throw new IllegalArgumentException("must be a fieldname or a SQLField but got : " + field);
 
-            this.listFields.add(f);
+            tmpList.add(f);
         }
+        this.listFields = Collections.unmodifiableList(tmpList);
 
-        if (cutAtAncestor != null)
-            this.getGraph().walkGraph(null, new ITransformer<State<Object>, Object>() {
-                @Override
-                public Object transformChecked(State<Object> input) {
-                    final SQLRowValues current = input.getCurrent();
-                    for (final String field : new HashSet<String>(current.getFields())) {
-                        final Object value = current.getObject(field);
-                        if (value instanceof SQLRowValues && ((SQLRowValues) value).getTable() == cutAtAncestor)
-                            current.remove(field);
-                    }
-                    return null;
-                }
-            });
+        final Configuration conf = Configuration.getInstance();
+        if (conf == null) {
+            this.showAs = FieldExpander.getEmpty();
+        } else if (cutAtAncestor == null) {
+            this.showAs = conf.getShowAs();
+        } else {
+            final ShowAs tmp = new ShowAs(conf.getShowAs());
+            tmp.removeTable(cutAtAncestor);
+            tmp.show(cutAtAncestor, Collections.<String> emptyList());
+            this.showAs = tmp;
+        }
     }
 
-    public ListSQLRequest(ListSQLRequest req) {
-        super(req);
-        this.listFields = new ArrayList<SQLField>(req.listFields);
+    protected ListSQLRequest(ListSQLRequest req, final boolean freeze) {
+        super(req, freeze);
+        this.listFields = req.listFields;
+        this.showAs = req.showAs;
+    }
+
+    // wasFrozen() : our showAs might change but our fetcher won't, MAYBE remove final modifier and
+    // clone showAs
+
+    @Override
+    public ListSQLRequest toUnmodifiable() {
+        return this.toUnmodifiableP(ListSQLRequest.class);
+    }
+
+    @Override
+    public ListSQLRequest clone() {
+        synchronized (this) {
+            return this.clone(false);
+        }
+    }
+
+    @Override
+    protected ListSQLRequest clone(boolean forFreeze) {
+        return new ListSQLRequest(this, forFreeze);
     }
 
     @Override
     protected FieldExpander getShowAs() {
-        final Configuration conf = Configuration.getInstance();
-        return conf == null ? FieldExpander.getEmpty() : conf.getShowAs();
+        return this.showAs;
     }
 
     /*
@@ -97,8 +120,9 @@ public class ListSQLRequest extends FilteredFillSQLRequest {
      * 
      * @see org.openconcerto.devis.request.BaseSQLRequest#getFields()
      */
+    @Override
     public final List<SQLField> getFields() {
-        return Collections.unmodifiableList(this.listFields);
+        return this.listFields;
     }
 
     @Override

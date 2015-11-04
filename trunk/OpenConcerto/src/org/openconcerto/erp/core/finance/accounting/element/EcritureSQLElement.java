@@ -25,6 +25,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
@@ -32,6 +33,7 @@ import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.request.UpdateBuilder;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
@@ -39,10 +41,13 @@ import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.sql.utils.SQLUtils.SQLFactory;
 import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.ExceptionHandler;
 
 import java.awt.GridBagConstraints;
@@ -54,6 +59,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -79,6 +85,9 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
         l.add("ID");
         l.add("VALIDE");
         l.add("ID_MOUVEMENT");
+        if (getTable().contains("NOM_PIECE")) {
+            l.add("NOM_PIECE");
+        }
         // l.add("ID_COMPTE_PCE");
         l.add("COMPTE_NUMERO");
         l.add("COMPTE_NOM");
@@ -158,6 +167,38 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
             column.setRenderer(LettrageRenderer.UTILS.getRenderer(column.getRenderer()));
         }
         return res;
+    }
+
+    @Override
+    protected SQLTableModelSourceOnline createTableSource() {
+        SQLTableModelSourceOnline source = super.createTableSource();
+
+        BaseSQLTableModelColumn analytique = new BaseSQLTableModelColumn("Poste analytique", String.class) {
+
+            @Override
+            protected Object show_(SQLRowAccessor r) {
+                Collection<? extends SQLRowAccessor> assocs = r.getReferentRows(getTable().getTable("ASSOCIATION_ANALYTIQUE"));
+                StringBuffer res = new StringBuffer();
+
+                for (SQLRowAccessor sqlRowAccessor : assocs) {
+                    res.append(sqlRowAccessor.getForeign("ID_POSTE_ANALYTIQUE").getString("NOM"));
+                    res.append(", ");
+                }
+
+                return res.toString();
+            }
+
+            @Override
+            public Set<FieldPath> getPaths() {
+                Path p = new Path(getTable());
+                p = p.add(getTable().getTable("ASSOCIATION_ANALYTIQUE"));
+                p = p.add(p.getLast().getForeignTable("ID_POSTE_ANALYTIQUE"));
+                return CollectionUtils.createSet(new FieldPath(p, "NOM"));
+            }
+        };
+        source.getColumns().add(analytique);
+
+        return source;
     }
 
     /*
@@ -269,8 +310,7 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
                     this.nom.setEnabled(false);
                     this.debit.setEnabled(false);
                     this.credit.setEnabled(false);
-                    this.date.setEnabled(false);
-                    this.date.setEditable(false);
+                    this.date.setInteractionMode(InteractionMode.DISABLED);
                     this.journal.setEnabled(false);
                 }
 
@@ -473,7 +513,7 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
     }
 
     // Suppression des ecritures associées à un mouvement
-    private synchronized void archiveEcritures(final int idMvt, final boolean dropMvt) {
+    public synchronized void archiveEcritures(final int idMvt, final boolean dropMvt) {
         final SQLBase base = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete();
         final SQLTable tableMvt = base.getTable("MOUVEMENT");
         final SQLTable tableEcriture = base.getTable("ECRITURE");

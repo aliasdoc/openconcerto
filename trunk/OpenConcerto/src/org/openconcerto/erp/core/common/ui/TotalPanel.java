@@ -82,6 +82,7 @@ public class TotalPanel extends JPanel implements TableModelListener {
             DeviseField textService, DeviseField textTotalHA, DeviseField textTotalDevise, JTextField textTotalPoids, JPanel tableEchantillon, SQLRequestComboBox selPortTva) {
 
         super();
+        this.setOpaque(false);
         this.selPortTVA = selPortTva;
         this.articleTable = articleItemTable;
         this.supp = new PropertyChangeSupport(this);
@@ -160,7 +161,7 @@ public class TotalPanel extends JPanel implements TableModelListener {
 
             // Total HA HT
             c.gridy++;
-            this.add(new JLabel("Total achat HT"), c);
+            this.add(new JLabel((this.ha == articleItemTable.getPrebilanElement()) ? "Budget prévisionnel" : "Total achat HT"), c);
 
             c.gridx++;
             c.weightx = 1;
@@ -274,7 +275,7 @@ public class TotalPanel extends JPanel implements TableModelListener {
 
             // Total HA HT
             c.gridy++;
-            this.add(new JLabel("Total achat HT"), c);
+            this.add(new JLabel((this.ha == articleItemTable.getPrebilanElement()) ? "Budget prévisionnel" : "Total achat HT"), c);
 
             c.gridx++;
             c.weightx = 1;
@@ -382,7 +383,7 @@ public class TotalPanel extends JPanel implements TableModelListener {
         field.setHorizontalAlignment(JTextField.RIGHT);
         field.setBorder(null);
         field.setColumns(11);
-        field.setOpaque(true);
+        field.setOpaque(false);
         field.setMinimumSize(new Dimension(150, 20));
         field.setPreferredSize(new Dimension(150, 20));
         field.setBackground(UIManager.getColor("control"));
@@ -420,6 +421,12 @@ public class TotalPanel extends JPanel implements TableModelListener {
             textHASel.setText(CLEAR);
             margeSel.setText(CLEAR);
         }
+    }
+
+    private SQLRowAccessor defaultRowCompteProduit = null;
+
+    public void setDefaultCompteProduit(SQLRowAccessor row) {
+        this.defaultRowCompteProduit = row;
     }
 
     /**
@@ -506,6 +513,9 @@ public class TotalPanel extends JPanel implements TableModelListener {
                 String fieldHT = (tableElementTotalHT == null ? null : tableElementTotalHT.getField().getName());
 
                 final TotalCalculator calc = new TotalCalculator(fieldHA, fieldHT, fieldDevise, achat, null);
+                if (defaultRowCompteProduit != null) {
+                    calc.setRowDefaultCptProduit(defaultRowCompteProduit);
+                }
                 calc.setSelectedRows(selectedRows);
 
                 // Calcul avant remise

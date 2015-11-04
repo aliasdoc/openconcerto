@@ -17,13 +17,18 @@ import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.JournalSQLElement;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowListRSH;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.GestionDevise;
+import org.openconcerto.utils.Tuple2;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +50,8 @@ public final class GenerationMvtFichePaye extends GenerationEcritures implements
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
 
+    private SQLTable tableCaisse = Configuration.getInstance().getBase().getTable("CAISSE_COTISATION");
+
     // Journal OD
     private static final Integer journalOD = Integer.valueOf(JournalSQLElement.OD);
 
@@ -52,7 +59,9 @@ public final class GenerationMvtFichePaye extends GenerationEcritures implements
 
     public GenerationMvtFichePaye(int[] idFichePaye, String mois, String annee) throws SQLException {
 
+        setRowAnalytiqueSource(null);
         SQLTable tableNet = Configuration.getInstance().getBase().getTable("RUBRIQUE_NET");
+
         SQLTable tableBrut = Configuration.getInstance().getBase().getTable("RUBRIQUE_BRUT");
         SQLTable tableCotis = Configuration.getInstance().getBase().getTable("RUBRIQUE_COTISATION");
         SQLTable tableComm = Configuration.getInstance().getBase().getTable("RUBRIQUE_COMM");
@@ -71,6 +80,20 @@ public final class GenerationMvtFichePaye extends GenerationEcritures implements
     private void genereComptaFichePaye() throws Exception {
 
         System.out.println("Génération des ecritures  reglement du mouvement " + this.idMvt);
+
+        SQLRowValues rowValsCaisse = new SQLRowValues(tableCaisse);
+        rowValsCaisse.put(tableCaisse.getKey().getName(), null);
+        rowValsCaisse.put("NUMERO_COMPTE_PCE", null);
+        rowValsCaisse.put("NUMERO_COMPTE_PCE_CHARGES", null);
+        SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(rowValsCaisse);
+        List<SQLRowValues> result = fetcher.fetch();
+
+        Map<Integer, Tuple2<Integer, Integer>> mapCaisse = new HashMap<Integer, Tuple2<Integer, Integer>>(result.size());
+        for (SQLRowValues sqlRowValues : result) {
+            int idCompte = ComptePCESQLElement.getId(sqlRowValues.getString("NUMERO_COMPTE_PCE"));
+            int idCompteCharges = ComptePCESQLElement.getId(sqlRowValues.getString("NUMERO_COMPTE_PCE_CHARGES"));
+            mapCaisse.put(sqlRowValues.getID(), Tuple2.create(idCompteCharges, idCompte));
+        }
 
         // SQLRow rowFiche =
         // Configuration.getInstance().getBase().getTable("FICHE_PAYE").getRow(this.idFichePaye);
@@ -117,7 +140,7 @@ public final class GenerationMvtFichePaye extends GenerationEcritures implements
             this.mEcritures.put("ID_COMPTE_PCE", Integer.valueOf(idComptePayeRegl));
             this.mEcritures.put("NOM", rowSal.getString("NOM") + " " + this.nom);
 
-            float sal = rowFiche.getFloat("SAL_BRUT");
+            float sal = rowFiche.getFloat("NET_A_PAYER");
 
             this.mEcritures.put("DEBIT", Long.valueOf(0));
             this.mEcritures.put("CREDIT", Long.valueOf(GestionDevise.parseLongCurrency(String.valueOf(sal))));
@@ -162,92 +185,76 @@ public final class GenerationMvtFichePaye extends GenerationEcritures implements
 
         // on recupere les élements de la fiche
         // ensemble des cotisations
-        SQLSelect selAllIDFicheElt = new SQLSelect(base);
+        SQLSelect selAllFicheElt = new SQLSelect();
 
-        selAllIDFicheElt.addSelect(tableFichePayeElt.getField("ID"));
-
-        Where w = null;
-        for (int i = 0; i < this.idFichePaye.length; i++) {
-            if (w == null) {
-                w = new Where(tableFichePayeElt.getField("ID_FICHE_PAYE"), "=", this.idFichePaye[i]);
-            } else {
-                w.and(new Where(tableFichePayeElt.getField("ID_FICHE_PAYE"), "=", this.idFichePaye[i]));
-            }
+        selAllFicheElt.addSelectStar(tableFichePayeElt);
+        List<Integer> idsElt = new ArrayList<Integer>();
+        for (int id : this.idFichePaye) {
+            idsElt.add(id);
         }
+        Where w = new Where(tableFichePayeElt.getField("ID_FICHE_PAYE"), idsElt);
+        w = w.and(new Where(tableFichePayeElt.getField("SOURCE"), "=", "RUBRIQUE_COTISATION"));
 
-        selAllIDFicheElt.setWhere(w);
+        selAllFicheElt.setWhere(w);
 
-        selAllIDFicheElt.setDistinct(true);
-
-        String reqAllIDFichelElt = selAllIDFicheElt.asString();
-
-        System.err.println("Request " + reqAllIDFichelElt);
-
-        Object[] objIDFicheElt = ((List) base.getDataSource().execute(reqAllIDFichelElt, new ArrayListHandler())).toArray();
-
-        System.err.println(objIDFicheElt.length + " elements to load");
+        List<SQLRow> resultElt = SQLRowListRSH.execute(selAllFicheElt);
 
         Map<Integer, Long> mapCompteDebSal = new HashMap<Integer, Long>();
         Map<Integer, Long> mapCompteDebPat = new HashMap<Integer, Long>();
         Map<Integer, Long> mapCompteCredSal = new HashMap<Integer, Long>();
         Map<Integer, Long> mapCompteCredPat = new HashMap<Integer, Long>();
 
-        for (int i = 0; i < objIDFicheElt.length; i++) {
-            SQLRow row = tableFichePayeElt.getRow(Integer.parseInt(((Object[]) objIDFicheElt[i])[0].toString()));
+        for (SQLRow row : resultElt) {
 
             String source = row.getString("SOURCE");
             int idSource = row.getInt("IDSOURCE");
 
-            if (source.trim().length() != 0) {
+            SQLRow rowSource = this.mapTableSource.get(source).getRow(idSource);
 
-                System.err.println("Source != null");
+            int idCaisse = rowSource.getInt("ID_CAISSE_COTISATION");
 
-                if (this.mapTableSource.get(source) != null) {
-                    SQLRow rowSource = this.mapTableSource.get(source).getRow(idSource);
+            Tuple2<Integer, Integer> t = mapCaisse.get(idCaisse);
+            // on recupere les comptes tiers et charge de la caisse associée
+            int idCompteCharge = (t == null ? ComptePCESQLElement.getId("645") : t.get0());
+            // }
 
-                    if (rowSource.getTable().getName().equalsIgnoreCase("RUBRIQUE_COTISATION")) {
-                        // on recupere les comptes tiers et charge de la caisse associée
-                        int idCompteCharge = ComptePCESQLElement.getId("645");
-                        // }
+            // int idCompteTiers = rowCaisse.getInt("ID_COMPTE_PCE_TIERS");
+            // if (idCompteTiers <= 1) {
+            int idCompteTiers = (t == null ? ComptePCESQLElement.getId("437") : t.get1());
+            // int idCompteTiers = ComptePCESQLElement.getId("437");
+            // }
 
-                        // int idCompteTiers = rowCaisse.getInt("ID_COMPTE_PCE_TIERS");
-                        // if (idCompteTiers <= 1) {
-                        int idCompteTiers = ComptePCESQLElement.getId("437");
-                        // }
+            // Cotisations sal.
+            if (row.getObject("MONTANT_SAL_DED") != null && row.getFloat("MONTANT_SAL_DED") != 0) {
 
-                        // Cotisations sal.
-                        if (row.getFloat("MONTANT_SAL_DED") != 0) {
+                Object montantCredObj = mapCompteCredSal.get(Integer.valueOf(idCompteTiers));
+                long montantCred = (montantCredObj == null) ? 0 : ((Long) montantCredObj).longValue();
+                montantCred += GestionDevise.parseLongCurrency(row.getObject("MONTANT_SAL_DED").toString());
+                mapCompteCredSal.put(Integer.valueOf(idCompteTiers), Long.valueOf(montantCred));
 
-                            Object montantCredObj = mapCompteCredSal.get(Integer.valueOf(idCompteTiers));
-                            long montantCred = (montantCredObj == null) ? 0 : ((Long) montantCredObj).longValue();
-                            montantCred += GestionDevise.parseLongCurrency(row.getObject("MONTANT_SAL_DED").toString());
-                            mapCompteCredSal.put(Integer.valueOf(idCompteTiers), Long.valueOf(montantCred));
+                // Object montantDebObj =
+                // mapCompteDebSal.get(Integer.valueOf(ComptePCESQLElement.getId("421")));
+                // long montantDeb = (montantDebObj == null) ? 0 : ((Long)
+                // montantDebObj).longValue();
+                // montantDeb +=
+                // GestionDevise.parseLongCurrency(row.getObject("MONTANT_SAL_DED").toString());
+                // mapCompteDebSal.put(Integer.valueOf(ComptePCESQLElement.getId("421")),
+                // Long.valueOf(montantDeb));
+            }
 
-                            Object montantDebObj = mapCompteDebSal.get(Integer.valueOf(ComptePCESQLElement.getId("421")));
-                            long montantDeb = (montantDebObj == null) ? 0 : ((Long) montantDebObj).longValue();
-                            montantDeb += GestionDevise.parseLongCurrency(row.getObject("MONTANT_SAL_DED").toString());
-                            mapCompteDebSal.put(Integer.valueOf(ComptePCESQLElement.getId("421")), Long.valueOf(montantDeb));
-                        }
+            // Cotisation pat.
+            if (row.getObject("MONTANT_PAT") != null && row.getFloat("MONTANT_PAT") != 0) {
 
-                        // Cotisation pat.
-                        if (row.getFloat("MONTANT_PAT") != 0) {
+                Object montantDebObj = mapCompteDebPat.get(Integer.valueOf(idCompteCharge));
+                long montantDeb = (montantDebObj == null) ? 0 : ((Long) montantDebObj).longValue();
+                montantDeb += GestionDevise.parseLongCurrency(row.getObject("MONTANT_PAT").toString());
+                mapCompteDebPat.put(Integer.valueOf(idCompteCharge), Long.valueOf(montantDeb));
 
-                            Object montantDebObj = mapCompteDebPat.get(Integer.valueOf(idCompteCharge));
-                            long montantDeb = (montantDebObj == null) ? 0 : ((Long) montantDebObj).longValue();
-                            montantDeb += GestionDevise.parseLongCurrency(row.getObject("MONTANT_PAT").toString());
-                            mapCompteDebPat.put(Integer.valueOf(idCompteCharge), Long.valueOf(montantDeb));
+                Object montantCredObj = mapCompteCredPat.get(Integer.valueOf(idCompteTiers));
+                long montantCred = (montantCredObj == null) ? 0 : ((Long) montantCredObj).longValue();
+                montantCred += GestionDevise.parseLongCurrency(row.getObject("MONTANT_PAT").toString());
+                mapCompteCredPat.put(Integer.valueOf(idCompteTiers), Long.valueOf(montantCred));
 
-                            Object montantCredObj = mapCompteCredPat.get(Integer.valueOf(idCompteTiers));
-                            long montantCred = (montantCredObj == null) ? 0 : ((Long) montantCredObj).longValue();
-                            montantCred += GestionDevise.parseLongCurrency(row.getObject("MONTANT_PAT").toString());
-                            mapCompteCredPat.put(Integer.valueOf(idCompteTiers), Long.valueOf(montantCred));
-
-                        }
-                    }
-
-                } else {
-                    System.err.println("Table " + source + " non référencée");
-                }
             }
 
         }

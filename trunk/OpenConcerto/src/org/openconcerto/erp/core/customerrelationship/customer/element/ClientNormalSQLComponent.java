@@ -13,6 +13,40 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.element;
 
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.sql.SQLException;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.swing.ButtonGroup;
+import javax.swing.Icon;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.BanqueSQLElement;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
@@ -50,40 +84,7 @@ import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ComboLockedMode;
 import org.openconcerto.ui.component.ITextArea;
-
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.sql.SQLException;
-import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.swing.ButtonGroup;
-import javax.swing.Icon;
-import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+import org.openconcerto.ui.component.InteractionMode;
 
 // Client without CTech link (i.e. there's one and only table in the DB)
 public class ClientNormalSQLComponent extends BaseSQLComponent {
@@ -451,19 +452,15 @@ public class ClientNormalSQLComponent extends BaseSQLComponent {
 
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 boolean b = checkAdrLivraison.isSelected();
-
-                componentLivraison.setEditable(!b);
+                componentLivraison.setEditable((!b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
                 componentLivraison.setCreated(!b);
             };
         });
 
         this.checkAdrFacturation.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-
                 boolean b = checkAdrFacturation.isSelected();
-
-                componentFacturation.setEditable(!b);
-
+                componentFacturation.setEditable((!b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
                 componentFacturation.setCreated(!b);
             }
         });
@@ -556,8 +553,7 @@ public class ClientNormalSQLComponent extends BaseSQLComponent {
 
                         public void actionPerformed(java.awt.event.ActionEvent e) {
                             boolean b = checkAdrLivraison.isSelected();
-
-                            componentLivraison.setEditable(!b);
+                            componentLivraison.setEditable((!b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
                             componentLivraison.setCreated(!b);
                         }
                     });

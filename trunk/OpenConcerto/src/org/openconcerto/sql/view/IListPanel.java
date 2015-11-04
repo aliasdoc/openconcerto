@@ -39,6 +39,7 @@ import org.openconcerto.ui.SwingThreadUtils;
 import org.openconcerto.ui.component.JRadioButtons.JStringRadioButtons;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.Tuple2;
+import org.openconcerto.utils.Tuple2.List2;
 import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.change.ListChangeIndex;
@@ -55,6 +56,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
@@ -92,6 +96,8 @@ abstract public class IListPanel extends JPanel implements ActionListener {
 
     static private final String EXPORT_DIR_KEY = "exportDir";
 
+    protected static final String FALLBACK_KEY = "FALLBACK_ACTION";
+
     static public final File getConfigFile(final SQLElement elem, final Class<? extends Container> c) {
         return getConfigFile(elem, c, null);
     }
@@ -110,8 +116,6 @@ abstract public class IListPanel extends JPanel implements ActionListener {
     protected final BtnTooltipMnger btnMngr;
 
     protected JButton buttonActualiser;
-
-    boolean selectRowOnAdd = true;
 
     // partagé par ListModifyFrame
     protected JButton buttonModifier;
@@ -137,6 +141,8 @@ abstract public class IListPanel extends JPanel implements ActionListener {
     }
 
     protected EditFrame createFrame;
+    private boolean selectRowOnAdd = true;
+    private boolean deaf = Boolean.getBoolean("org.openconcerto.sql.listPanel.deafEditPanel");
 
     protected SearchListComponent searchComponent;
 
@@ -219,6 +225,33 @@ abstract public class IListPanel extends JPanel implements ActionListener {
                 IListPanel.this.searchComponent.reset((ITableModel) evt.getNewValue());
             }
         });
+        this.liste.getJTable().addMouseListener(new MouseAdapter() {
+
+            private EditFrame listeningFrame = null;
+
+            private final EditFrame createFrame(final boolean listening) {
+                final EditFrame res = new EditFrame(getElement(), EditPanel.READONLY);
+                if (listening)
+                    getListe().addIListener(res);
+                res.selectionId(getListe().getSelectedId());
+                return res;
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    final EditFrame frame;
+                    if ((e.getModifiersEx() & InputEvent.ALT_DOWN_MASK) != 0) {
+                        if (this.listeningFrame == null)
+                            this.listeningFrame = createFrame(true);
+                        frame = this.listeningFrame;
+                    } else {
+                        frame = createFrame(false);
+                    }
+                    FrameUtil.show(frame);
+                }
+            }
+        });
         // selectID() alone won't init us if NONEXISTANT_ID is already the selected id
         this.btnMngr.updateBtns();
         this.getListe().selectID(SQLRow.NONEXISTANT_ID);
@@ -273,7 +306,7 @@ abstract public class IListPanel extends JPanel implements ActionListener {
 
         this.buttonModifier = new JButton(TM.tr("modify"));
         this.buttonModifier.setOpaque(false);
-        this.btnMngr.addBtn(this.buttonModifier, "noRightToModify", TableAllRights.MODIFY_ROW_TABLE, true, modifyIsImmediate());
+        this.btnMngr.addBtn(this.buttonModifier, "noRightToModify", TableAllRights.MODIFY_ROW_TABLE, true, true);
         this.buttonEffacer = new JButton(TM.tr("remove"));
         this.buttonEffacer.setOpaque(false);
         this.btnMngr.addBtn(this.buttonEffacer, "noRightToDel", TableAllRights.DELETE_ROW_TABLE, true);
@@ -551,8 +584,12 @@ abstract public class IListPanel extends JPanel implements ActionListener {
      * 
      * @return <code>true</code> if the create panel should be empty.
      */
-    protected boolean isDeaf() {
-        return Boolean.getBoolean("org.openconcerto.sql.listPanel.deafEditPanel");
+    public final boolean isDeaf() {
+        return this.deaf;
+    }
+
+    public final void setDeaf(final boolean b) {
+        this.deaf = b;
     }
 
     protected final EditFrame getCreateFrame() {
@@ -585,6 +622,8 @@ abstract public class IListPanel extends JPanel implements ActionListener {
         // btn -> tooltip
         private final Map<JButton, ITransformer<JButton, String>> additional;
         private final Map<JButton, String> okTooltip;
+        // if the normal action is denied, offer an alternate one
+        private final Map<JButton, List2<String>> alternateLabels;
 
         public BtnTooltipMnger() {
             super();
@@ -593,6 +632,7 @@ abstract public class IListPanel extends JPanel implements ActionListener {
             this.code = new HashMap<JButton, Tuple2<String, String>>();
             this.additional = new HashMap<JButton, ITransformer<JButton, String>>();
             this.okTooltip = new HashMap<JButton, String>();
+            this.alternateLabels = new HashMap<JButton, List2<String>>(4);
         }
 
         public void addBtn(final JButton btn, String desc, String rightCode, final boolean needSelection) {
@@ -615,6 +655,13 @@ abstract public class IListPanel extends JPanel implements ActionListener {
                 this.additional.put(btn, additional);
             else
                 this.additional.remove(btn);
+        }
+
+        public void setFallback(final JButton btn, final String normalLabel, final String altLabel) {
+            if (normalLabel == null || altLabel == null)
+                this.alternateLabels.remove(btn);
+            else
+                this.alternateLabels.put(btn, new List2<String>(normalLabel, altLabel));
         }
 
         public void setOKToolTip(final JButton btn, String tooltip) {
@@ -642,12 +689,15 @@ abstract public class IListPanel extends JPanel implements ActionListener {
 
                 final boolean ok;
                 final String tooltip;
+                boolean fallBack = false;
                 if (!TableAllRights.hasRight(rights, t.get1(), getElement().getTable())) {
                     ok = false;
                     tooltip = TM.tr(t.get0());
+                    fallBack = true;
                 } else if (this.needRWSelection.contains(btn) && isRO()) {
                     ok = false;
                     tooltip = TM.tr("editPanel.readOnlySelection");
+                    fallBack = true;
                 } else if (this.needSelection.contains(btn) && !hasSelection) {
                     ok = false;
                     tooltip = TM.tr("noSelection");
@@ -658,8 +708,24 @@ abstract public class IListPanel extends JPanel implements ActionListener {
                     ok = true;
                     tooltip = this.okTooltip.get(btn);
                 }
+                boolean finalOK = ok;
+                final List2<String> fallbackLabels = this.alternateLabels.get(btn);
+                if (fallbackLabels != null) {
+                    final String label;
+                    // the main action is denied (e.g. modify) but an alternate one is allowed (e.g.
+                    // display)
+                    if (fallBack) {
+                        assert !ok;
+                        finalOK = true;
+                        label = fallbackLabels.get1();
+                    } else {
+                        label = fallbackLabels.get0();
+                    }
+                    btn.setText(TM.tr(label));
+                    btn.putClientProperty(FALLBACK_KEY, fallBack);
+                }
                 btn.setToolTipText(tooltip);
-                btn.setEnabled(ok);
+                btn.setEnabled(finalOK);
             }
         }
 

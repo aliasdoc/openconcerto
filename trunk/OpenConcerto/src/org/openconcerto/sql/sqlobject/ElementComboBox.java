@@ -29,6 +29,7 @@ import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.ui.component.ITextCombo;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.list.selection.BaseListStateModel;
 import org.openconcerto.utils.cc.ITransformer;
 
@@ -353,20 +354,22 @@ public class ElementComboBox extends SQLRequestComboBox implements ActionListene
         return this.getClass().getName() + " " + this.element;
     }
 
-    protected void modeChanged(ComboMode mode) {
+    @Override
+    protected void modeChanged(InteractionMode mode) {
         super.modeChanged(mode);
         updateViewBtn();
-        this.listButton.setEnabled(mode == ComboMode.EDITABLE);
-        this.addButton.setEnabled(mode == ComboMode.EDITABLE);
+        this.listButton.setEnabled(mode.isEditable());
+        this.addButton.setEnabled(mode.isEditable());
     }
 
     private void updateViewBtn() {
         final boolean modif, enabled;
-        if (getEnabled() == ComboMode.DISABLED || this.getWantedID() < SQLRow.MIN_VALID_ID) {
+        final InteractionMode mode = getInteractionMode();
+        if (!mode.isEnabled() || this.getWantedID() < SQLRow.MIN_VALID_ID) {
             // disabled
             modif = this.canModif;
             enabled = false;
-        } else if (this.canModif && getEnabled() == ComboMode.EDITABLE) {
+        } else if (this.canModif && mode.isEditable()) {
             // modification enabled
             modif = true;
             enabled = true;

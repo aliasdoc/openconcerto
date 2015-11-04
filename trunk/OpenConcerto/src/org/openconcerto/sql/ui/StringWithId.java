@@ -18,7 +18,10 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-public class StringWithId implements Externalizable {
+import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.Transferable;
+
+public class StringWithId implements Externalizable, Transferable {
     private long id;
     // value is always trimed
     private String value;
@@ -78,5 +81,10 @@ public class StringWithId implements Externalizable {
 
     public String toCondensedString() {
         return id + "," + value;
+    }
+
+    @Override
+    public String toJSON() {
+        return "{\"StringWithId\":" + JSONconverter.getJSON(this.id + "," + this.value) + "}";
     }
 }

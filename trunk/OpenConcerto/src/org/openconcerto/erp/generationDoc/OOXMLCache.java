@@ -78,16 +78,30 @@ public class OOXMLCache {
             if (row.isEmpty() || (row.size() > 0 && row.get(0).isUndefined())) {
                 list = new ArrayList<SQLRowAccessor>();
             } else if (row.size() > 0 && (groupBy == null || groupBy.trim().length() == 0)) {
+
                 list = new ArrayList<SQLRowAccessor>();
-                for (SQLRowAccessor sqlRowAccessor : row) {
-                    if (sqlRowAccessor != null && !sqlRowAccessor.isUndefined()) {
-                        list.addAll(sqlRowAccessor.getReferentRows(tableForeign));
+                SQLSelect sel = new SQLSelect();
+                sel.addSelectStar(tableForeign);
+
+                Where w = null;
+                for (SQLRowAccessor rowAccess : row) {
+                    if (rowAccess != null && !rowAccess.isUndefined()) {
+                        if (w == null) {
+                            w = new Where((SQLField) tableForeign.getForeignKeys(rowAccess.getTable()).toArray()[0], "=", rowAccess.getID());
+                        } else {
+                            w = w.or(new Where((SQLField) tableForeign.getForeignKeys(rowAccess.getTable()).toArray()[0], "=", rowAccess.getID()));
+                        }
                     }
                 }
+                sel.setWhere(w);
+                addSelectOrder(tableForeign, orderBy, sel);
+                System.err.println(sel.asString());
+                list.addAll(SQLRowListRSH.execute(sel));
+
             } else {
 
                 final List<String> params = SQLRow.toList(groupBy);
-                SQLSelect sel = new SQLSelect(row.get(0).getTable().getBase());
+                SQLSelect sel = new SQLSelect();
                 sel.addSelect(tableForeign.getKey());
                 for (int i = 0; i < params.size(); i++) {
                     sel.addSelect(tableForeign.getField(params.get(i)));
@@ -102,8 +116,9 @@ public class OOXMLCache {
                     }
                 }
                 sel.setWhere(w);
+                addSelectOrder(tableForeign, orderBy, sel);
                 System.err.println(sel.asString());
-                List<SQLRow> result = (List<SQLRow>) row.get(0).getTable().getBase().getDataSource().execute(sel.asString(), new SQLRowListRSH(tableForeign));
+                List<SQLRow> result = SQLRowListRSH.execute(sel);
 
                 list = new ArrayList<SQLRowAccessor>();
                 Map<Object, SQLRowValues> m = new HashMap<Object, SQLRowValues>();
@@ -132,7 +147,7 @@ public class OOXMLCache {
                 c.put(tableForeign, list);
             }
 
-            if (orderBy != null && orderBy.trim().length() > 0) {
+            if (orderBy != null && orderBy.trim().length() > 0 && !orderBy.contains(".")) {
                 Collections.sort(list, new Comparator<SQLRowAccessor>() {
                     @Override
                     public int compare(SQLRowAccessor o1, SQLRowAccessor o2) {
@@ -145,6 +160,17 @@ public class OOXMLCache {
             return list;
         }
         // return row.getReferentRows(tableForeign);
+    }
+
+    private void addSelectOrder(final SQLTable tableForeign, final String orderBy, SQLSelect sel) {
+        if (orderBy != null && orderBy.contains(".")) {
+            String fieldRefTable = orderBy.substring(0, orderBy.indexOf('.'));
+            String field = orderBy.substring(orderBy.indexOf('.') + 1, orderBy.length());
+            sel.addJoin("LEFT", sel.getAlias(tableForeign).getField(fieldRefTable));
+            sel.addFieldOrder(sel.getAlias(tableForeign.getForeignTable(fieldRefTable)).getField(field));
+        } else {
+            sel.addFieldOrder(tableForeign.getOrderField());
+        }
     }
 
     private void cumulRows(final List<String> params, SQLRow sqlRow, SQLRowValues rowVals) {

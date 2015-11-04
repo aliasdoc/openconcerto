@@ -57,8 +57,8 @@ public class HistoriqueClientFrame {
         mapList.put("Relances", Arrays.asList("RELANCE"));
         mapList.put("Devis", Arrays.asList("DEVIS"));
         mapList.put("Avoirs", Arrays.asList("AVOIR_CLIENT"));
-            mapList.put("Articles facturés", Arrays.asList("SAISIE_VENTE_FACTURE_ELEMENT"));
-            mapList.put("Articles proposés", Arrays.asList("DEVIS_ELEMENT"));
+                mapList.put("Articles facturés", Arrays.asList("SAISIE_VENTE_FACTURE_ELEMENT"));
+                mapList.put("Articles proposés", Arrays.asList("DEVIS_ELEMENT"));
         Map<SQLTable, SQLField> map = new HashMap<SQLTable, SQLField>();
         map.put(b.getTable("SAISIE_VENTE_FACTURE_ELEMENT"), b.getTable("SAISIE_VENTE_FACTURE_ELEMENT").getField("ID_SAISIE_VENTE_FACTURE"));
         map.put(b.getTable("DEVIS_ELEMENT"), b.getTable("DEVIS_ELEMENT").getField("ID_DEVIS"));

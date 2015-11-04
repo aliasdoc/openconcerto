@@ -16,7 +16,9 @@
 import org.openconcerto.erp.action.AboutAction;
 import org.openconcerto.erp.action.PreferencesAction;
 import org.openconcerto.erp.core.common.ui.StatusPanel;
+import org.openconcerto.erp.rights.MenuComboRightEditor;
 import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.task.TodoListPanel;
 import org.openconcerto.task.config.ComptaBasePropsConfiguration;
 import org.openconcerto.ui.AutoHideTabbedPane;
@@ -221,7 +223,7 @@ public class MainFrame extends JFrame {
         final Group g = mm.getGroup();
         for (int i = 0; i < g.getSize(); i++) {
             final Item item = g.getItem(i);
-            if (item.getLocalHint().isVisible())
+            if (item.getLocalHint().isVisible() && UserRightsManager.getCurrentUserRights().haveRight(MenuComboRightEditor.ID_RIGHT, item.getId()))
                 result.add(createJMenuFrom(item, mm));
         }
         return result;
@@ -247,7 +249,7 @@ public class MainFrame extends JFrame {
 
         if (item instanceof Group) {
             createMenuItemsRec(mm, m, Collections.<String> emptyList(), (Group) item);
-        } else {
+        } else if (UserRightsManager.getCurrentUserRights().haveRight(MenuComboRightEditor.ID_RIGHT, item.getId())) {
             m.add(createJMenuItemForId(id, mm));
         }
         return m;
@@ -257,7 +259,7 @@ public class MainFrame extends JFrame {
         assert g.getLocalHint().isVisible();
         for (int i = 0; i < g.getSize(); i++) {
             final Item child = g.getItem(i);
-            if (!child.getLocalHint().isVisible())
+            if (!child.getLocalHint().isVisible() || !UserRightsManager.getCurrentUserRights().haveRight(MenuComboRightEditor.ID_RIGHT, child.getId()))
                 continue;
 
             if (child instanceof Group) {

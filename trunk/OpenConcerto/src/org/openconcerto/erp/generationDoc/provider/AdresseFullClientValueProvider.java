@@ -29,11 +29,15 @@ public class AdresseFullClientValueProvider extends AdresseClientProvider {
     public Object getValue(SpreadSheetCellValueContext context) {
         final SQLRowAccessor r = getAdresse(context.getRow(), this.type);
 
-        String result = r.getString("LIBELLE");
-        if (result.trim().length() == 0) {
-            result = r.getString("RUE");
-        } else {
-            result += "\n" + r.getString("RUE");
+        String result = "";
+        if (r.getString("LIBELLE").trim().length() > 0) {
+            result = r.getString("LIBELLE") + "\n";
+        }
+        if (r.getString("DEST").trim().length() > 0) {
+            result = r.getString("DEST") + "\n";
+        }
+        if (r.getString("RUE").trim().length() > 0) {
+            result = r.getString("RUE") + "\n";
         }
         result += "\n" + r.getString("CODE_POSTAL");
         result += " ";

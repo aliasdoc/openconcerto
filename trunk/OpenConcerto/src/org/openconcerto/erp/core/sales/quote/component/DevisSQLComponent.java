@@ -24,11 +24,13 @@ import org.openconcerto.erp.core.common.ui.AcompteField;
 import org.openconcerto.erp.core.common.ui.AcompteRowItemView;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
-import org.openconcerto.erp.core.sales.quote.element.DevisSQLElement;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseType;
 import org.openconcerto.erp.core.sales.quote.element.EtatDevisSQLElement;
 import org.openconcerto.erp.core.sales.quote.report.DevisXmlSheet;
 import org.openconcerto.erp.core.sales.quote.ui.DevisItemTable;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
 import org.openconcerto.map.ui.ITextComboVilleViewer;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
@@ -41,6 +43,7 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.UndefinedRowValuesCache;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.preferences.SQLPreferences;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.sqlobject.JUniqueTextField;
 import org.openconcerto.sql.sqlobject.SQLTextCombo;
@@ -126,9 +129,14 @@ public class DevisSQLComponent extends BaseSQLComponent {
     final JTextField contactDonneur = new JTextField(20);
     final JTextField desDonneur = new JTextField(20);
     final ITextArea adrDonneur = new ITextArea();
+    private final boolean displayDpt;
+
+    private final ElementComboBox comboDpt = new ElementComboBox(false, 25);
 
     public DevisSQLComponent(final SQLElement elt) {
         super(elt);
+        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        this.displayDpt = prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false);
     }
 
     public AbstractArticleItemTable getRowValuesTable() {
@@ -142,6 +150,8 @@ public class DevisSQLComponent extends BaseSQLComponent {
         s.add("NUMERO");
         return s;
     }
+
+    private final JDate dateDevis = new JDate(true);
 
     @Override
     public void addViews() {
@@ -188,8 +198,17 @@ public class DevisSQLComponent extends BaseSQLComponent {
         c.weightx = 1;
 
         c.fill = GridBagConstraints.NONE;
-        final JDate dateDevis = new JDate(true);
-        this.add(dateDevis, c);
+        this.add(this.dateDevis, c);
+
+        this.dateDevis.addValueListener(new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (!isFilling() && dateDevis.getValue() != null) {
+                    table.setDateDevise(dateDevis.getValue());
+                }
+            }
+        });
 
         // Etat devis
         this.radioEtat.setLayout(new VFlowLayout());
@@ -273,7 +292,72 @@ public class DevisSQLComponent extends BaseSQLComponent {
         this.add(comboClient, c);
         addRequiredSQLObject(comboClient, "ID_CLIENT");
 
+        if (this.displayDpt) {
+            c.gridx++;
+            c.gridwidth = 1;
+            final JLabel labelDpt = new JLabel(getLabelFor("ID_CLIENT_DEPARTEMENT"));
+            labelDpt.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelDpt, c);
+
+            c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.weighty = 0;
+            c.fill = GridBagConstraints.NONE;
+            this.add(this.comboDpt, c);
+            DefaultGridBagConstraints.lockMinimumSize(this.comboDpt);
+            addSQLObject(this.comboDpt, "ID_CLIENT_DEPARTEMENT");
+
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                        final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                        comboDpt.getRequest().setWhere(new Where(comboDpt.getRequest().getPrimaryTable().getField("ID_CLIENT"), "=", rowClient.getID()));
+                    } else {
+                        comboDpt.getRequest().setWhere(null);
+                    }
+                }
+            });
+
+        }
+
         final ElementComboBox boxTarif = new ElementComboBox();
+
+            final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+            final AddressChoiceUI addressUI = new AddressChoiceUI();
+            addressUI.addToUI(this, c);
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                        addressUI
+                                .getComboAdrF()
+                                .getRequest()
+                                .setWhere(
+                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI
+                                .getComboAdrL()
+                                .getRequest()
+                                .setWhere(
+                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                    } else {
+                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                    }
+                }
+            });
+
             if (getTable().contains("ID_CONTACT")) {
                 // Contact Client
                 c.gridx = 0;
@@ -295,6 +379,7 @@ public class DevisSQLComponent extends BaseSQLComponent {
                 this.add(comboContact, c);
                 final SQLElement contactElement = getElement().getForeignElement("ID_CONTACT");
                 comboContact.init(contactElement, contactElement.getComboRequest(true));
+                comboContact.getRequest().setWhere(Where.FALSE);
                 DefaultGridBagConstraints.lockMinimumSize(comboContact);
                 this.addView(comboContact, "ID_CONTACT");
                 comboClient.addModelListener("wantedID", new PropertyChangeListener() {
@@ -309,7 +394,7 @@ public class DevisSQLComponent extends BaseSQLComponent {
                             int idClient = rowClient.getID();
                             comboContact.getRequest().setWhere(new Where(contactElement.getTable().getField("ID_CLIENT"), "=", idClient));
                         } else {
-                            comboContact.getRequest().setWhere(null);
+                            comboContact.getRequest().setWhere(Where.FALSE);
                             DevisSQLComponent.this.table.setTarif(null, false);
                         }
                     }
@@ -319,7 +404,9 @@ public class DevisSQLComponent extends BaseSQLComponent {
 
         if (getTable().getFieldsName().contains("DATE_VALIDITE")) {
             c.gridx++;
-            this.add(new JLabel(getLabelFor("DATE_VALIDITE")), c);
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(new JLabel(getLabelFor("DATE_VALIDITE"), SwingConstants.RIGHT), c);
+            c.fill = GridBagConstraints.NONE;
             c.gridx++;
             JDate dateValidite = new JDate();
             this.add(dateValidite, c);
@@ -334,11 +421,11 @@ public class DevisSQLComponent extends BaseSQLComponent {
             c.weightx = 0;
             c.weighty = 0;
             c.gridwidth = 1;
-            JLabel comp = new JLabel("Tarif à appliquer", SwingConstants.RIGHT);
+            c.fill = GridBagConstraints.HORIZONTAL;
+            JLabel comp = new JLabel(getLabelFor("ID_TARIF"), SwingConstants.RIGHT);
             this.add(comp, c);
             c.gridx++;
-            c.gridwidth = GridBagConstraints.REMAINDER;
-
+            c.fill = GridBagConstraints.NONE;
             c.weightx = 1;
             this.add(boxTarif, c);
             this.addView(boxTarif, "ID_TARIF");
@@ -352,6 +439,20 @@ public class DevisSQLComponent extends BaseSQLComponent {
                     table.setTarif(selectedRow, !isFilling());
                 }
             });
+            if (this.getTable().getFieldsName().contains("DUNNING_DATE")) {
+                c.gridx++;
+                c.weightx = 0;
+                this.add(new JLabel(getLabelFor("DUNNING_DATE"), SwingConstants.RIGHT), c);
+                c.gridx++;
+                JDate dateRelance = new JDate();
+                this.add(dateRelance, c);
+                if (getTable().getDBRoot().contains("TARIF_AGENCE")) {
+                    this.addView(dateRelance, "DUNNING_DATE", REQ);
+                } else {
+                    this.addView(dateRelance, "DUNNING_DATE");
+                }
+            }
+
         }
 
         // Table d'élément
@@ -1071,4 +1172,5 @@ public class DevisSQLComponent extends BaseSQLComponent {
         this.table.getModel().fireTableDataChanged();
         this.table.repaint();
     }
+
 }

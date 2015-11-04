@@ -31,6 +31,9 @@ public class CommandeBrSQLInjector extends SQLInjector {
         map(tableCmd.getField("NOM"), tableBr.getField("NOM"));
         map(tableCmd.getField("INFOS"), tableBr.getField("INFOS"));
         map(tableCmd.getField("ID"), tableBr.getField("ID_COMMANDE"));
+        if (tableBr.contains("CREATE_VIRTUAL_STOCK")) {
+            mapDefaultValues(tableBr.getField("CREATE_VIRTUAL_STOCK"), Boolean.FALSE);
+        }
     }
 
     @Override

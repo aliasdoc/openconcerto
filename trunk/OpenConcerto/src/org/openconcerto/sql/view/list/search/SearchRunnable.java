@@ -17,15 +17,16 @@ import org.openconcerto.sql.view.list.ListAccess;
 import org.openconcerto.sql.view.list.ListSQLLine;
 import org.openconcerto.sql.view.search.SearchSpec;
 
-import java.util.Collections;
-import java.util.List;
-
 abstract class SearchRunnable implements Runnable {
 
     private final SearchQueue q;
 
-    public SearchRunnable(SearchQueue q) {
+    public SearchRunnable(final SearchQueue q) {
         this.q = q;
+    }
+
+    protected boolean performsSearch() {
+        return true;
     }
 
     /**
@@ -37,7 +38,7 @@ abstract class SearchRunnable implements Runnable {
         return this.getSearch() != null && !this.getSearch().isEmpty();
     }
 
-    protected final boolean matchFilter(ListSQLLine line) {
+    protected final boolean matchFilter(final ListSQLLine line) {
         if (this.isFiltered())
             return this.matchFilterUnsafe(line);
         else
@@ -45,12 +46,13 @@ abstract class SearchRunnable implements Runnable {
     }
 
     // ATTN only call if this.isFiltered() otherwise it might throw NPE
-    protected final boolean matchFilterUnsafe(ListSQLLine line) {
+    protected final boolean matchFilterUnsafe(final ListSQLLine line) {
         // ne chercher que sur les colonnes affichées
         final int columnCount = this.q.getModel().getColumnCount();
         return this.getSearch().match(line.getList(columnCount).subList(0, columnCount));
     }
 
+    @Override
     public String toString() {
         return this.getClass().getSimpleName() + " on " + this.q;
     }
@@ -61,9 +63,5 @@ abstract class SearchRunnable implements Runnable {
 
     protected final SearchSpec getSearch() {
         return this.q.getSearch();
-    }
-
-    protected final List<ListSQLLine> getFullList() {
-        return Collections.unmodifiableList(this.q.getFullList());
     }
 }

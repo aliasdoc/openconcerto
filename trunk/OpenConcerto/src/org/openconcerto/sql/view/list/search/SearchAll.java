@@ -14,6 +14,8 @@
  package org.openconcerto.sql.view.list.search;
 
 import org.openconcerto.sql.view.list.ListSQLLine;
+import org.openconcerto.sql.view.list.SQLTableModelColumns;
+import org.openconcerto.utils.Tuple2;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,21 +24,21 @@ import javax.swing.SwingUtilities;
 
 public final class SearchAll extends SearchRunnable {
 
-    public SearchAll(SearchQueue q) {
+    public SearchAll(final SearchQueue q) {
         super(q);
     }
 
+    @Override
     public void run() {
-        // at first we have nothing to search
-        if (this.getFullList() != null) {
-            final List<ListSQLLine> newList = this.filter(this.getFullList());
-            if (newList != null) {
-                SwingUtilities.invokeLater(new Runnable() {
-                    public void run() {
-                        SearchAll.this.getAccess().setList(newList);
-                    }
-                });
-            }
+        final Tuple2<List<ListSQLLine>, SQLTableModelColumns> fullListCopy = getAccess().getUpdateQ().copyFullList();
+        final List<ListSQLLine> newList = this.filter(fullListCopy.get0());
+        if (newList != null) {
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    getAccess().setList(newList, fullListCopy.get1());
+                }
+            });
         }
     }
 
@@ -46,23 +48,27 @@ public final class SearchAll extends SearchRunnable {
      * @param tmp the list to filter.
      * @return the filtered list, or <code>null</code> if interrupted.
      */
-    private List<ListSQLLine> filter(List<ListSQLLine> tmp) {
+    private List<ListSQLLine> filter(final List<ListSQLLine> tmp) {
         if (tmp == null)
             throw new NullPointerException();
-        List<ListSQLLine> res;
-        if (!isFiltered())
-            res = new ArrayList<ListSQLLine>(tmp);
-        else {
-            res = new ArrayList<ListSQLLine>(tmp.size());
+        final List<ListSQLLine> res;
+        if (!isFiltered()) {
+            res = tmp;
+        } else {
+            final int fullSize = tmp.size();
+            final ArrayList<ListSQLLine> l = new ArrayList<ListSQLLine>(fullSize);
             for (final ListSQLLine line : tmp) {
                 // clear the interrupt flag
                 if (Thread.interrupted()) {
-                    res = null;
-                    break;
+                    return null;
                 }
                 if (this.matchFilterUnsafe(line))
-                    res.add(line);
+                    l.add(line);
             }
+            // trim if this frees at least 60 kB
+            if (fullSize - l.size() > 15000)
+                l.trimToSize();
+            res = l;
         }
         return res;
     }

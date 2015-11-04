@@ -20,6 +20,8 @@ import org.openconcerto.laf.LAFUtils;
 import org.openconcerto.ui.TM;
 import org.openconcerto.ui.component.ComboLockedMode;
 import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.ui.component.InteractionMode.InteractionComponent;
 import org.openconcerto.ui.component.MutableListCombo;
 import org.openconcerto.ui.component.MutableListComboPopupListener;
 import org.openconcerto.ui.component.text.DocumentComponent;
@@ -111,7 +113,7 @@ import javax.swing.text.JTextComponent;
  * 
  * @param <T> type of item in the combo
  */
-public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, DocumentComponent, TextComponent {
+public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, DocumentComponent, TextComponent, InteractionComponent {
 
     // Mode de filtrage de la popup de completion
     public static final SearchMode MODE_STARTWITH = new SearchMode.DefaultSearchMode(false);
@@ -133,6 +135,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
     private final ComboLockedMode locked;
     private boolean searchable;
     private final ValueChangeSupport<T> supp;
+    private InteractionMode interactionMode;
 
     private final List<Action> actions;
     // cache
@@ -299,7 +302,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
                 if (e.getButton() != MouseEvent.BUTTON1)
                     return;
 
-                if (this.isClickTarget(e)) {
+                if (getInteractionMode().isEditable() && this.isClickTarget(e)) {
                     // acquire focus so that we can listen to focusLost
                     getTextComp().requestFocusInWindow();
                     final boolean showing = ISearchableCombo.this.popupCompletion.isShowing();
@@ -357,7 +360,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
         this.setOpaque(false);
 
         // init this.btn
-        this.setEnabled(true);
+        this.setInteractionMode(InteractionMode.READ_WRITE);
         this.setSearchable(true);
     }
 
@@ -412,10 +415,35 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
 
     @Override
     public void setEnabled(final boolean b) {
-        super.setEnabled(b);
-        this.text.setEnabled(b);
+        if (b != this.isEnabled())
+            this.setInteractionMode(b ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+    }
+
+    @Override
+    public void setInteractionMode(InteractionMode mode) {
+        this.interactionMode = mode;
+        super.setEnabled(mode.isEnabled());
+        updateTxt();
+        updateBtn();
+    }
+
+    private void updateTxt() {
+        this.text.setEnabled(this.getInteractionMode().isEnabled());
+        this.text.setEditable(this.getInteractionMode().isEditable() && (this.searchable || !this.isLocked()));
+        // swing removes our background
+        if (!this.text.isEditable()) {
+            this.text.setBackground(Color.WHITE);
+        }
+    }
+
+    private void updateBtn() {
         // don't let the user think he can click, if there's nothing
-        this.btn.setEnabled(b && this.getCache() != null);
+        this.btn.setEnabled(this.getInteractionMode().isEditable() && this.getCache() != null);
+    }
+
+    @Override
+    public InteractionMode getInteractionMode() {
+        return this.interactionMode;
     }
 
     protected final ComboLockedMode getMode() {
@@ -432,11 +460,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
 
     public final void setSearchable(final boolean searchable) {
         this.searchable = searchable;
-        this.text.setEditable(this.searchable || !this.isLocked());
-        // swing removes our background
-        if (!this.text.isEditable()) {
-            this.text.setBackground(Color.WHITE);
-        }
+        updateTxt();
     }
 
     /**
@@ -463,7 +487,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
 
         this.cache = acache;
         // the btn should now be enabled
-        this.setEnabled(this.isEnabled());
+        this.updateBtn();
 
         final boolean isMutable = acache instanceof IMutableListModel;
         final IMutableListModel<T> mutable = isMutable ? (IMutableListModel<T>) acache : null;
@@ -835,7 +859,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
 
     // null meaning show all existing values
     private void updateAutoCompletion(final String t) {
-        if (this.getCache() == null) {
+        if (this.getCache() == null || !this.getInteractionMode().isEditable()) {
             return;
         }
 
@@ -897,7 +921,7 @@ public class ISearchableCombo<T> extends JPanel implements ValueWrapper<T>, Docu
     }
 
     void showCompletionPopup() {
-        if (this.isShowing()) {
+        if (this.isShowing() && this.getInteractionMode().isEditable()) {
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     ISearchableCombo.this.popupCompletion.open();

@@ -198,10 +198,14 @@ public final class DocumentFilterList extends DocumentFilter {
 
         @Override
         public void replace(int offset, int length, String text, AttributeSet attrs) throws BadLocationException {
-            if (this.nextFilter == null)
-                this.orig.replace(offset, length, text, attrs);
-            else
+            if (this.nextFilter == null) {
+                final String str = this.orig.getDocument().getText(offset, length);
+                if (!str.equals(text)) {
+                    this.orig.replace(offset, length, text, attrs);
+                }
+            } else {
                 this.nextFilter.replace(this.next, offset, length, text, attrs);
+            }
         }
     }
 

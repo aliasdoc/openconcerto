@@ -132,10 +132,10 @@ public class AnalytiqueSQLElement extends ComptaSQLConfElement {
                 // on recupere les axes existant
                 // SELECT ID, NOM FROM AXE
                 SQLBase base = getTable().getBase();
-                SQLSelect sel = new SQLSelect(base);
+                SQLSelect sel = new SQLSelect();
                 sel.addSelect(getTable().getKey());
                 sel.addSelect(getTable().getField("NOM"));
-                sel.addRawOrder("AXE_ANALYTIQUE.NOM");
+                sel.addFieldOrder(sel.getAlias(getTable().getField("NOM")));
                 String req = sel.asString();
 
                 Object ob = getTable().getBase().getDataSource().execute(req, new ArrayListHandler());

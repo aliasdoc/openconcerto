@@ -88,14 +88,18 @@ public final class SQLServer extends DBStructureItemJDBC {
         final DBSystemRoot res = create(url, new IClosure<DBSystemRoot>() {
             @Override
             public void executeChecked(DBSystemRoot input) {
-                assert url.getRootName() != null;
-                input.setRootToMap(url.getRootName());
-                input.addRootsToMap(roots);
+                if (url.getRootName() != null) {
+                    input.setRootToMap(url.getRootName());
+                    input.addRootsToMap(roots);
+                } else {
+                    input.setRootsToMap(roots);
+                }
             }
         }, dsInit);
         if (setPath) {
             final List<String> path = new ArrayList<String>(roots);
-            path.add(0, url.getRootName());
+            if (url.getRootName() != null)
+                path.add(0, url.getRootName());
             path.retainAll(res.getChildrenNames());
             if (path.size() > 0)
                 res.setRootPath(path);

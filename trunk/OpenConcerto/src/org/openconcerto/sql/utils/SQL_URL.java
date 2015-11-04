@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An URL identifying a specific DBRoot or SQLTable. There's 2 types :
+ * An URL identifying a specific DBSystemRoot, DBRoot or SQLTable. There's 2 types :
  * <dl>
  * <dt>Simple</dt>
  * <dd>Exclusively to access a server, eg psql://user@127.0.0.1:5433/Controle/Ideation_2007/TENSION
@@ -58,8 +58,6 @@ public abstract class SQL_URL {
 
         if (sysRoot == null)
             throw new IllegalArgumentException("null sysRoot");
-        if (root == null)
-            throw new IllegalArgumentException("null root");
 
         this.originalURL = originalURL;
         this.system = system;
@@ -140,7 +138,7 @@ public abstract class SQL_URL {
             if (path.size() > 0) {
                 root = path.remove(0).getName();
             } else {
-                throw new IllegalArgumentException("Not root specified for the SystemRoot: " + sysRoot);
+                root = null;
             }
             // tableName is not mandatory
             if (path.size() > 0)

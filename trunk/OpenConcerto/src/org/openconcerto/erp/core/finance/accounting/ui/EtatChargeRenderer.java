@@ -24,7 +24,6 @@ import javax.swing.JTable;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 
-
 public class EtatChargeRenderer extends DefaultTableCellRenderer {
 
     private final static Color couleurCot = new Color(253, 243, 204);
@@ -35,24 +34,26 @@ public class EtatChargeRenderer extends DefaultTableCellRenderer {
         super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
         if (!isSelected) {
-
             if ((value != null) && (value.getClass() == String.class)) {
-
                 this.setBackground(couleurCot);
-
             } else {
                 this.setBackground(Color.WHITE);
             }
         }
-
-        if (value instanceof Float) {
-            // System.out.println("setText Double format" + value.toString());
-            float f = ((Float) value).floatValue();
-            this.setText(numberFormat.format(f));
-            this.setHorizontalAlignment(SwingConstants.RIGHT);
-        }
-        if (value.getClass() == Long.class) {
-            this.setText(GestionDevise.currencyToString(((Long) value).longValue()));
+        if (value == null) {
+            this.setText("");
+        } else {
+            if (value instanceof Float) {
+                float f = ((Float) value).floatValue();
+                this.setText(numberFormat.format(f));
+                this.setHorizontalAlignment(SwingConstants.RIGHT);
+            } else if (value instanceof Long) {
+                this.setText(GestionDevise.currencyToString(((Long) value).longValue()));
+                this.setHorizontalAlignment(SwingConstants.RIGHT);
+            } else {
+                this.setHorizontalAlignment(SwingConstants.LEFT);
+                this.setText(value.toString());
+            }
         }
         return this;
     }

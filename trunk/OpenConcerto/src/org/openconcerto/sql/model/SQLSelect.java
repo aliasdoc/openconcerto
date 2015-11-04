@@ -18,6 +18,7 @@ import org.openconcerto.sql.model.Order.Nulls;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.Tuple2;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.util.ArrayList;
@@ -50,7 +51,7 @@ public final class SQLSelect {
      * @param params the parameters, eg [ /TENSION/, |TENSION.LABEL| ].
      * @return pattern with % replaced, eg SELECT * FROM "TENSION" where "TENSION.LABEL" like '%a%'.
      */
-    public static final String quote(final String pattern, Object... params) {
+    public static final String quote(final String pattern, final Object... params) {
         return SQLBase.quoteStd(pattern, params);
     }
 
@@ -76,7 +77,7 @@ public final class SQLSelect {
     // la politique générale pour l'exclusion des indéfinis
     private boolean generalExcludeUndefined;
     // [SQLTable => Boolean]
-    private Map<SQLTable, Boolean> excludeUndefined;
+    private final Map<SQLTable, Boolean> excludeUndefined;
     // null key for general
     private final Map<SQLTable, ArchiveMode> archivedPolicy;
     // DISTINCT
@@ -88,6 +89,8 @@ public final class SQLSelect {
     private final List<String> waitTrxTables;
     // number of rows to return
     private Integer limit;
+    // offset from the start
+    private int offset;
 
     /**
      * Create a new SQLSelect.
@@ -95,7 +98,8 @@ public final class SQLSelect {
      * @param base the database of the request.
      * @deprecated use {@link #SQLSelect(DBSystemRoot, boolean)}
      */
-    public SQLSelect(SQLBase base) {
+    @Deprecated
+    public SQLSelect(final SQLBase base) {
         this(base, false);
     }
 
@@ -107,7 +111,8 @@ public final class SQLSelect {
      *        undefined.
      * @deprecated use {@link #SQLSelect(DBSystemRoot, boolean)}
      */
-    public SQLSelect(SQLBase base, boolean plain) {
+    @Deprecated
+    public SQLSelect(final SQLBase base, final boolean plain) {
         this(base.getDBSystemRoot(), plain);
     }
 
@@ -115,7 +120,7 @@ public final class SQLSelect {
         this(false);
     }
 
-    public SQLSelect(boolean plain) {
+    public SQLSelect(final boolean plain) {
         this((DBSystemRoot) null, plain);
     }
 
@@ -127,7 +132,7 @@ public final class SQLSelect {
      * @param plain whether this request should automatically add a where clause for archived and
      *        undefined.
      */
-    public SQLSelect(DBSystemRoot sysRoot, boolean plain) {
+    public SQLSelect(final DBSystemRoot sysRoot, final boolean plain) {
         this.select = new ArrayList<String>();
         this.selectNames = new ArrayList<String>();
         this.selectFields = new ArrayList<FieldRef>();
@@ -146,6 +151,8 @@ public final class SQLSelect {
         // false by default cause it is quite incompatible (and maybe slow too)
         this.waitTrx = false;
         this.waitTrxTables = new ArrayList<String>();
+        this.limit = null;
+        this.offset = 0;
         if (plain) {
             this.generalExcludeUndefined = false;
             this.setArchivedPolicy(BOTH);
@@ -162,14 +169,14 @@ public final class SQLSelect {
      * 
      * @param orig l'instance à cloner.
      */
-    public SQLSelect(SQLSelect orig) {
+    public SQLSelect(final SQLSelect orig) {
         // ATTN synch les implémentations des attributs (LinkedHashSet, ...)
         this.select = new ArrayList<String>(orig.select);
         this.selectNames = new ArrayList<String>(orig.selectNames);
         this.selectFields = new ArrayList<FieldRef>(orig.selectFields);
-        this.where = orig.where == null ? null : new Where(orig.where);
+        this.where = orig.where;
         this.groupBy = new ArrayList<FieldRef>(orig.groupBy);
-        this.having = orig.having == null ? null : new Where(orig.having);
+        this.having = orig.having;
         this.order = new ArrayList<String>(orig.order);
         this.from = new FromClause(orig.from);
         this.declaredTables = new AliasedTables(orig.declaredTables);
@@ -183,13 +190,18 @@ public final class SQLSelect {
         this.waitTrx = orig.waitTrx;
         this.waitTrxTables = new ArrayList<String>(orig.waitTrxTables);
         this.limit = orig.limit;
+        this.offset = orig.offset;
     }
 
-    public final SQLSystem getSQLSystem() {
+    final DBSystemRoot getSystemRoot() {
         final DBSystemRoot sysRoot = this.declaredTables.getSysRoot();
         if (sysRoot == null)
             throw new IllegalStateException("No systemRoot supplied (neither in the constructor nor by adding an item)");
-        return sysRoot.getServer().getSQLSystem();
+        return sysRoot;
+    }
+
+    public final SQLSystem getSQLSystem() {
+        return getSystemRoot().getServer().getSQLSystem();
     }
 
     public String asString() {
@@ -199,11 +211,6 @@ public final class SQLSelect {
         result.append("SELECT ");
         if (this.distinct)
             result.append("DISTINCT ");
-        if (this.getLimit() != null && sys == SQLSystem.MSSQL) {
-            result.append("TOP ");
-            result.append(this.getLimit());
-            result.append(' ');
-        }
         result.append(CollectionUtils.join(this.select, ", "));
 
         result.append("\n " + this.from.getSQL());
@@ -228,7 +235,7 @@ public final class SQLSelect {
             result.append("\n GROUP BY ");
             result.append(CollectionUtils.join(this.groupBy, ", ", new ITransformer<FieldRef, String>() {
                 @Override
-                public String transformChecked(FieldRef input) {
+                public String transformChecked(final FieldRef input) {
                     return input.getFieldRef();
                 }
             }));
@@ -241,9 +248,34 @@ public final class SQLSelect {
             result.append("\n ORDER BY ");
             result.append(CollectionUtils.join(this.order, ", "));
         }
-        if (this.getLimit() != null && sys != SQLSystem.MSSQL) {
-            result.append("\nLIMIT ");
-            result.append(this.getLimit());
+        // most systems need to specify both
+        if (this.getLimit() != null || this.getOffset() != 0) {
+            if (sys == SQLSystem.MSSQL) {
+                result.append("\nOFFSET ");
+                result.append(this.getOffset());
+                result.append(" ROWS");
+                if (this.getLimit() != null) {
+                    result.append(" FETCH NEXT ");
+                    result.append(this.getLimit());
+                    result.append(" ROWS ONLY");
+                }
+            } else {
+                final Object actualLimit;
+                if (this.getLimit() != null) {
+                    actualLimit = this.getLimit();
+                } else if (sys == SQLSystem.H2) {
+                    actualLimit = "NULL";
+                } else if (sys == SQLSystem.POSTGRESQL) {
+                    actualLimit = "ALL";
+                } else {
+                    // From the official MySQL manual
+                    actualLimit = Integer.MAX_VALUE;
+                }
+                result.append("\nLIMIT ");
+                result.append(actualLimit);
+                result.append(" OFFSET ");
+                result.append(this.getOffset());
+            }
         }
         // wait for other update trx to finish before selecting
         if (this.waitTrx) {
@@ -287,6 +319,7 @@ public final class SQLSelect {
         return res;
     }
 
+    @Override
     public String toString() {
         return this.asString();
     }
@@ -332,7 +365,7 @@ public final class SQLSelect {
         return this.where;
     }
 
-    public final boolean contains(String alias) {
+    public final boolean contains(final String alias) {
         return this.declaredTables.contains(alias);
     }
 
@@ -343,18 +376,23 @@ public final class SQLSelect {
      * @param table the table to test.
      * @return <code>true</code> if table is already in this.
      */
-    public final boolean contains(SQLTable table) {
+    public final boolean contains(final SQLTable table) {
         return this.contains(table.getName());
+    }
+
+    private final void addIfNotExist(final TableRef t) {
+        if (this.declaredTables.add(t, false))
+            this.from.add(t);
     }
 
     // *** group by / having
 
-    public SQLSelect addGroupBy(FieldRef f) {
+    public SQLSelect addGroupBy(final FieldRef f) {
         this.groupBy.add(f);
         return this;
     }
 
-    public SQLSelect setHaving(Where w) {
+    public SQLSelect setHaving(final Where w) {
         this.having = w;
         return this;
     }
@@ -370,11 +408,11 @@ public final class SQLSelect {
      * @throws IllegalStateException si t n'est pas dans cette requete.
      * @see SQLTable#isOrdered()
      */
-    public SQLSelect addOrder(String t) {
+    public SQLSelect addOrder(final String t) {
         return this.addOrder(this.getTableRef(t));
     }
 
-    public SQLSelect addOrder(TableRef t) {
+    public SQLSelect addOrder(final TableRef t) {
         return this.addOrder(t, true);
     }
 
@@ -388,7 +426,7 @@ public final class SQLSelect {
      * @throws IllegalArgumentException if <code>t</code> isn't ordered and <code>mustExist</code>
      *         is <code>true</code>.
      */
-    public SQLSelect addOrder(TableRef t, final boolean fieldMustExist) {
+    public SQLSelect addOrder(final TableRef t, final boolean fieldMustExist) {
         final SQLField orderField = t.getTable().getOrderField();
         if (orderField != null)
             this.addFieldOrder(t.getField(orderField.getName()));
@@ -397,15 +435,15 @@ public final class SQLSelect {
         return this;
     }
 
-    public SQLSelect addFieldOrder(FieldRef fieldRef) {
+    public SQLSelect addFieldOrder(final FieldRef fieldRef) {
         return this.addFieldOrder(fieldRef, Order.asc());
     }
 
-    public SQLSelect addFieldOrder(FieldRef fieldRef, final Direction dir) {
+    public SQLSelect addFieldOrder(final FieldRef fieldRef, final Direction dir) {
         return this.addFieldOrder(fieldRef, dir, null);
     }
 
-    public SQLSelect addFieldOrder(FieldRef fieldRef, final Direction dir, final Nulls nulls) {
+    public SQLSelect addFieldOrder(final FieldRef fieldRef, final Direction dir, final Nulls nulls) {
         // with Derby if you ORDER BY w/o mentioning the field in the select clause
         // you can't get the table names of columns in a result set.
         if (fieldRef.getField().getServer().getSQLSystem().equals(SQLSystem.DERBY))
@@ -420,7 +458,7 @@ public final class SQLSelect {
      * @param selectItem an item that appears in the select, either a field reference or an alias.
      * @return this.
      */
-    public SQLSelect addRawOrder(String selectItem) {
+    public SQLSelect addRawOrder(final String selectItem) {
         this.order.add(selectItem);
         return this;
     }
@@ -437,7 +475,7 @@ public final class SQLSelect {
      * @return this.
      * @throws IllegalStateException si t n'est pas dans cette requete.
      */
-    public SQLSelect addOrderSilent(String t) {
+    public SQLSelect addOrderSilent(final String t) {
         return this.addOrder(this.getTableRef(t), false);
     }
 
@@ -449,7 +487,7 @@ public final class SQLSelect {
      * @param f le champ à ajouter.
      * @return this pour pouvoir chaîner.
      */
-    public SQLSelect addSelect(FieldRef f) {
+    public SQLSelect addSelect(final FieldRef f) {
         return this.addSelect(f, null);
     }
 
@@ -459,7 +497,7 @@ public final class SQLSelect {
      * @param s une collection de FieldRef.
      * @return this pour pouvoir chaîner.
      */
-    public SQLSelect addAllSelect(Collection<? extends FieldRef> s) {
+    public SQLSelect addAllSelect(final Collection<? extends FieldRef> s) {
         for (final FieldRef element : s) {
             this.addSelect(element);
         }
@@ -473,7 +511,7 @@ public final class SQLSelect {
      * @param s une collection de nom de champs, eg "NOM".
      * @return this pour pouvoir chaîner.
      */
-    public SQLSelect addAllSelect(TableRef t, Collection<String> s) {
+    public SQLSelect addAllSelect(final TableRef t, final Collection<String> s) {
         for (final String fieldName : s) {
             this.addSelect(t.getField(fieldName));
         }
@@ -487,11 +525,11 @@ public final class SQLSelect {
      * @param function la fonction, eg "AVG".
      * @return this pour pouvoir chaîner.
      */
-    public SQLSelect addSelect(FieldRef f, String function) {
+    public SQLSelect addSelect(final FieldRef f, final String function) {
         return this.addSelect(f, function, null);
     }
 
-    public SQLSelect addSelect(FieldRef f, String function, String alias) {
+    public SQLSelect addSelect(final FieldRef f, final String function, final String alias) {
         final String defaultAlias;
         String s = f.getFieldRef();
         if (function != null) {
@@ -510,19 +548,19 @@ public final class SQLSelect {
      * @param alias a name for the expression, may be <code>null</code>.
      * @return this.
      */
-    public SQLSelect addRawSelect(String expr, String alias) {
+    public SQLSelect addRawSelect(final String expr, final String alias) {
         return this.addRawSelect(null, expr, alias, null);
     }
 
     // private since we can't check that f is used in expr
     // defaultName only used if alias is null
-    private SQLSelect addRawSelect(FieldRef f, String expr, String alias, String defaultName) {
+    private SQLSelect addRawSelect(final FieldRef f, String expr, final String alias, final String defaultName) {
         if (alias != null) {
             expr += " as " + SQLBase.quoteIdentifier(alias);
         }
         this.select.add(expr);
         if (f != null)
-            this.from.add(this.declaredTables.add(f));
+            this.addIfNotExist(f.getTableRef());
         this.selectFields.add(f);
         this.selectNames.add(alias != null ? alias : defaultName);
         return this;
@@ -534,13 +572,13 @@ public final class SQLSelect {
      * @param function la fonction, eg "COUNT".
      * @return this pour pouvoir chaîner.
      */
-    public SQLSelect addSelectFunctionStar(String function) {
+    public SQLSelect addSelectFunctionStar(final String function) {
         return this.addRawSelect(function + "(*)", null);
     }
 
-    public SQLSelect addSelectStar(TableRef table) {
+    public SQLSelect addSelectStar(final TableRef table) {
         this.select.add(SQLBase.quoteIdentifier(table.getAlias()) + ".*");
-        this.from.add(this.declaredTables.add(table));
+        this.addIfNotExist(table);
         final List<SQLField> allFields = table.getTable().getOrderedFields();
         this.selectFields.addAll(allFields);
         for (final SQLField f : allFields)
@@ -548,10 +586,17 @@ public final class SQLSelect {
         return this;
     }
 
+    public SQLSelect clearSelect() {
+        this.select.clear();
+        this.selectFields.clear();
+        this.selectNames.clear();
+        return this;
+    }
+
     // *** from
 
-    public SQLSelect addFrom(SQLTable table, String alias) {
-        return this.addFrom(new AliasedTable(table, alias));
+    public SQLSelect addFrom(final SQLTable table, final String alias) {
+        return this.addFrom(AliasedTable.getTableRef(table, alias));
     }
 
     /**
@@ -561,8 +606,8 @@ public final class SQLSelect {
      * @param t the table to add.
      * @return this.
      */
-    public SQLSelect addFrom(TableRef t) {
-        this.from.add(this.declaredTables.add(t));
+    public SQLSelect addFrom(final TableRef t) {
+        this.addIfNotExist(t);
         return this;
     }
 
@@ -574,7 +619,7 @@ public final class SQLSelect {
      * @param w la nouvelle clause, <code>null</code> pour aucune clause.
      * @return this.
      */
-    public SQLSelect setWhere(Where w) {
+    public SQLSelect setWhere(final Where w) {
         this.where = w;
         // FIXME si where était non null alors on a ajouté des tables dans FROM
         // qui ne sont peut être plus utiles
@@ -582,13 +627,13 @@ public final class SQLSelect {
         // sert dans addOrder
         if (w != null) {
             for (final FieldRef f : w.getFields()) {
-                this.from.add(this.declaredTables.add(f));
+                this.addIfNotExist(f.getTableRef());
             }
         }
         return this;
     }
 
-    public SQLSelect setWhere(FieldRef field, String op, int i) {
+    public SQLSelect setWhere(final FieldRef field, final String op, final int i) {
         return this.setWhere(new Where(field, op, i));
     }
 
@@ -598,11 +643,26 @@ public final class SQLSelect {
      * @param w le Where à ajouter.
      * @return this.
      */
-    public SQLSelect andWhere(Where w) {
+    public SQLSelect andWhere(final Where w) {
         return this.setWhere(Where.and(this.getWhere(), w));
     }
 
     // *** join
+
+    /**
+     * Add a join to this SELECT.
+     * 
+     * @param joinType can be INNER, LEFT or RIGHT.
+     * @param existingAlias an alias for a table already in this select, can be <code>null</code>.
+     * @param s how to join a new table, i.e. the {@link Step#getTo() destination} will be added.
+     * @param joinedAlias the alias of the new table, can be <code>null</code>.
+     * @return the added join.
+     */
+    public SQLSelectJoin addJoin(final String joinType, final String existingAlias, final Step s, final String joinedAlias) {
+        final TableRef existingTable = this.getTableRef(existingAlias != null ? existingAlias : s.getFrom().getName());
+        final TableRef joinedTable = new AliasedTable(s.getTo(), joinedAlias);
+        return this.addJoin(new SQLSelectJoin(this, joinType, existingTable, s, joinedTable));
+    }
 
     // simple joins (with foreign field)
 
@@ -614,7 +674,7 @@ public final class SQLSelect {
      * @param f a foreign key, eg |BATIMENT.ID_SITE|.
      * @return the added join.
      */
-    public SQLSelectJoin addJoin(String joinType, FieldRef f) {
+    public SQLSelectJoin addJoin(final String joinType, final FieldRef f) {
         return this.addJoin(joinType, f, null);
     }
 
@@ -627,13 +687,9 @@ public final class SQLSelect {
      * @param alias the alias for joined table, can be <code>null</code>, eg "art2".
      * @return the added join.
      */
-    public SQLSelectJoin addJoin(String joinType, FieldRef f, final String alias) {
-        final SQLTable foreignTable = f.getField().getForeignTable();
-        // check that f is contained in this
-        this.getTable(f.getAlias());
-        // handle null
-        final TableRef aliased = this.declaredTables.add(alias, foreignTable);
-        return this.addJoin(new SQLSelectJoin(this, joinType, aliased, f, aliased));
+    public SQLSelectJoin addJoin(final String joinType, final FieldRef f, final String alias) {
+        final Step s = Step.create(f.getField(), org.openconcerto.sql.model.graph.Link.Direction.FOREIGN);
+        return this.addJoin(joinType, f.getAlias(), s, alias);
     }
 
     // arbitrary joins
@@ -647,10 +703,12 @@ public final class SQLSelect {
      * @throws IllegalArgumentException if <code>w</code> hasn't exactly one table not yet
      *         {@link #contains(String) contained} in this.
      */
-    public SQLSelectJoin addJoin(String joinType, final Where w) {
+    public SQLSelectJoin addJoin(final String joinType, final Where w) {
         final Set<AliasedTable> tables = new HashSet<AliasedTable>();
         for (final FieldRef f : w.getFields()) {
             if (!this.contains(f.getAlias())) {
+                // since it's a Set, use same class (i.e. SQLTable.equals(AliasedTable) always
+                // return false)
                 tables.add(new AliasedTable(f.getField().getTable(), f.getAlias()));
             }
         }
@@ -659,17 +717,33 @@ public final class SQLSelect {
         if (tables.size() > 1)
             throw new IllegalArgumentException("More than one table to add (" + tables + ") in " + w);
         final AliasedTable joinedTable = tables.iterator().next();
-        return addJoin(joinType, joinedTable.getTable(), joinedTable.getAlias(), w);
+        return addJoin(joinType, joinedTable, w);
     }
 
-    public SQLSelectJoin addJoin(String joinType, SQLTable joinedTable, final Where w) {
-        return this.addJoin(joinType, joinedTable, null, w);
-    }
+    public SQLSelectJoin addJoin(final String joinType, final TableRef joinedTable, final Where w) {
+        // try to parse the where to find a Step
+        final Tuple2<FieldRef, TableRef> parsed = SQLSelectJoin.parse(w);
+        final FieldRef foreignFieldParsed = parsed.get0();
+        final Step s;
+        final TableRef existingTable;
+        if (foreignFieldParsed == null) {
+            s = null;
+            existingTable = null;
+        } else {
+            final TableRef srcTableParsed = foreignFieldParsed.getTableRef();
+            final TableRef destTableParsed = parsed.get1();
+            if (AliasedTable.equals(destTableParsed, joinedTable)) {
+                existingTable = srcTableParsed;
+                s = Step.create(foreignFieldParsed.getField(), org.openconcerto.sql.model.graph.Link.Direction.FOREIGN);
+            } else if (AliasedTable.equals(srcTableParsed, joinedTable)) {
+                existingTable = destTableParsed;
+                s = Step.create(foreignFieldParsed.getField(), org.openconcerto.sql.model.graph.Link.Direction.REFERENT);
+            } else {
+                throw new IllegalArgumentException("Joined table " + joinedTable + " isn't referenced in " + w);
+            }
+        }
 
-    public SQLSelectJoin addJoin(String joinType, SQLTable joinedTable, final String alias, final Where w) {
-        // handle null
-        final TableRef aliased = this.declaredTables.add(alias, joinedTable);
-        return this.addJoin(new SQLSelectJoin(this, joinType, aliased, w));
+        return this.addJoin(new SQLSelectJoin(this, joinType, joinedTable, w, s, existingTable));
     }
 
     /**
@@ -683,7 +757,7 @@ public final class SQLSelect {
      *        <code>null</code> for "SITE".
      * @return the added join.
      */
-    public SQLSelectJoin addBackwardJoin(String joinType, final String joinAlias, SQLField ff, final String foreignTableAlias) {
+    public SQLSelectJoin addBackwardJoin(final String joinType, final String joinAlias, final SQLField ff, final String foreignTableAlias) {
         return this.addBackwardJoin(joinType, new AliasedField(ff, joinAlias), foreignTableAlias);
     }
 
@@ -697,25 +771,34 @@ public final class SQLSelect {
      *        <code>null</code> for "SITE".
      * @return the added join.
      */
-    public SQLSelectJoin addBackwardJoin(String joinType, final FieldRef ff, final String foreignTableAlias) {
-        final SQLTable foreignTable = ff.getField().getForeignTable();
-        // handle null foreignTableAlias
-        // verify that the alias already exists
-        final TableRef aliasedFT = this.getTableRef(foreignTableAlias == null ? foreignTable.getName() : foreignTableAlias);
-        // verify aliasedFT coherence
-        if (aliasedFT.getTable() != foreignTable)
-            throw new IllegalArgumentException("wrong alias: " + aliasedFT + " is not an alias to the target of " + ff);
-
-        final TableRef aliased = this.declaredTables.add(ff);
-        return this.addJoin(new SQLSelectJoin(this, joinType, aliased, ff, aliasedFT));
+    public SQLSelectJoin addBackwardJoin(final String joinType, final FieldRef ff, final String foreignTableAlias) {
+        final Step s = Step.create(ff.getField(), org.openconcerto.sql.model.graph.Link.Direction.REFERENT);
+        return this.addJoin(joinType, foreignTableAlias, s, ff.getAlias());
     }
 
-    private final SQLSelectJoin addJoin(SQLSelectJoin j) {
+    private final SQLSelectJoin addJoin(final SQLSelectJoin j) {
         // first check if the joined table is not already in this from
+        // avoid this (where the 2nd line already added MOUVEMENT) :
+        // sel.addSelect(tableEcriture.getField("NOM"));
+        // sel.addSelect(tableMouvement.getField("NUMERO"));
+        // sel.addJoin("LEFT", "ECRITURE.ID_MOUVEMENT");
+        final boolean added = this.declaredTables.add(j.getJoinedTable(), true);
+        // since we passed mustBeNew=true
+        assert added;
         this.from.add(j);
         this.joinAliases.add(j.getAlias());
         this.joins.add(j);
         return j;
+    }
+
+    // ATTN doesn't check if the join is referenced
+    private final void removeJoin(final SQLSelectJoin j) {
+        if (this.joins.remove(j)) {
+            final boolean removed = this.declaredTables.remove(j.getJoinedTable());
+            assert removed;
+            this.from.remove(j);
+            this.joinAliases.remove(j.getAlias());
+        }
     }
 
     public final List<SQLSelectJoin> getJoins() {
@@ -726,16 +809,22 @@ public final class SQLSelect {
      * Get the join going through <code>ff</code>, regardless of its alias.
      * 
      * @param ff a foreign field, eg |BATIMENT.ID_SITE|.
-     * @return the corresponding join or <code>null</code> if none found, eg LEFT JOIN "test"."SITE"
-     *         "s" on "bat"."ID_SITE"="s"."ID"
+     * @return the corresponding join or <code>null</code> if not exactly one is found, e.g. LEFT
+     *         JOIN "test"."SITE" "s" on "bat"."ID_SITE"="s"."ID"
      */
-    public final SQLSelectJoin getJoinFromField(SQLField ff) {
+    public final SQLSelectJoin getJoinFromField(final SQLField ff) {
+        return CollectionUtils.getSole(getJoinsFromField(ff));
+    }
+
+    public final List<SQLSelectJoin> getJoinsFromField(final SQLField ff) {
+        final List<SQLSelectJoin> res = new ArrayList<SQLSelectJoin>();
         for (final SQLSelectJoin j : this.joins) {
-            if (j.hasForeignField() && j.getForeignField().getField().equals(ff)) {
-                return j;
+            final Step s = j.getStep();
+            if (s != null && ff.equals(s.getSingleField())) {
+                res.add(j);
             }
         }
-        return null;
+        return res;
     }
 
     /**
@@ -745,7 +834,7 @@ public final class SQLSelect {
      * @return the first matching join or <code>null</code> if none found, eg LEFT JOIN
      *         "test"."LOCAL" "l" on "r"."ID_LOCAL"="l"."ID"
      */
-    public final SQLSelectJoin findJoinAdding(SQLTable t) {
+    public final SQLSelectJoin findJoinAdding(final SQLTable t) {
         for (final SQLSelectJoin j : this.joins) {
             if (j.getJoinedTable().getTable().equals(t)) {
                 return j;
@@ -771,29 +860,55 @@ public final class SQLSelect {
     }
 
     /**
-     * Get the join going through <code>ff</code>, matching its alias.
+     * Get the join going through <code>ff</code>, matching its alias but regardless of its
+     * direction.
      * 
      * @param ff a foreign field, eg |BATIMENT.ID_SITE|.
-     * @return the corresponding join or <code>null</code> if none found, eg <code>null</code> if
-     *         this only contains LEFT JOIN "test"."SITE" "s" on "bat"."ID_SITE"="s"."ID"
+     * @return the corresponding join or <code>null</code> if not exactly one is found, eg
+     *         <code>null</code> if this only contains LEFT JOIN "test"."SITE" "s" on
+     *         "bat"."ID_SITE"="s"."ID" or if it contains
+     * 
+     *         <pre>
+     *         LEFT JOIN "test"."SITE" s1 on "BATIMENT"."ID_SITE" = s1."ID" and s1."FOO"
+     *         LEFT JOIN "test"."SITE" s2 on "BATIMENT"."ID_SITE" = s2."ID" and s2."BAR"
+     * </pre>
      */
-    public final SQLSelectJoin getJoin(FieldRef ff) {
-        for (final SQLSelectJoin j : this.joins) {
-            // handle AliasedField equals( SQLField )
-            if (j.hasForeignField() && j.getForeignField().getFieldRef().equals(ff.getFieldRef())) {
-                return j;
-            }
-        }
-        return null;
+    public final SQLSelectJoin getJoin(final FieldRef ff) {
+        return this.getJoin(ff, null);
     }
 
-    private SQLSelectJoin getJoin(SQLField ff, String foreignTableAlias) {
+    public final SQLSelectJoin getJoin(final FieldRef ff, final String foreignAlias) {
+        final Step s = Step.create(ff.getField(), org.openconcerto.sql.model.graph.Link.Direction.FOREIGN);
+        final List<SQLSelectJoin> res = new ArrayList<SQLSelectJoin>();
+        res.addAll(this.getJoins(ff.getAlias(), s, foreignAlias));
+        res.addAll(this.getJoins(foreignAlias, s.reverse(), ff.getAlias()));
+
+        // if we specify both aliases there can't be more than one join
+        if (foreignAlias != null && res.size() > 1)
+            throw new IllegalStateException("More than one join matched " + ff + " and " + foreignAlias + " :\n" + CollectionUtils.join(res, "\n"));
+        return CollectionUtils.getSole(res);
+    }
+
+    /**
+     * Get the JOIN matching the passed step.
+     * 
+     * @param fromAlias the alias for the source of the step, <code>null</code> match any alias.
+     * @param s the {@link SQLSelectJoin#getStep() step}, cannot be <code>null</code>.
+     * @param joinedAlias the alias for the destination of the step, i.e. the
+     *        {@link SQLSelectJoin#getJoinedTable() added table}, <code>null</code> match any alias.
+     * @return the matching joins.
+     */
+    public final List<SQLSelectJoin> getJoins(final String fromAlias, final Step s, final String joinedAlias) {
+        if (s == null)
+            throw new NullPointerException("Null step");
+        final List<SQLSelectJoin> res = new ArrayList<SQLSelectJoin>();
         for (final SQLSelectJoin j : this.joins) {
-            if (j.hasForeignField() && j.getForeignField().getField().equals(ff) && j.getForeignTable().getAlias().equals(foreignTableAlias)) {
-                return j;
+            final Step joinStep = j.getStep();
+            if (s.equals(joinStep) && (fromAlias == null || j.getExistingTable().getAlias().equals(fromAlias)) && (joinedAlias == null || j.getAlias().equals(joinedAlias))) {
+                res.add(j);
             }
         }
-        return null;
+        return res;
     }
 
     /**
@@ -804,11 +919,11 @@ public final class SQLSelect {
      * @param p the path that must be added, eg LOCAL-BATIMENT-SITE.
      * @return the alias of the last table of the path, "sit".
      */
-    public TableRef assurePath(String tableAlias, Path p) {
+    public TableRef assurePath(final String tableAlias, final Path p) {
         return this.followPath(tableAlias, p, true);
     }
 
-    public TableRef followPath(String tableAlias, Path p) {
+    public TableRef followPath(final String tableAlias, final Path p) {
         return this.followPath(tableAlias, p, false);
     }
 
@@ -820,7 +935,7 @@ public final class SQLSelect {
      * @param create <code>true</code> if missing joins should be created.
      * @return the alias of the last table of the path or <code>null</code>, eg "sit".
      */
-    public TableRef followPath(String tableAlias, Path p, final boolean create) {
+    public TableRef followPath(final String tableAlias, final Path p, final boolean create) {
         final TableRef firstTableRef = this.getTableRef(tableAlias);
         final SQLTable firstTable = firstTableRef.getTable();
         if (!p.getFirst().equals(firstTable) && !p.getLast().equals(firstTable))
@@ -831,38 +946,19 @@ public final class SQLSelect {
         TableRef current = firstTableRef;
         for (int i = 0; i < p.length(); i++) {
             final Step step = p.getStep(i);
-            // |BATIMENT.ID_SITE|
-            final SQLField ff = step.getSingleField();
-            // TODO handle multi-link:
-            // JOIN test.article art ON obs.ID_ARTICLE_1 = art.ID or obs.ID_ARTICLE_2 = art.ID
-            if (ff == null)
-                throw new IllegalArgumentException(p + " has more than 1 link at index " + i);
-            final SQLSelectJoin j;
-            // are we currently at the start of the foreign field or at the destination
-            final boolean forward = step.getDirection() == org.openconcerto.sql.model.graph.Link.Direction.FOREIGN;
-            if (forward) {
-                // bat.ID_SITE
-                j = this.getJoin(current.getField(ff.getName()));
-            } else {
-                // sit.ID
-                // on cherche (1 alias de ff.getTable()).ff = current.ID
-                j = this.getJoin(ff, current.getAlias());
-            }
-            if (j != null)
-                current = j.getJoinedTable();
-            else if (create) {
+            final List<SQLSelectJoin> joins = this.getJoins(current.getAlias(), step, null);
+            if (joins.size() > 1)
+                throw new IllegalStateException("More than one join from " + current + " through " + step + " : " + joins);
+            if (joins.size() == 1) {
+                current = joins.get(0).getJoinedTable();
+            } else if (create) {
                 // we must add a join
                 final String uniqAlias = getUniqueAlias("assurePath_" + i);
-                final SQLSelectJoin createdJoin;
-                if (forward)
-                    // JOIN test.SITE uniqAlias on current.ID_SITE = uniqAlias.ID
-                    createdJoin = this.addJoin("LEFT", current.getField(ff.getName()), uniqAlias);
-                else
-                    // JOIN test.BATIMENT uniqAlias on uniqAlias.ID_SITE = current.ID
-                    createdJoin = this.addBackwardJoin("LEFT", uniqAlias, ff, current.getAlias());
+                final SQLSelectJoin createdJoin = this.addJoin("LEFT", current.getAlias(), step, uniqAlias);
                 current = createdJoin.getJoinedTable();
-            } else
+            } else {
                 return null;
+            }
         }
 
         return current;
@@ -872,23 +968,23 @@ public final class SQLSelect {
         return this.generalExcludeUndefined;
     }
 
-    public void setExcludeUndefined(boolean excludeUndefined) {
+    public void setExcludeUndefined(final boolean excludeUndefined) {
         this.generalExcludeUndefined = excludeUndefined;
     }
 
-    public void setExcludeUndefined(boolean exclude, SQLTable table) {
+    public void setExcludeUndefined(final boolean exclude, final SQLTable table) {
         this.excludeUndefined.put(table, Boolean.valueOf(exclude));
     }
 
-    public void setArchivedPolicy(ArchiveMode policy) {
+    public void setArchivedPolicy(final ArchiveMode policy) {
         this.setArchivedPolicy(null, policy);
     }
 
-    public void setArchivedPolicy(SQLTable t, ArchiveMode policy) {
+    public void setArchivedPolicy(final SQLTable t, final ArchiveMode policy) {
         this.archivedPolicy.put(t, policy);
     }
 
-    public final void setDistinct(boolean distinct) {
+    public final void setDistinct(final boolean distinct) {
         this.distinct = distinct;
     }
 
@@ -899,11 +995,11 @@ public final class SQLSelect {
      * 
      * @param waitTrx <code>true</code> if this select should wait.
      */
-    public void setWaitPreviousWriteTX(boolean waitTrx) {
+    public void setWaitPreviousWriteTX(final boolean waitTrx) {
         this.waitTrx = waitTrx;
     }
 
-    public void addWaitPreviousWriteTXTable(String table) {
+    public void addWaitPreviousWriteTXTable(final String table) {
         this.setWaitPreviousWriteTX(true);
         this.waitTrxTables.add(SQLBase.quoteIdentifier(table));
     }
@@ -923,8 +1019,26 @@ public final class SQLSelect {
         return this.limit;
     }
 
+    /**
+     * Set the number of rows to skip. NOTE: many systems require an ORDER BY, but even if some
+     * don't you should use one to get consistent results.
+     * 
+     * @param offset number of rows to skip, <code>0</code> meaning don't skip any.
+     * @return this.
+     */
+    public SQLSelect setOffset(final int offset) {
+        if (offset < 0)
+            throw new IllegalArgumentException("Negative offset : " + offset);
+        this.offset = offset;
+        return this;
+    }
+
+    public int getOffset() {
+        return this.offset;
+    }
+
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         if (o instanceof SQLSelect)
             // MAYBE use instance variables
             return this.asString().equals(((SQLSelect) o).asString());
@@ -939,17 +1053,54 @@ public final class SQLSelect {
     }
 
     /**
+     * This method will replace the expressions in the {@link #getSelect()} by <code>count(*)</code>
+     * , further it will remove any items not useful for counting rows. This includes
+     * {@link #getOrder()} and left joins.
+     */
+    public final void clearForRowCount() {
+        // MAYBE support it by not removing joins declaring the referenced fields
+        if (!this.groupBy.isEmpty() || this.having != null)
+            throw new IllegalStateException("Group by present");
+
+        this.clearSelect();
+        // not needed and some systems require the used fields to be in the select
+        this.clearOrder();
+        // some systems don't support aggregate functions (e.g. count) with this
+        this.setWaitPreviousWriteTX(false);
+
+        final Set<String> requiredAliases;
+        if (this.getWhere() == null) {
+            requiredAliases = Collections.emptySet();
+        } else {
+            requiredAliases = new HashSet<String>();
+            for (final FieldRef f : this.getWhere().getFields()) {
+                requiredAliases.add(f.getTableRef().getAlias());
+            }
+        }
+        for (final SQLSelectJoin j : new ArrayList<SQLSelectJoin>(this.joins)) {
+            if (j.getJoinType().equalsIgnoreCase("left") && !requiredAliases.contains(j.getAlias()))
+                this.removeJoin(j);
+        }
+
+        this.addSelectFunctionStar("count");
+    }
+
+    public final Map<String, TableRef> getTableRefs() {
+        return this.declaredTables.getMap();
+    }
+
+    /**
      * Returns the table designated in this select by name.
      * 
      * @param name a table name or an alias, eg "OBSERVATION" or "art2".
      * @return the table named <code>name</code>.
      * @throws IllegalArgumentException if <code>name</code> is unknown to this select.
      */
-    public final SQLTable getTable(String name) {
+    public final SQLTable getTable(final String name) {
         return this.getTableRef(name).getTable();
     }
 
-    public final TableRef getTableRef(String alias) {
+    public final TableRef getTableRef(final String alias) {
         final TableRef res = this.declaredTables.getAliasedTable(alias);
         if (res == null)
             throw new IllegalArgumentException("alias not in this select : " + alias);
@@ -963,15 +1114,15 @@ public final class SQLSelect {
      * @return the alias for <code>t</code>, or <code>null</code> if <code>t</code> is not exactly
      *         once in this.
      */
-    public final TableRef getAlias(SQLTable t) {
+    public final TableRef getAlias(final SQLTable t) {
         return this.declaredTables.getAlias(t);
     }
 
-    public final List<TableRef> getAliases(SQLTable t) {
+    public final List<TableRef> getAliases(final SQLTable t) {
         return this.declaredTables.getAliases(t);
     }
 
-    public final FieldRef getAlias(SQLField f) {
+    public final FieldRef getAlias(final SQLField f) {
         return this.getAlias(f.getTable()).getField(f.getName());
     }
 
@@ -1012,7 +1163,7 @@ public final class SQLSelect {
         }
     }
 
-    private final FieldRef createRef(String alias, SQLField f) {
+    private final FieldRef createRef(final String alias, final SQLField f) {
         return createRef(alias, f, true);
     }
 
@@ -1026,7 +1177,7 @@ public final class SQLSelect {
      * @throws IllegalArgumentException if <code>mustExist</code> is <code>true</code> and this does
      *         not contain alias.
      */
-    private final FieldRef createRef(String alias, SQLField f, boolean mustExist) {
+    private final FieldRef createRef(final String alias, final SQLField f, final boolean mustExist) {
         if (mustExist && !this.contains(alias))
             throw new IllegalArgumentException("unknown alias " + alias);
         return new AliasedField(f, alias);
@@ -1054,7 +1205,7 @@ public final class SQLSelect {
         return res;
     }
 
-    private static final Set<SQLField> getFields(Where w) {
+    private static final Set<SQLField> getFields(final Where w) {
         if (w != null) {
             final Set<SQLField> res = new HashSet<SQLField>();
             for (final FieldRef v : w.getFields())

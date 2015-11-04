@@ -30,10 +30,18 @@ public abstract class AdresseClientProvider implements SpreadSheetCellValueProvi
     public SQLRowAccessor getAdresse(SQLRowAccessor r, int type) {
 
         // Adresse spécifique
-        if (r.getTable().contains("ID_ADRESSE")) {
-            SQLRowAccessor rAdr = r.getForeign("ID_ADRESSE");
-            if (rAdr != null && !rAdr.isUndefined()) {
-                return rAdr;
+        if (type != ADRESSE_PRINCIPALE) {
+            String field;
+            if (type == ADRESSE_FACTURATION) {
+                field = "ID_ADRESSE";
+            } else {
+                field = "ID_ADRESSE_LIVRAISON";
+            }
+            if (r.getTable().contains(field)) {
+                SQLRowAccessor rAdr = r.getForeign(field);
+                if (rAdr != null && !rAdr.isUndefined()) {
+                    return rAdr;
+                }
             }
         }
 
@@ -53,6 +61,16 @@ public abstract class AdresseClientProvider implements SpreadSheetCellValueProvi
                 adrResult = rAdr;
             }
         }
+
+        if (type == ADRESSE_FACTURATION && r.getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            if (!r.isForeignEmpty("ID_CLIENT_DEPARTEMENT")) {
+                SQLRowAccessor rDpt = r.getForeign("ID_CLIENT_DEPARTEMENT");
+                if (!rDpt.isForeignEmpty("ID_ADRESSE")) {
+                    adrResult = rDpt.getForeign("ID_ADRESSE");
+                }
+            }
+        }
+
         return adrResult;
     }
 

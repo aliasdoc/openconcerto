@@ -196,36 +196,53 @@ public final class DBSystemRoot extends DBStructureItemDB {
         }
     }
 
-    public final void addRootToMap(final String rootName) {
-        this.addRootsToMap(Collections.singleton(rootName));
+    public final Set<String> addRootToMap(final String rootName) {
+        return this.addRootsToMap(Collections.singleton(rootName));
     }
 
-    public final void addRootsToMap(final Collection<String> rootsNames) {
+    /**
+     * Add roots to map.
+     * 
+     * @param rootsNames the names to map, not <code>null</code>.
+     * @return the roots that were added, e.g. should be passed to {@link #refresh(Set, boolean)}.
+     */
+    public final Set<String> addRootsToMap(final Collection<String> rootsNames) {
         synchronized (this) {
             // otherwise already included
             if (this.rootsToMap != null) {
                 final Set<String> newSet = new HashSet<String>(this.rootsToMap);
-                if (newSet.addAll(rootsNames))
+                if (newSet.addAll(rootsNames)) {
+                    final Set<String> old = this.rootsToMap;
                     this.rootsToMap = Collections.unmodifiableSet(newSet);
+                    final Set<String> res = new HashSet<String>(this.rootsToMap);
+                    res.removeAll(old);
+                    return Collections.unmodifiableSet(res);
+                }
             }
         }
+        return Collections.emptySet();
     }
 
     /**
      * Remove a root to map.
      * 
      * @param rootName the root to remove.
+     * @return <code>true</code> if the roots to map were modified, e.g.
+     *         {@link #refresh(TablesMap, boolean)} should be called.
      * @throws IllegalStateException if {@link #mapAllRoots()} was called.
      */
-    public final void removeExplicitRootToMap(final String rootName) throws IllegalStateException {
+    public final boolean removeExplicitRootToMap(final String rootName) throws IllegalStateException {
         synchronized (this) {
             // MAYBE rootsNotToMap
             if (this.rootsToMap == null)
                 throw new IllegalStateException("Mapping all roots");
 
             final Set<String> newSet = new HashSet<String>(this.rootsToMap);
-            if (newSet.remove(rootName))
+            final boolean changed = newSet.remove(rootName);
+            if (changed) {
                 this.rootsToMap = Collections.unmodifiableSet(newSet);
+            }
+            return changed;
         }
     }
 
@@ -417,12 +434,14 @@ public final class DBSystemRoot extends DBStructureItemDB {
     /**
      * Refresh some tables.
      * 
-     * @param tables which root/tables to refresh.
+     * @param tables which root/tables to refresh, <code>null</code> meaning all.
      * @param readCache <code>false</code> to use JDBC.
      * @return tables loaded with JDBC.
      * @throws SQLException if an error occurs.
      */
-    public final TablesMap refresh(TablesMap tables, final boolean readCache) throws SQLException {
+    public final TablesMap refresh(final TablesMap tables, final boolean readCache) throws SQLException {
+        if (tables != null && tables.isEmpty())
+            return new TablesMap(0);
         if (this.getJDBC() instanceof SQLBase) {
             return ((SQLBase) this.getJDBC()).refresh(tables, readCache);
         } else if (this.getJDBC() instanceof SQLServer) {

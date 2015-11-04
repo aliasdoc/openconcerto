@@ -13,6 +13,8 @@
  
  package org.openconcerto.ui;
 
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.ui.component.InteractionMode.InteractionComponent;
 import org.openconcerto.ui.component.text.TextComponent;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
 import org.openconcerto.utils.FormatGroup;
@@ -21,14 +23,17 @@ import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
 import org.openconcerto.utils.i18n.TM.MissingMode;
 
-import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeListener;
 import java.text.DateFormat;
 import java.text.Format;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -38,8 +43,8 @@ import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.InputMap;
-import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JFormattedTextField;
 import javax.swing.JFormattedTextField.AbstractFormatter;
 import javax.swing.JFormattedTextField.AbstractFormatterFactory;
 import javax.swing.KeyStroke;
@@ -50,34 +55,53 @@ import javax.swing.text.DefaultFormatterFactory;
 import javax.swing.text.InternationalFormatter;
 import javax.swing.text.JTextComponent;
 
-import org.jdesktop.swingx.JXDatePicker;
-import org.jdesktop.swingx.JXDatePickerFormatter;
+import org.jopencalendar.ui.DatePicker;
 
 /**
  * Un composant d'édition de date acceptant les formats "dd/MM/yy" et "d MMMM yyyy".
  * 
  * @author Sylvain CUAZ
  */
-public final class JDate extends JXDatePicker implements ValueWrapper<Date>, TextComponent {
+public final class JDate extends JComponent implements ValueWrapper<Date>, TextComponent, InteractionComponent {
+
+    private static boolean CommitEachValidEditDefault = false;
+    public static String DATE_PICKER_FORMATS_KEY = "org.openconcerto.DatePicker.formats";
 
     static {
-        final String formats = TM.getInstance().translate(MissingMode.NULL, "jdate.formats");
-        // else keep SwingX defaults
-        if (formats != null) {
-            final String[] array = formats.split("\n");
-            final UIDefaults lafDefaults = UIManager.getLookAndFeelDefaults();
-            if (array.length > 0)
-                lafDefaults.put("JXDatePicker.longFormat", array[0]);
-            if (array.length > 1)
-                lafDefaults.put("JXDatePicker.mediumFormat", array[1]);
-            if (array.length > 2)
-                lafDefaults.put("JXDatePicker.shortFormat", array[2]);
-            if (array.length > 3)
-                Log.get().warning("Some formats ignored " + formats);
+        final UIDefaults lafDefaults = UIManager.getLookAndFeelDefaults();
+        // don't overwrite if e.g. set in the main()
+        if (lafDefaults.get(DATE_PICKER_FORMATS_KEY) == null) {
+            final String formats = TM.getInstance().translate(MissingMode.NULL, "jdate.formats");
+            // else keep defaults
+            if (formats != null && formats.trim().length() > 0) {
+                final String[] array = formats.split("\n");
+                lafDefaults.put(DATE_PICKER_FORMATS_KEY, array);
+            }
         }
     }
 
-    private static boolean CommitEachValidEditDefault = false;
+    static DateFormat[] getDefaultDateFormats() {
+        final UIDefaults lafDefaults = UIManager.getLookAndFeelDefaults();
+        final String[] formats = (String[]) lafDefaults.get(DATE_PICKER_FORMATS_KEY);
+        if (formats == null || formats.length == 0) {
+            return new DateFormat[] { DateFormat.getDateInstance() };
+        } else {
+            final DateFormat[] l = new DateFormat[formats.length];
+            for (int i = 0; i < l.length; i++) {
+                l[i] = new SimpleDateFormat(formats[i]);
+            }
+            return l;
+        }
+    }
+
+    static Format getDefaultDateFormat() {
+        final DateFormat[] formats = getDefaultDateFormats();
+        if (formats.length == 1) {
+            return formats[0];
+        } else {
+            return new FormatGroup(formats);
+        }
+    }
 
     public static void setCommitEachValidEditDefault(final boolean commitEachValidEditDefault) {
         CommitEachValidEditDefault = commitEachValidEditDefault;
@@ -90,6 +114,8 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
     private final boolean fillWithCurrentDate;
     private final boolean commitEachValidEdit;
     private final Calendar cal;
+
+    private final DatePicker picker;
 
     /**
      * Créé un composant d'édition de date, vide.
@@ -121,8 +147,20 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
      */
     public JDate(final boolean fillWithCurrentDate, final boolean commitEachValidEdit) {
         super();
+
+        this.setLayout(new GridLayout(1, 1));
+        // no need to fill DatePicker since we call resetValue() at the end of this constructor
+        this.picker = new DatePicker(getDefaultDateFormat(), true, false);
+        this.add(this.picker);
+        this.setMinimumSize(new Dimension(this.picker.getPreferredSize()));
+
         this.fillWithCurrentDate = fillWithCurrentDate;
-        this.commitEachValidEdit = commitEachValidEdit;
+        if (commitEachValidEdit) {
+            // Committing on valid edit will trigger that 32/01/15 is replaced by 1/02/15
+            // and make annoying behaviour...
+            Log.get().warning("commitEachValidEdit ignored due to Java bug");
+        }
+        this.commitEachValidEdit = false;
 
         final InputMap inputMap = this.getEditor().getInputMap();
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "dayToFuture");
@@ -130,13 +168,18 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.ALT_DOWN_MASK), "monthToFuture");
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.ALT_DOWN_MASK), "monthToPast");
         final ActionMap actionMap = this.getEditor().getActionMap();
-        this.cal = Calendar.getInstance(this.getMonthView().getLocale());
+        this.cal = Calendar.getInstance();
         actionMap.put("dayToPast", createChangeDateAction(Calendar.DAY_OF_YEAR, -1));
         actionMap.put("dayToFuture", createChangeDateAction(Calendar.DAY_OF_YEAR, 1));
         actionMap.put("monthToPast", createChangeDateAction(Calendar.MONTH, -1));
         actionMap.put("monthToFuture", createChangeDateAction(Calendar.MONTH, 1));
 
+        this.updateUI();
         this.resetValue();
+    }
+
+    private JFormattedTextField getEditor() {
+        return this.picker.getEditor();
     }
 
     public final boolean fillsWithCurrentDate() {
@@ -151,6 +194,10 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
         return new AbstractAction() {
             @Override
             public void actionPerformed(final ActionEvent e) {
+                final JTextComponent comp = (JTextComponent) e.getSource();
+                if (!comp.isEnabled() || !comp.isEditable())
+                    return;
+
                 Date currentVal = getDate();
                 if (currentVal == null && fillsWithCurrentDate())
                     currentVal = new Date();
@@ -163,30 +210,40 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
         };
     }
 
-    @Override
     public void setFormats(final DateFormat[] formats) {
-        final InternationalFormatter formatter = new InternationalFormatter(new FormatGroup(formats)) {
+        this.setFormatP(new FormatGroup(formats));
+    }
+
+    public void setFormat(final DateFormat format) {
+        this.setFormatP(format);
+    }
+
+    // private since we don't want to be passed e.g. DecimalFormat
+    private void setFormatP(final Format format) {
+        final InternationalFormatter formatter = new InternationalFormatter(format) {
             @Override
             public Object stringToValue(final String text) throws ParseException {
                 // JXDatePickerFormatter used to handle null date ; InternationalFormatter only use
                 // the formats which obviously fail to parse "" and so revert the empty value.
-                if (text == null || text.isEmpty())
-                    return null;
-                return super.stringToValue(text);
+                Object result;
+                if (text == null || text.isEmpty()) {
+                    result = null;
+                } else {
+                    result = super.stringToValue(text);
+
+                }
+                return result;
             }
         };
         formatter.setCommitsOnValidEdit(this.commitEachValidEdit);
         this.getEditor().setFormatterFactory(new DefaultFormatterFactory(formatter));
     }
 
-    @Override
     public DateFormat[] getFormats() {
         final AbstractFormatterFactory factory = this.getEditor().getFormatterFactory();
         if (factory != null) {
             final AbstractFormatter formatter = factory.getFormatter(this.getEditor());
-            if (formatter instanceof JXDatePickerFormatter) {
-                return ((JXDatePickerFormatter) formatter).getFormats();
-            } else if (formatter instanceof InternationalFormatter) {
+            if (formatter instanceof InternationalFormatter) {
                 final Format format = ((InternationalFormatter) formatter).getFormat();
                 if (format instanceof DateFormat) {
                     return new DateFormat[] { (DateFormat) format };
@@ -209,14 +266,7 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
     public void updateUI() {
         super.updateUI();
         // replace JXDatePickerFormatter by InternationalFormatter
-        this.setFormats(this.getFormats());
-        // can't change BasicDatePickerUI behavior, so do it here
-        for (final Component child : this.getComponents()) {
-            if (child instanceof JButton) {
-                ((JComponent) child).setOpaque(false);
-                ((JButton) child).setContentAreaFilled(false);
-            }
-        }
+        this.setFormats(getDefaultDateFormats());
     }
 
     /**
@@ -269,6 +319,12 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
         this.getEditor().removePropertyChangeListener("value", l);
     }
 
+    // useful since by default this commits on focus lost, as is a table cell editor. So sometimes
+    // the table cell editor is called back before the commit and thus takes the original value.
+    public void commitEdit() throws ParseException {
+        this.picker.commitEdit();
+    }
+
     @Override
     public JComponent getComp() {
         return this;
@@ -292,5 +348,66 @@ public final class JDate extends JXDatePicker implements ValueWrapper<Date>, Tex
     @Override
     public JTextComponent getTextComp() {
         return getEditor();
+    }
+
+    /**
+     * Set the currently selected date.
+     * 
+     * @param date date
+     */
+    public void setDate(Date date) {
+        this.picker.setDate(date);
+    }
+
+    /**
+     * Set the currently selected date.
+     * 
+     * @param millis milliseconds
+     */
+    public void setDateInMillis(long millis) {
+        this.picker.setDate(new Date(millis));
+    }
+
+    /**
+     * Returns the currently selected date.
+     * 
+     * @return Date
+     */
+    public Date getDate() {
+        return this.picker.getDate();
+    }
+
+    /**
+     * Returns the currently selected date in milliseconds.
+     * 
+     * @return the date in milliseconds
+     */
+    public long getDateInMillis() {
+        return this.picker.getDate().getTime();
+    }
+
+    @Override
+    public void setInteractionMode(InteractionMode mode) {
+        this.picker.setEditable(mode.isEditable());
+        this.setEnabled(mode.isEnabled());
+    }
+
+    @Override
+    public InteractionMode getInteractionMode() {
+        return InteractionMode.from(this.picker.isEnabled(), this.picker.isEditable());
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        this.picker.setEnabled(enabled);
+        super.setEnabled(enabled);
+    }
+
+    public void addActionListener(ActionListener actionListener) {
+        this.picker.addActionListener(actionListener);
+    }
+
+    public void removeActionListener(ActionListener actionListener) {
+        this.picker.removeActionListener(actionListener);
     }
 }

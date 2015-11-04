@@ -26,6 +26,7 @@ import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.view.list.search.SearchQueue;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.Value;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.util.Collection;
@@ -41,16 +42,42 @@ abstract class AbstractUpdateOneRunnable extends UpdateRunnable {
     }
 
     protected final ListMap<Path, ListSQLLine> getAffectedPaths() {
-        return this.getSearchQ().getAffectedPaths(this.getRow());
+        return this.getUpdateQ().getAffectedPaths(this.getRow());
     }
 
     protected final void updateLines(ListMap<Path, ListSQLLine> paths) {
+        this.updateLines(paths, Value.<ListSQLLine> getNone());
+    }
+
+    protected final void updateLines(ListMap<Path, ListSQLLine> paths, final Value<ListSQLLine> line) {
+        final List<ListSQLLine> fullList = this.getUpdateQ().getFullList();
+        synchronized (fullList) {
+            this._updateLines(paths, line);
+        }
+    }
+
+    private final void _updateLines(ListMap<Path, ListSQLLine> paths, final Value<ListSQLLine> newLine) {
+        final boolean isPrimaryTable = getRow().getTable() == getReq().getParent().getPrimaryTable();
+        // if we're refreshing the primary table, the new line must be provided
+        assert newLine.hasValue() == isPrimaryTable;
+        // even if paths is empty we might have to add a line, so this must be done outside the for
+        if (isPrimaryTable) {
+            final List<ListSQLLine> lines = paths.getNonNull(new Path(getRow().getTable()));
+            if (lines.size() > 1)
+                throw new IllegalStateException("More than one line for " + this.getRow() + " : " + lines);
+            if (!newLine.hasValue())
+                throw new IllegalArgumentException("Missing line");
+            // update fullList
+            final ListSQLLine oldLine = this.getUpdateQ().replaceLine(getRow().getID(), newLine.getValue());
+            assert oldLine == CollectionUtils.getSole(lines);
+        }
         for (final Entry<Path, ? extends Collection<ListSQLLine>> e : paths.entrySet()) {
             // eg SITE.ID_CONTACT_CHEF
             final Path p = e.getKey();
             // eg [SQLRowValues(SITE), SQLRowValues(SITE)]
             final List<ListSQLLine> lines = (List<ListSQLLine>) e.getValue();
-            if (!lines.isEmpty()) {
+            // primary table already handled above
+            if (p.length() > 0 && !lines.isEmpty()) {
                 // deepCopy() instead of new SQLRowValues() otherwise the used line's graph will be
                 // modified (eg the new instance would be linked to it)
                 final SQLRowValues proto = getModel().getLinesSource().getParent().getMaxGraph().followPathToOne(p, CreateMode.CREATE_NONE, false).deepCopy();
@@ -80,7 +107,7 @@ abstract class AbstractUpdateOneRunnable extends UpdateRunnable {
                         public SQLSelect transformChecked(SQLSelect input) {
                             if (ListSQLRequest.getDefaultLockSelect())
                                 input.addWaitPreviousWriteTXTable(getTable().getName());
-                            return input.setWhere(new Where(getTable().getKey(), "=", getID()));
+                            return input.setWhere(getRow().getWhere());
                         }
                     };
                     fetcher.setSelTransf(transf);
@@ -96,7 +123,13 @@ abstract class AbstractUpdateOneRunnable extends UpdateRunnable {
                         final SQLRowValues soleFetched = CollectionUtils.getSole(fetched);
                         // copy it to each affected lines
                         for (final ListSQLLine line : lines) {
-                            line.loadAt(getID(), soleFetched, p);
+                            // don't update a part of the line, if the whole has been be passed to
+                            // UpdateQueue.replaceLine()
+                            // (if the primary table is in the graph more than once, and a row is
+                            // deleted, the line might get (rightly) removed from the full list and
+                            // then searched and added to the table model by the following)
+                            if (!isPrimaryTable || getRow().getID() != line.getID())
+                                this.getUpdateQ().updateLine(line, p, getRow().getID(), soleFetched);
                         }
                     }
                 }

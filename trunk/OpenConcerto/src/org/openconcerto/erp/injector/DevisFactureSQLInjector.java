@@ -13,19 +13,14 @@
  
  package org.openconcerto.erp.injector;
 
-import java.math.BigDecimal;
-import java.util.Collection;
-
-import org.openconcerto.erp.preferences.GenerationDocGlobalPreferencePanel;
-import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
-import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.UndefinedRowValuesCache;
-import org.openconcerto.sql.preferences.SQLPreferences;
+
+import java.math.BigDecimal;
+import java.util.Collection;
 
 public class DevisFactureSQLInjector extends SQLInjector {
     public DevisFactureSQLInjector(final DBRoot root) {
@@ -40,8 +35,25 @@ public class DevisFactureSQLInjector extends SQLInjector {
         if (tableDevis.getTable().contains("ID_POLE_PRODUIT")) {
             map(tableDevis.getField("ID_POLE_PRODUIT"), tableFacture.getField("ID_POLE_PRODUIT"));
         }
+        if (tableDevis.getTable().contains("ID_VERIFICATEUR") && tableFacture.getTable().contains("ID_VERIFICATEUR")) {
+            map(tableDevis.getField("ID_VERIFICATEUR"), tableFacture.getField("ID_VERIFICATEUR"));
+        }
         if (tableDevis.getTable().contains("ID_CONTACT")) {
             map(tableDevis.getField("ID_CONTACT"), tableFacture.getField("ID_CONTACT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(tableDevis.getField("ID_CLIENT_DEPARTEMENT"), tableFacture.getField("ID_CLIENT_DEPARTEMENT"));
+        }
+        if (getSource().getTable().contains("ID_ADRESSE") && getDestination().contains("ID_ADRESSE")) {
+            map(tableDevis.getField("ID_ADRESSE"), tableFacture.getField("ID_ADRESSE"));
+        }
+        if (getSource().getTable().contains("ID_ADRESSE_LIVRAISON") && getDestination().contains("ID_ADRESSE_LIVRAISON")) {
+            map(tableDevis.getField("ID_ADRESSE_LIVRAISON"), tableFacture.getField("ID_ADRESSE_LIVRAISON"));
+        }
+
+        if (getSource().getTable().contains("MONTANT_REMISE") && tableFacture.contains("MONTANT_REMISE")) {
+            map(tableDevis.getField("MONTANT_REMISE"), tableFacture.getField("MONTANT_REMISE"));
+            map(tableDevis.getField("POURCENT_REMISE"), tableFacture.getField("POURCENT_REMISE"));
         }
     }
 

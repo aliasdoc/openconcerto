@@ -183,7 +183,7 @@ public class RowValuesTableControlPanel extends JPanel {
         }
         SQLRowValues rowVals = this.model.getRowValuesAt(row);
 
-        SQLRowValues rowValsBis = new SQLRowValues(rowVals);
+        SQLRowValues rowValsBis = rowVals.deepCopy();
         rowValsBis.clearPrimaryKeys();
         rowValsBis.put(rowValsBis.getTable().getOrderField().getName(), null);
 

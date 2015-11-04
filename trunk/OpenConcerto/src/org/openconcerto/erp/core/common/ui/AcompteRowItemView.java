@@ -13,12 +13,13 @@
  
  package org.openconcerto.erp.core.common.ui;
 
+import java.math.BigDecimal;
+
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.sqlobject.itemview.VWRowItemView;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
-
-import java.math.BigDecimal;
 
 public class AcompteRowItemView extends VWRowItemView<Acompte> {
 
@@ -27,9 +28,10 @@ public class AcompteRowItemView extends VWRowItemView<Acompte> {
     }
 
     @Override
-    public void setEditable(boolean b) {
-        if (this.getComp() != null)
-            this.getComp().setEnabled(b);
+    public void setEditable(InteractionMode b) {
+        if (this.getComp() != null) {
+            this.getComp().setEnabled(b.isEnabled());
+        }
     }
 
     @Override

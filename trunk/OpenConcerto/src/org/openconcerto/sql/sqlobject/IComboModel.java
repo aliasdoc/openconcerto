@@ -599,7 +599,7 @@ public class IComboModel extends DefaultIMutableListModel<IComboSelectionItem> i
             if (item == null && this.addMissingItem()) {
                 // si l'ID voulu n'est pas la, essayer d'aller le chercher directement dans la base
                 // sans respecter le filtre
-                final ComboSQLRequest comboSQLRequest = new ComboSQLRequest(this.req);
+                final ComboSQLRequest comboSQLRequest = this.req.clone();
                 comboSQLRequest.setFilterEnabled(false);
                 comboSQLRequest.setWhere(null);
                 final ITransformer<SQLSelect, SQLSelect> transf = comboSQLRequest.getSelectTransf();

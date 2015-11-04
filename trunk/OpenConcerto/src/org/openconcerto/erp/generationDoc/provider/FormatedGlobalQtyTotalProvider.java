@@ -24,7 +24,7 @@ import java.math.BigDecimal;
 
 public class FormatedGlobalQtyTotalProvider implements SpreadSheetCellValueProvider {
 
-    private final boolean shortName;
+    private final boolean shortName, alwaysShowOnZeroQty;
 
     private static enum Type {
         NORMAL, SHIPMENT
@@ -33,18 +33,28 @@ public class FormatedGlobalQtyTotalProvider implements SpreadSheetCellValueProvi
     private final Type type;
 
     private FormatedGlobalQtyTotalProvider(Type t, boolean shortName) {
+        this(t, shortName, false);
+    }
+
+    private FormatedGlobalQtyTotalProvider(Type t, boolean shortName, boolean alwaysShowOnZeroQty) {
         this.shortName = shortName;
         this.type = t;
+        this.alwaysShowOnZeroQty = alwaysShowOnZeroQty;
     }
 
     public Object getValue(SpreadSheetCellValueContext context) {
         final SQLRowAccessor row = context.getRow();
         final BigDecimal pv = row.getBigDecimal("PV_HT");
-        if (pv.compareTo(BigDecimal.ZERO) == 0) {
+        if (!alwaysShowOnZeroQty && pv.compareTo(BigDecimal.ZERO) == 0) {
             return null;
         }
 
-        final int qte = row.getInt(this.type == Type.NORMAL ? "QTE" : "QTE_LIVREE");
+        final String field = this.type == Type.NORMAL ? "QTE" : "QTE_LIVREE";
+        if (row.getObject(field) == null) {
+            return null;
+        }
+
+        final int qte = row.getInt(field);
 
         if (row.getInt("ID_UNITE_VENTE") == UniteVenteArticleSQLElement.A_LA_PIECE) {
             return String.valueOf(qte);
@@ -67,6 +77,7 @@ public class FormatedGlobalQtyTotalProvider implements SpreadSheetCellValueProvi
     }
 
     public static void register() {
+        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.short.with.quantity", new FormatedGlobalQtyTotalProvider(Type.NORMAL, true, true));
         SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.short", new FormatedGlobalQtyTotalProvider(Type.NORMAL, true));
         SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit", new FormatedGlobalQtyTotalProvider(Type.NORMAL, false));
         SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.deliver.short", new FormatedGlobalQtyTotalProvider(Type.SHIPMENT, true));

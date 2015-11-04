@@ -14,6 +14,7 @@
  package org.openconcerto.sql.request;
 
 import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLFilter;
 import org.openconcerto.sql.model.SQLFilterListener;
 import org.openconcerto.sql.model.SQLRow;
@@ -33,7 +34,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
+
 // une fill request qui utilise le filtre
+@ThreadSafe
 public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
 
     // make sure that all rows are from the same table
@@ -55,18 +60,32 @@ public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
         return conf == null ? null : conf.getFilter();
     }
 
+    static protected final int getRowCount(final SQLRowValuesListFetcher fetcher) {
+        final SQLTable primaryT = fetcher.getGraph().getTable();
+        return getRowCount(new SQLSelect(fetcher.getReq()), primaryT.getDBSystemRoot().getDataSource());
+    }
+
+    static public final int getRowCount(final SQLSelect sel, final SQLDataSource ds) {
+        sel.clearForRowCount();
+        return ((Number) ds.executeScalar(sel.asString())).intValue();
+    }
+
     // never null (but can be <null, null>)
+    @GuardedBy("this")
     private Tuple2<Set<SQLRow>, Path> filterInfo;
     private final SQLFilter filter;
     // initially false since we don't listen to filter before calling setFilterEnabled()
+    @GuardedBy("this")
     private boolean filterEnabled = false;
     private final SQLFilterListener filterListener;
 
     {
         this.filterListener = new SQLFilterListener() {
             public void filterChanged(Collection<SQLTable> tables) {
-                if (CollectionUtils.containsAny(getTables(), tables))
-                    updateFilterWhere();
+                // when we remove the listener in wasFrozen(), there might already be threads
+                // waiting for our lock to notify us. So we must ignore these last few events.
+                if (!isFrozen() && CollectionUtils.containsAny(getTables(), tables))
+                    updateFilterWhere(true);
             }
         };
     }
@@ -78,11 +97,26 @@ public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
         this.setFilterEnabled(true);
     }
 
-    public FilteredFillSQLRequest(FilteredFillSQLRequest req) {
+    // ATTN if freeze is true freeze() must be called right after (cannot be called here since
+    // subclasses aren't finished)
+    protected FilteredFillSQLRequest(FilteredFillSQLRequest req, final boolean freeze) {
         super(req);
+        // otherwise each superclass will lock the source, resulting in an inconsistent view
+        assert Thread.holdsLock(req);
         this.filter = req.filter;
         this.filterInfo = req.filterInfo;
-        this.setFilterEnabled(req.filterEnabled);
+        // don't add listener and update our info (which leave us inconsistent until
+        // freeze() is called)
+        if (freeze)
+            this.filterEnabled = req.filterEnabled;
+        else
+            this.setFilterEnabled(req.filterEnabled);
+    }
+
+    @Override
+    protected void wasFrozen() {
+        super.wasFrozen();
+        this.getFilter().rmListener(this.filterListener);
     }
 
     protected final SQLFilter getFilter() {
@@ -92,42 +126,68 @@ public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
     public final void setFilterEnabled(boolean b) {
         final SQLFilter filter = this.getFilter();
         b = filter == null ? false : b;
-        if (this.filterEnabled != b) {
-            // since filter is final and filterEnabled is initially false
-            assert filter != null;
-            this.filterEnabled = b;
-            if (this.filterEnabled)
-                filter.addWeakListener(this.filterListener);
-            else
-                filter.rmListener(this.filterListener);
-            updateFilterWhere();
+        final boolean changed;
+        synchronized (this) {
+            checkFrozen();
+            if (this.filterEnabled != b) {
+                // since filter is final and filterEnabled is initially false
+                assert filter != null;
+                this.filterEnabled = b;
+                if (this.filterEnabled)
+                    filter.addWeakListener(this.filterListener);
+                else
+                    filter.rmListener(this.filterListener);
+                changed = updateFilterWhere(false);
+            } else {
+                changed = false;
+            }
         }
+        if (changed)
+            fireWhereChange();
     }
 
-    private void updateFilterWhere() {
-        if (this.filterEnabled) {
-            this.setFilterWhere(getFilter().getLeaf(), getFilter().getPath(getPrimaryTable()));
-        } else
-            this.setFilterWhere(null, null);
+    // fire=false allow to call this method with our lock
+    private boolean updateFilterWhere(final boolean fire) {
+        final boolean changed;
+        synchronized (this) {
+            if (this.filterEnabled) {
+                changed = this.setFilterWhere(getFilter().getLeaf(), getFilter().getPath(getPrimaryTable()));
+            } else {
+                changed = this.setFilterWhere(null, null);
+            }
+        }
+        if (fire && changed)
+            fireWhereChange();
+        return changed;
     }
 
-    private synchronized void setFilterWhere(final Set<SQLRow> w, final Path p) {
-        if (!CompareUtils.equals(this.filterInfo.get0(), w) || !CompareUtils.equals(this.filterInfo.get1(), p)) {
+    private synchronized boolean setFilterWhere(final Set<SQLRow> w, final Path p) {
+        checkFrozen();
+        final boolean changed = !CompareUtils.equals(this.filterInfo.get0(), w) || !CompareUtils.equals(this.filterInfo.get1(), p);
+        if (changed) {
             // shall we filter : w==null => no filter selected, p==null => filter doesn't affect us
             if (w == null || p == null) {
                 this.filterInfo = Tuple2.create(null, null);
             } else {
                 this.filterInfo = Tuple2.create((Set<SQLRow>) new HashSet<SQLRow>(w), p);
             }
-            fireWhereChange();
         }
+        return changed;
     }
 
     public final SQLRowValues getValues(int id) {
         final List<SQLRowValues> res = getValues(new Where(this.getPrimaryTable().getKey(), "=", id));
+        return getSole(res, id);
+    }
+
+    protected final <T> T getSole(final List<T> res, int id) {
         if (res.size() > 1)
             throw new IllegalStateException("there's more than one line which has ID " + id + " for " + this + " : " + res);
         return CollectionUtils.getFirst(res);
+    }
+
+    public int getValuesCount() {
+        return getRowCount(this.getFetcher());
     }
 
     public final List<SQLRowValues> getValues() {
@@ -135,11 +195,11 @@ public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
     }
 
     protected List<SQLRowValues> getValues(final Where w) {
-        return getFetcher(w).fetch();
+        return getFetcher().fetch(w);
     }
 
     protected final List<SQLRowValues> fetchValues(final SQLRowValuesListFetcher f, final Where w) {
-        return this.setupFetcher(f, w).fetch();
+        return this.setupFetcher(f).fetch(w);
     }
 
     @Override
@@ -176,6 +236,6 @@ public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
 
     // the where applied to all request (as opposed to the one passed to getFillRequest())
     public final Where getInstanceWhere() {
-        return this.getFetcher(null).getReq().getWhere();
+        return this.getFetcher().getReq().getWhere();
     }
 }

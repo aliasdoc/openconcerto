@@ -32,7 +32,25 @@ public class FactureAvoirSQLInjector extends SQLInjector {
         map(tableFacture.getField("ID_COMMERCIAL"), tableAvoir.getField("ID_COMMERCIAL"));
         map(tableFacture.getField("REMISE_HT"), tableAvoir.getField("REMISE_HT"));
         map(tableFacture.getField("PORT_HT"), tableAvoir.getField("PORT_HT"));
+        if (getSource().getTable().contains("ID_CONTACT")) {
+            map(getSource().getField("ID_CONTACT"), getDestination().getField("ID_CONTACT"));
+        }
 
+        if (getSource().contains("ID_ADRESSE") && getDestination().contains("ID_ADRESSE")) {
+            map(getSource().getField("ID_ADRESSE"), getDestination().getField("ID_ADRESSE"));
+        }
+
+        if (getSource().contains("ID_ADRESSE_LIVRAISON") && getDestination().contains("ID_ADRESSE_LIVRAISON")) {
+            map(getSource().getField("ID_ADRESSE_LIVRAISON"), getDestination().getField("ID_ADRESSE_LIVRAISON"));
+        }
+
+        if (getSource().getTable().contains("DATE_LIVRAISON") && getDestination().contains("DATE_LIVRAISON")) {
+            map(getSource().getField("DATE_LIVRAISON"), getDestination().getField("DATE_LIVRAISON"));
+        }
+
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
+        }
     }
 
     @Override

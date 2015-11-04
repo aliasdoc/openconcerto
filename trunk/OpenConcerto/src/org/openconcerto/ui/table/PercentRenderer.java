@@ -22,7 +22,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
-import org.jdesktop.swingx.VerticalLayout;
+import org.openconcerto.ui.VerticalLayout;
 
 public class PercentRenderer extends JPanel {
     private int v = 0;

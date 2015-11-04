@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.request.SQLRowItemView;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.checks.EmptyChangeSupport;
 import org.openconcerto.utils.checks.EmptyListener;
 import org.openconcerto.utils.checks.ValidListener;
@@ -184,11 +185,12 @@ public class ListSQLView extends JPanel implements SQLRowItemView {
 
     //
 
-    public void setEditable(final boolean enabled) {
-        this.addBtn.setEnabled(enabled);
+    @Override
+    public void setEditable(final InteractionMode mode) {
+        this.addBtn.setEnabled(mode.isEditable());
         forAllDo(new Cl() {
             public void execute(ListItemSQLView input) {
-                input.setEditable(enabled);
+                input.setEditable(mode);
             }
         });
     }
@@ -251,8 +253,14 @@ public class ListSQLView extends JPanel implements SQLRowItemView {
         this.helper.removeEmptyListener(l);
     }
 
+    @Override
     public void addValueListener(PropertyChangeListener l) {
         this.supp.addPropertyChangeListener(l);
+    }
+
+    @Override
+    public void removeValueListener(PropertyChangeListener l) {
+        this.supp.removePropertyChangeListener(l);
     }
 
     @Override

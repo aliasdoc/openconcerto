@@ -42,7 +42,7 @@ public class AliasedField implements FieldRef {
         if (f == null)
             throw new NullPointerException("f is null");
         this.f = f;
-        this.t = alias == null ? f.getTable() : new AliasedTable(f.getTable(), alias);
+        this.t = AliasedTable.getTableRef(f.getTable(), alias);
     }
 
     public SQLField getField() {

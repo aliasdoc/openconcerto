@@ -53,47 +53,53 @@ class AliasedTables {
     /**
      * Adds a new declaration if not already present.
      * 
-     * @param alias the alias, can be <code>null</code>, e.g. "obs7".
-     * @param t the associated table, e.g. /OBSERVATION/.
-     * @return the added table reference.
-     */
-    public TableRef add(String alias, SQLTable t) {
-        return this.add(new AliasedTable(t, alias));
-    }
-
-    /**
-     * Adds a new declaration if not already present.
-     * 
      * @param table the table to add, e.g. /OBSERVATION/.
-     * @return the added table reference, can be different than the parameter if the alias was
-     *         already present.
+     * @param mustBeNew <code>true</code> if table cannot already be present.
+     * @return <code>true</code> if the table was new, <code>false</code> if the alias was already
+     *         present.
+     * @throws IllegalArgumentException if the alias was already used for another table or
+     *         <code>mustBeNew</code> is <code>true</code> and the alias was already used (even for
+     *         the same table).
      */
-    public TableRef add(TableRef table) {
+    public boolean add(TableRef table, final boolean mustBeNew) throws IllegalArgumentException {
         final boolean nullSysRoot = this.sysRoot == null;
         if (!nullSysRoot && this.sysRoot != table.getTable().getDBSystemRoot())
             throw new IllegalArgumentException(table + " not in " + this.sysRoot);
         final String alias = table.getAlias();
-        final TableRef res;
+        final boolean res;
         if (!this.contains(alias)) {
-            res = table;
-            this.tables.put(alias, res);
+            res = true;
+            this.tables.put(alias, table);
             if (nullSysRoot)
                 this.sysRoot = table.getTable().getDBSystemRoot();
-        } else if (this.getTable(alias) != table.getTable()) {
+        } else if (this.getTable(alias) != table.getTable() || mustBeNew) {
             throw new IllegalArgumentException(table.getTable().getSQLName() + " can't be aliased to " + alias + " : " + this.getTable(alias).getSQLName() + " already is");
         } else {
-            res = getAliasedTable(alias);
+            res = false;
         }
 
         return res;
     }
 
-    public TableRef add(FieldRef f) {
-        return this.add(f.getTableRef());
+    public boolean remove(TableRef table) {
+        final String alias = table.getAlias();
+        final boolean res;
+        if (this.contains(alias)) {
+            this.tables.remove(alias);
+            // don't unset sysRoot as it may have been set in the constructor
+            res = true;
+        } else {
+            res = false;
+        }
+        return res;
     }
 
     public final DBSystemRoot getSysRoot() {
         return this.sysRoot;
+    }
+
+    final Map<String, TableRef> getMap() {
+        return Collections.unmodifiableMap(this.tables);
     }
 
     public SQLTable getTable(String alias) {

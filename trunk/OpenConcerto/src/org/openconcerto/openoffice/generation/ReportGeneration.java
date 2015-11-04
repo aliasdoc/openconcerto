@@ -22,6 +22,7 @@ import org.openconcerto.openoffice.generation.desc.part.ForkReportPart;
 import org.openconcerto.openoffice.generation.desc.part.GeneratorReportPart;
 import org.openconcerto.openoffice.generation.desc.part.InsertReportPart;
 import org.openconcerto.openoffice.generation.desc.part.SubReportPart;
+import org.openconcerto.utils.RTInterruptedException;
 import org.openconcerto.utils.Tuple2;
 
 import java.beans.PropertyChangeEvent;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Stack;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
 import ognl.Ognl;
@@ -70,6 +72,10 @@ public class ReportGeneration<C extends GenerationCommon> {
                 throw new OgnlException("", new UnsupportedOperationException("setProperty not supported on XML elements"));
             }
         });
+    }
+
+    static private final boolean isInterruptedExn(final Throwable e) {
+        return e instanceof InterruptedException || e instanceof RTInterruptedException;
     }
 
     // instance members
@@ -203,17 +209,18 @@ public class ReportGeneration<C extends GenerationCommon> {
         try {
             thr.join();
             f = future.get();
-        } catch (InterruptedException e) {
-            f = null;
         } catch (Exception e) {
-            this.interrupt(e);
+            if (isInterruptedExn(e) || (e instanceof ExecutionException && isInterruptedExn(e.getCause())))
+                f = null;
+            else
+                this.interrupt(e);
         }
 
         final Map<String, ODSingleXMLDocument> res;
         synchronized (this) {
-            if (this.interruptCause != null) {
+            if (this.interruptCause != null && !isInterruptedExn(this.interruptCause)) {
                 throw this.interruptCause;
-            } else if (Thread.currentThread().isInterrupted() || f == null) {
+            } else if (Thread.currentThread().isInterrupted()) {
                 res = null;
             } else {
                 res = f;

@@ -47,9 +47,6 @@ import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
 
 public class Ticket {
-    static public Calendar getCalendar() {
-        return Calendar.getInstance();
-    }
 
     private static boolean inited = false;
     // Propre a ticket
@@ -154,7 +151,7 @@ public class Ticket {
 
     public Ticket(int caisse) {
         this.caisseNumber = caisse;
-        this.creationCal = getCalendar();
+        this.creationCal = Calendar.getInstance();
         initNumber();
     }
 
@@ -197,9 +194,9 @@ public class Ticket {
     }
 
     public void save() {
-        // Update Hour & Minute
-        int hour = getCalendar().get(Calendar.HOUR_OF_DAY);
-        int minute = getCalendar().get(Calendar.MINUTE);
+        final Calendar c = getCreationCal();
+        int hour = c.get(Calendar.HOUR_OF_DAY);
+        int minute = c.get(Calendar.MINUTE);
 
         // Hierarchie: 2010/04/05/01_05042010_00002.xml
         final File f = getFile();

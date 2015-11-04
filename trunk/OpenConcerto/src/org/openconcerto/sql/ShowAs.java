@@ -26,8 +26,10 @@ import org.openconcerto.utils.CollectionUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import net.jcip.annotations.GuardedBy;
 import net.jcip.annotations.ThreadSafe;
@@ -59,11 +61,20 @@ public class ShowAs extends FieldExpander {
         this.setRoot(root);
     }
 
-    public synchronized final void putAll(ShowAs s) {
-        CollectionUtils.addIfNotPresent(this.byFields, s.byFields);
-        CollectionUtils.addIfNotPresent(this.byTables, s.byTables);
-        // s might have replaced some of our entries
-        this.clearCache();
+    public ShowAs(ShowAs src) {
+        this(src.getRoot());
+        this.putAll(src);
+    }
+
+    public final void putAll(ShowAs s) {
+        synchronized (this) {
+            synchronized (s) {
+                CollectionUtils.addIfNotPresent(this.byFields, s.byFields);
+                CollectionUtils.addIfNotPresent(this.byTables, s.byTables);
+            }
+            // s might have replaced some of our entries
+            this.clearCache();
+        }
     }
 
     public synchronized List<SQLField> getFieldExpand(SQLTable table) {
@@ -77,6 +88,10 @@ public class ShowAs extends FieldExpander {
      */
     public synchronized final void setRoot(DBRoot root) {
         this.root = root;
+    }
+
+    public synchronized final DBRoot getRoot() {
+        return this.root;
     }
 
     private synchronized SQLField getField(String fieldName) {
@@ -102,8 +117,16 @@ public class ShowAs extends FieldExpander {
     // TODO a listener to remove tables and fields as they are dropped
     public synchronized final void removeTable(SQLTable t) {
         this.byTables.remove(t);
-        for (final SQLField f : t.getFields())
-            this.byFields.remove(f);
+        for (final Iterator<Entry<SQLField, List<SQLField>>> iterator = this.byFields.entrySet().iterator(); iterator.hasNext();) {
+            final Entry<SQLField, List<SQLField>> e = iterator.next();
+            if (e.getKey().getTable().equals(t)) {
+                iterator.remove();
+            } else {
+                final SQLField f = CollectionUtils.getFirst(e.getValue());
+                if (f != null && f.getTable().equals(t))
+                    iterator.remove();
+            }
+        }
         this.clearCache();
     }
 

@@ -25,6 +25,7 @@ import org.openconcerto.erp.action.list.ListeDesSocietesCommonsAction;
 import org.openconcerto.erp.action.list.ListeDesUsersCommonAction;
 import org.openconcerto.erp.core.customerrelationship.customer.action.ListeDesClientsAction;
 import org.openconcerto.erp.core.customerrelationship.customer.action.ListeDesContactsAction;
+import org.openconcerto.erp.core.customerrelationship.customer.action.ListeDesDepartementsClientsAction;
 import org.openconcerto.erp.core.customerrelationship.customer.action.NouvelHistoriqueListeClientAction;
 import org.openconcerto.erp.core.customerrelationship.mail.action.ListeDesCourriersClientsAction;
 import org.openconcerto.erp.core.finance.accounting.action.BalanceAgeeAction;
@@ -36,12 +37,15 @@ import org.openconcerto.erp.core.finance.accounting.action.EtatJournauxAction;
 import org.openconcerto.erp.core.finance.accounting.action.ExportRelationExpertAction;
 import org.openconcerto.erp.core.finance.accounting.action.GenerePointageAction;
 import org.openconcerto.erp.core.finance.accounting.action.GestionPlanComptableEAction;
+import org.openconcerto.erp.core.finance.accounting.action.ImportEcritureAction;
 import org.openconcerto.erp.core.finance.accounting.action.ImpressionJournauxAnalytiqueAction;
 import org.openconcerto.erp.core.finance.accounting.action.ImpressionLivrePayeAction;
+import org.openconcerto.erp.core.finance.accounting.action.ImpressionRepartitionAnalytiqueAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesDevisesAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesEcrituresAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesEcrituresAnalytiquesAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesJournauxAction;
+import org.openconcerto.erp.core.finance.accounting.action.ListeDesTauxDeChangeAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeEcritureParClasseAction;
 import org.openconcerto.erp.core.finance.accounting.action.NouveauClotureAction;
 import org.openconcerto.erp.core.finance.accounting.action.NouveauLettrageAction;
@@ -96,6 +100,7 @@ import org.openconcerto.erp.core.sales.pos.action.ListeDesCaissesTicketAction;
 import org.openconcerto.erp.core.sales.product.action.FamilleArticleAction;
 import org.openconcerto.erp.core.sales.product.action.ListeDesArticlesAction;
 import org.openconcerto.erp.core.sales.quote.action.ListeDesDevisAction;
+import org.openconcerto.erp.core.sales.quote.action.ListeDesElementsDevisAction;
 import org.openconcerto.erp.core.sales.quote.action.ListeDesElementsPropositionsAction;
 import org.openconcerto.erp.core.sales.quote.action.NouveauDevisAction;
 import org.openconcerto.erp.core.sales.quote.action.NouvellePropositionAction;
@@ -120,11 +125,13 @@ import org.openconcerto.erp.core.supplychain.supplier.action.ListesFacturesFourn
 import org.openconcerto.erp.core.supplychain.supplier.action.NouvelHistoriqueListeFournAction;
 import org.openconcerto.erp.modules.ModuleFrame;
 import org.openconcerto.erp.preferences.DefaultNXProps;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
 import org.openconcerto.erp.rights.ComptaUserRight;
 import org.openconcerto.erp.rights.NXRights;
 import org.openconcerto.erp.utils.correct.CorrectMouvement;
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.preferences.SQLPreferences;
 import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.users.rights.LockAdminUserRight;
 import org.openconcerto.sql.users.rights.UserRights;
@@ -203,7 +210,6 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         Group group = new Group(MainFrame.FILE_MENU);
         if (UserRightsManager.getCurrentUserRights().haveRight(BackupPanel.RIGHT_CODE))
             group.addItem("backup");
-        group.addItem("export.accounting");
         group.addItem("modules");
         if (!Gestion.MAC_OS_X) {
             group.addItem("preferences");
@@ -270,6 +276,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
             gAccounting.addItem("accounting.journal");
             gAccounting.addItem("accounting.checkDB");
             gAccounting.addItem("accounting.currency");
+            gAccounting.addItem("accounting.currency.rates");
             group.add(gAccounting);
         }
 
@@ -380,10 +387,17 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         Group analytic = new Group("accounting.analytical");
         analytic.addItem("accounting.analytical.ledger");
         analytic.addItem("accounting.analytical.entries.ledger");
+        analytic.addItem("accounting.analytical.ledger.global");
         group.add(analytic);
         group.addItem("accounting.general.ledger");
         group.addItem("accounting.entries.ledger");
         group.addItem("accounting.entries.list");
+
+        final Group gIO = new Group("menu.accounting.io", LayoutHints.DEFAULT_NOLABEL_SEPARATED_GROUP_HINTS);
+        gIO.addItem("accounting.import");
+        gIO.addItem("accounting.export");
+        group.add(gIO);
+
         final Group gClosing = new Group("menu.accounting.closing", LayoutHints.DEFAULT_NOLABEL_SEPARATED_GROUP_HINTS);
         gClosing.addItem("accounting.validating");
         gClosing.addItem("accounting.closing");
@@ -400,6 +414,12 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
 
         Group gCustomer = new Group("menu.list.customer", LayoutHints.DEFAULT_NOLABEL_SEPARATED_GROUP_HINTS);
         gCustomer.addItem("customer.list");
+
+        SQLPreferences prefs = SQLPreferences.getMemCached(configuration.getRootSociete());
+        if (prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false)) {
+            gCustomer.addItem("customer.department.list");
+        }
+
         gCustomer.addItem("contact.list");
 
         if (rights.haveRight(NXRights.ACCES_HISTORIQUE.getCode())) {
@@ -449,6 +469,10 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
 
     private Group createTestMenuGroup() {
         final Group group = new Group("menu.test");
+        group.addItem("test.lettrage.fact");
+        group.addItem("test.lettrage.compt");
+        group.addItem("test.lettrage.achat");
+
         return group;
     }
 
@@ -457,7 +481,6 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
      * */
     private void registerFilesMenuActions(final MenuAndActions mManager) {
         mManager.registerAction("backup", new SauvegardeBaseAction());
-        mManager.registerAction("export.accounting", new ExportRelationExpertAction());
         mManager.registerAction("modules", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -514,6 +537,10 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         final UserRights rights = UserManager.getInstance().getCurrentUser().getRights();
 
         mManager.registerAction("customer.list", new ListeDesClientsAction());
+        SQLPreferences prefs = SQLPreferences.getMemCached(configuration.getRootSociete());
+        if (prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false)) {
+            mManager.registerAction("customer.department.list", new ListeDesDepartementsClientsAction());
+        }
         mManager.registerAction("contact.list", new ListeDesContactsAction());
 
         if (rights.haveRight(NXRights.ACCES_HISTORIQUE.getCode())) {
@@ -564,9 +591,12 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         mManager.registerAction("accounting.general.ledger", new EtatGrandLivreAction());
         mManager.registerAction("accounting.entries.ledger", new ListeDesEcrituresAction());
         mManager.registerAction("accounting.analytical.entries.ledger", new ListeDesEcrituresAnalytiquesAction());
+        mManager.registerAction("accounting.analytical.ledger.global", new ImpressionRepartitionAnalytiqueAction());
         mManager.registerAction("accounting.entries.list", new ListeEcritureParClasseAction());
         mManager.registerAction("accounting.validating", new NouvelleValidationAction());
         mManager.registerAction("accounting.closing", new NouveauClotureAction());
+        mManager.registerAction("accounting.import", new ImportEcritureAction());
+        mManager.registerAction("accounting.export", new ExportRelationExpertAction());
     }
 
     public void registerStatsDocumentsActions(final MenuAndActions mManager) {
@@ -642,6 +672,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
             mManager.putAction(new GestionPlanComptableEAction(), "accounting.chart");
             mManager.putAction(new ListeDesJournauxAction(), "accounting.journal");
             mManager.putAction(new ListeDesDevisesAction(), "accounting.currency");
+            mManager.putAction(new ListeDesTauxDeChangeAction(), "accounting.currency.rates");
             mManager.putAction(new AbstractAction("Check DB") {
                 @Override
                 public void actionPerformed(ActionEvent e) {
@@ -677,5 +708,6 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
     }
 
     private void registerHelpTestActions(final MenuAndActions mManager) {
+
     }
 }

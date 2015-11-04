@@ -168,6 +168,7 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
     private static int count = 0; // compteur de requetes
 
     private final DBSystemRoot sysRoot;
+    private ConnectionFactory connectionFactory;
     // no need to synchronize multiple call to this attribute since we only access the
     // Thread.currentThread() key
     @GuardedBy("handlers")
@@ -247,7 +248,8 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         }
         this.setLoginTimeout(loginTimeOut);
         this.setSocketTimeout(socketTimeOut);
-        this.setRetryWait(3);
+        this.setTCPKeepAlive(true);
+        this.setRetryWait(3000);
         // ATTN DO NOT call execute() or any method that might create a connection
         // since at this point dsInit() has not been called and thus connection properties might be
         // missing (eg allowMultiQueries). And the faulty connection will stay in the pool.
@@ -259,6 +261,8 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
             this.addConnectionProperty("connectTimeout", timeout + "000");
         } else if (this.getSystem() == SQLSystem.POSTGRESQL || this.getSystem() == SQLSystem.MSSQL) {
             this.addConnectionProperty("loginTimeout", timeout + "");
+        } else {
+            Log.get().warning("Ignoring login timeout for " + this);
         }
     }
 
@@ -269,9 +273,30 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
             this.addConnectionProperty("QUERY_TIMEOUT", timeout + "000");
         } else if (this.getSystem() == SQLSystem.POSTGRESQL) {
             this.addConnectionProperty("socketTimeout", timeout + "");
+        } else {
+            Log.get().log(getLogLevelForIgnoredTCPParam(), "Ignoring socket timeout for " + this);
         }
     }
 
+    // if TCP isn't used or is used to connect to localhost, TCP should be quite robust
+    private final Level getLogLevelForIgnoredTCPParam() {
+        return SQLSyntax.get(this.sysRoot).isServerLocalhost(this.sysRoot.getServer()) ? Level.CONFIG : Level.WARNING;
+    }
+
+    public final void setTCPKeepAlive(final boolean b) {
+        if (this.getSystem() == SQLSystem.POSTGRESQL || this.getSystem() == SQLSystem.MYSQL) {
+            this.addConnectionProperty("tcpKeepAlive", String.valueOf(b));
+        } else {
+            Log.get().log(getLogLevelForIgnoredTCPParam(), "Ignoring TCP keep alive for " + this);
+        }
+    }
+
+    /**
+     * Set the number of milliseconds to wait before retrying if a connection fails to establish or
+     * if a query fails to execute.
+     * 
+     * @param retryWait the number of milliseconds to wait, negative to disable retrying.
+     */
     public final void setRetryWait(int retryWait) {
         this.retryWait = retryWait;
     }
@@ -334,24 +359,42 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         this.initialShemaSet = false;
         this.initialShema = null;
 
-        // see #getNewConnection(boolean)
+        // used by #getNewConnection() when there's an exception and by #validateDBConnectivity()
         this.setValidationQuery("SELECT 1");
+        // We must set a socket timeout high enough for large queries but the validation query
+        // should return almost instantly. Not too low since overloaded links may have very high
+        // latencies.
+        this.setValidationQueryTimeout(6);
+        // don't test on borrow, this would double the queries.
         this.setTestOnBorrow(false);
+        // don't test on return, the connection was just used and this would double the queries.
+        this.setTestOnReturn(false);
+        // for now don't test on idle as our evictor is run quite often to promptly close unneeded
+        // connections. If it is slowed down, we risk overloading the server or just hit its maximum
+        // connection count. MAYBE enable when we upgrade to DBCP 2, since it depends on POOL 2
+        // which has an EvictionPolicy, so for example we could test connections after a smaller
+        // amount of time than minEvictableIdleTimeMillis.
+        this.setTestWhileIdle(false);
 
         this.setInitialSize(3);
-        this.setMaxActive(48);
+        // neither DOS the server...
+        this.setBlockWhenExhausted(true);
+        this.setMaxActive(12);
+        // ... nor us
+        this.setMaxWait(5000);
         // creating connections is quite costly so make sure we always have a couple free
         this.setMinIdle(2);
         // but not too much as it can lock out other users (the server has a max connection count)
-        this.setMaxIdle(16);
-        this.setBlockWhenExhausted(false);
+        this.setMaxIdle(10);
         // check 5 connections every 4 seconds
         this.setTimeBetweenEvictionRunsMillis(4000);
         this.setNumTestsPerEvictionRun(5);
         // kill extra (above minIdle) connections after 40s
         this.setSoftMinEvictableIdleTimeMillis(TimeUnit.SECONDS.toMillis(40));
         // kill idle connections after 30 minutes (even if it means re-creating some new ones
-        // immediately afterwards to ensure minIdle connections)
+        // immediately afterwards to ensure minIdle connections). For now it's a poor man's solution
+        // for lacking testWhileIdle. After that time NAT tables expires, the path to the server
+        // might be broken...
         this.setMinEvictableIdleTimeMillis(TimeUnit.MINUTES.toMillis(30));
 
         // the default of many systems
@@ -766,9 +809,25 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
      * @see ConnectionHandler
      */
     public final <T, X extends Exception> T useConnection(ConnectionHandler<T, X> handler) throws SQLException, X {
+        return this.useConnection(handler, false);
+    }
+
+    private final <T, X extends Exception> T useConnection(ConnectionHandler<T, X> handler, final boolean force) throws SQLException, X {
         final HandlersStack h;
+        boolean connOutsidePool = false;
         if (!this.handlingConnection()) {
-            h = new HandlersStack(this, this.getNewConnection(), handler);
+            Connection conn;
+            try {
+                conn = this.getNewConnection();
+            } catch (NoSuchElementException e) {
+                if (force) {
+                    conn = this.connectionFactory.createConnection();
+                    connOutsidePool = true;
+                } else {
+                    throw e;
+                }
+            }
+            h = new HandlersStack(this, conn, handler);
             this.handlers.put(Thread.currentThread(), h);
         } else if (handler.canRestoreState()) {
             h = this.getHandlersStack().push(handler);
@@ -810,11 +869,14 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         if (h.pop()) {
             // remove if this thread has no handlers left
             this.handlers.remove(Thread.currentThread());
-            if (pristineState)
+            if (connOutsidePool) {
+                conn.close();
+            } else if (pristineState)
                 this.returnConnection(conn);
             else
                 this.closeConnection(conn);
         } else {
+            assert !connOutsidePool;
             // connection is still used
             if (!pristineState) {
                 h.invalidConnection();
@@ -838,11 +900,15 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         try {
             res = executeOnce(query, queryInfo.getConnection());
         } catch (SQLException exn) {
+            // TODO only retry for transient errors
             if (State.DEBUG)
                 State.INSTANCE.addFailedRequest(query);
             // maybe this was a network problem, so wait a little
+            final int retryWait = this.retryWait;
+            if (retryWait < 0)
+                throw exn;
             try {
-                Thread.sleep(1000);
+                Thread.sleep(this.retryWait);
             } catch (InterruptedException e) {
                 throw new RTInterruptedException(e.getMessage() + " : " + query, exn);
             }
@@ -863,6 +929,35 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
             Log.get().log(Level.INFO, "executeOnce() failed for " + queryInfo, exn);
         }
         return res;
+    }
+
+    /**
+     * Try to execute a {@link #getValidationQuery() simple query} on the database server. This
+     * method even works when the pool is exhausted.
+     * 
+     * @throws SQLException if the query couldn't be executed.
+     */
+    public final void validateDBConnectivity() throws SQLException {
+        this.validateDBConnectivity(this.getValidationQueryTimeout());
+    }
+
+    public final void validateDBConnectivity(final int timeout) throws SQLException {
+        this.useConnection(new ConnectionHandlerNoSetup<Object, SQLException>() {
+            @Override
+            public Object handle(SQLDataSource ds) throws SQLException {
+                final Statement stmt = ds.getConnection().createStatement();
+                try {
+                    stmt.setQueryTimeout(timeout);
+                    final ResultSet rs = stmt.executeQuery(ds.getValidationQuery());
+                    if (!rs.next())
+                        throw new SQLException("No row returned");
+                    rs.close();
+                } finally {
+                    stmt.close();
+                }
+                return null;
+            }
+        }, true);
     }
 
     private Object[] executeOnce(String query, Connection c) throws SQLException {
@@ -953,6 +1048,13 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
                 // et on attend soit qu'elle finisse soit qu'on soit interrompu
                 try {
                     rs = thr.getRs();
+                } catch (SQLException e) {
+                    if (getSystem() == SQLSystem.MYSQL && e.getErrorCode() == 1317) {
+                        thr.stopQuery();
+                        throw new InterruptedQuery("request interrupted : " + query, e, thr);
+                    } else {
+                        throw e;
+                    }
                 } catch (InterruptedException e) {
                     thr.stopQuery();
                     throw new InterruptedQuery("request interrupted : " + query, e, thr);
@@ -1028,7 +1130,8 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         }
 
         public void stopQuery() throws SQLException {
-            this.stmt.cancel();
+            if (!this.stmt.isClosed())
+                this.stmt.cancel();
             synchronized (this) {
                 this.canceled = true;
             }
@@ -1109,23 +1212,32 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
 
     /**
      * Retourne une connection à cette source de donnée (generally
-     * {@link #useConnection(ConnectionHandler)} should be used). Si la connexion échoue cette
-     * méthode va réessayer quelques secondes plus tard.
+     * {@link #useConnection(ConnectionHandler)} should be used). If a connection in the pool fails
+     * to {@link #initConnection(Connection) initialize} or if the pool is empty and a new
+     * connection fails to get created, this method will try to borrow a connection from the pool a
+     * second time.
      * <p>
      * Note : you <b>must</b> return this connection (e.g. use try/finally).
      * <p>
      * 
      * @return une connection à cette source de donnée.
+     * @throws NoSuchElementException after {@link #getMaxWait()} milliseconds if the pool is
+     *         exhausted and {@link #blocksWhenExhausted()}.
      * @see #returnConnection(Connection)
      * @see #closeConnection(Connection)
      */
-    protected final Connection getNewConnection() {
+    protected final Connection getNewConnection() throws NoSuchElementException {
         try {
             return this.borrowConnection(false);
         } catch (RTInterruptedException e) {
             throw e;
         } catch (Exception e) {
-            return this.borrowConnection(true);
+            if (e instanceof NoSuchElementException) {
+                // no need to try to test all others connections, the pool is just exhausted
+                throw (NoSuchElementException) e;
+            } else {
+                return this.borrowConnection(true);
+            }
         }
     }
 
@@ -1135,15 +1247,19 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
      * 
      * @param test if <code>true</code> then testOnBorrow will be set.
      * @return the new connection.
+     * @throws NoSuchElementException after {@link #getMaxWait()} milliseconds if the pool is
+     *         exhausted and {@link #blocksWhenExhausted()}.
      */
-    private final Connection borrowConnection(final boolean test) {
+    private final Connection borrowConnection(final boolean test) throws NoSuchElementException {
         if (test) {
             this.testLock.lock();
             // invalidate all bad connections
             setTestOnBorrow(true);
         }
         try {
-            final Connection res = this.getRawConnection();
+            // when we call borrowConnection() with test, it's because there was an error so this
+            // call is already a second try, thus getRawConnection() shouldn't try a third time.
+            final Connection res = this.getRawConnection(!test);
             try {
                 initConnection(res);
                 return res;
@@ -1187,28 +1303,37 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
 
     private static final String pgInterrupted = GT.tr("Interrupted while attempting to connect.");
 
-    private Connection getRawConnection() {
+    private void getRawConnectionThrow(final Exception e1, final Exception e2) throws NoSuchElementException {
+        if (e1.getCause() instanceof NoSuchElementException)
+            throw (NoSuchElementException) e1.getCause();
+        else if (e2 == null)
+            throw new IllegalStateException("Impossible d'obtenir une connexion sur " + this, e1);
+        else
+            throw new IllegalStateException("Impossible d'obtenir une connexion sur " + this + "après 2 essais\nexception 2 :" + e2.getLocalizedMessage(), e1);
+    }
+
+    private Connection getRawConnection(final boolean retry) throws NoSuchElementException {
         assert !Thread.holdsLock(this) : "super.getConnection() might block (see setWhenExhaustedAction()), and since return/closeConnection() need this lock, this method cannot wait while holding the lock";
         Connection result = null;
         try {
             result = super.getConnection();
-        } catch (SQLException e1) {
+        } catch (Exception e1) {
             // try to know if interrupt, TODO cleanup : patch pg Driver.java to fill the cause
             if (e1.getCause() instanceof InterruptedException || (e1 instanceof PSQLException && e1.getMessage().equals(pgInterrupted))) {
                 throw new RTInterruptedException(e1);
             }
-            final int retryWait = this.retryWait;
-            if (retryWait == 0)
-                throw new IllegalStateException("Impossible d'obtenir une connexion sur " + this, e1);
+            final int retryWait = retry ? this.retryWait : -1;
+            if (retryWait < 0)
+                getRawConnectionThrow(e1, null);
             try {
                 // on attend un petit peu
-                Thread.sleep(retryWait * 1000);
+                Thread.sleep(retryWait);
                 // avant de réessayer
                 result = super.getConnection();
             } catch (InterruptedException e) {
                 throw new RTInterruptedException("interrupted while waiting for a second try", e);
             } catch (Exception e) {
-                throw new IllegalStateException("Impossible d'obtenir une connexion sur " + this + ": " + e.getLocalizedMessage(), e1);
+                getRawConnectionThrow(e1, e);
             }
         }
         if (State.DEBUG)
@@ -1423,6 +1548,13 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         this.connectionPool.setLifo(true);
         this.setBlockWhenExhausted(this.blockWhenExhausted);
         this.connectionPool.setSoftMinEvictableIdleTimeMillis(this.softMinEvictableIdleTimeMillis);
+    }
+
+    @Override
+    protected ConnectionFactory createConnectionFactory() throws SQLException {
+        final ConnectionFactory res = super.createConnectionFactory();
+        this.connectionFactory = res;
+        return res;
     }
 
     @Override

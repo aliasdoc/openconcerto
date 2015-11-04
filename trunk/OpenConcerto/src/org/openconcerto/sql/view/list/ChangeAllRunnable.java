@@ -31,7 +31,7 @@ abstract class ChangeAllRunnable extends UpdateRunnable {
     public final void run() {
         final List<ListSQLLine> tmp = getList();
         if (tmp != null)
-            this.getSearchQ().setFullList(tmp);
+            this.getUpdateQ().setFullList(tmp, this.getUpdateQ().getState().getAllColumns());
         this.done();
     }
 

@@ -45,7 +45,7 @@ public class ListeFastPrintFrame extends JFrame {
     private static final long serialVersionUID = -1653555706074122489L;
     private final Class<? extends AbstractSheetXml> clazz;
     private final JPanel panel;
-    private final List<SQLRowAccessor> liste;
+    private final List<? extends SQLRowAccessor> liste;
     private final JLabel operation = new JLabel("");
     private final JProgressBar bar = new JProgressBar();
     private final JSpinner spin;
@@ -54,7 +54,7 @@ public class ListeFastPrintFrame extends JFrame {
 
     private final JButton valid, cancel;
 
-    public ListeFastPrintFrame(final List<SQLRowAccessor> liste, final Class<? extends AbstractSheetXml> clazz) {
+    public ListeFastPrintFrame(final List<? extends SQLRowAccessor> liste, final Class<? extends AbstractSheetXml> clazz) {
         this.panel = new JPanel(new GridBagLayout());
         this.liste = liste;
         this.clazz = clazz;

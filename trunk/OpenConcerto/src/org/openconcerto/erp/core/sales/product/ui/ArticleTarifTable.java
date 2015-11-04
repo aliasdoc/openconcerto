@@ -127,7 +127,7 @@ public class ArticleTarifTable extends RowValuesTablePanel {
 
         tableElement_PrixMetrique1_VenteHT.addModificationListener(tableElement_PrixVente_HT);
         tableElement_PrixVente_HT.setModifier(new CellDynamicModifier() {
-            public Object computeValueFrom(SQLRowValues row) {
+            public Object computeValueFrom(SQLRowValues row, SQLTableElement source) {
                 rowValuesArticleCompile.putAll(comp.getDetailsRowValues().getAbsolutelyAll());
                 rowValuesArticleCompile.put("PRIX_METRIQUE_VT_1", row.getObject("PRIX_METRIQUE_VT_1"));
                 Number n = (Number) rowValuesArticleCompile.getObject("ID_MODE_VENTE_ARTICLE");
@@ -144,7 +144,7 @@ public class ArticleTarifTable extends RowValuesTablePanel {
         tableElement_PrixVente_HT.addModificationListener(tableElement_PrixVente_TTC);
         tableElement_PrixVente_TTC.setModifier(new CellDynamicModifier() {
             @Override
-            public Object computeValueFrom(SQLRowValues row) {
+            public Object computeValueFrom(SQLRowValues row, SQLTableElement source) {
 
                 rowValuesArticleCompile.putAll(comp.getDetailsRowValues().getAbsolutelyAll());
                 rowValuesArticleCompile.put("PRIX_METRIQUE_VT_1", row.getObject("PRIX_METRIQUE_VT_1"));

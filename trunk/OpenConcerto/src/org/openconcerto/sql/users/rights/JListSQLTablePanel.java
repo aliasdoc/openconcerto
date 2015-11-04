@@ -52,6 +52,7 @@ public class JListSQLTablePanel extends JPanel {
     private JListSQLTableModel listModel;
     private JList list;
     private SQLTable table;
+    private final boolean withUndefined;
     private final ListDataListener dataListener = new ListDataListener() {
 
         @Override
@@ -95,6 +96,7 @@ public class JListSQLTablePanel extends JPanel {
 
     public JListSQLTablePanel(final ComboSQLRequest req, final String undefined) {
         super(new GridBagLayout());
+        this.withUndefined = undefined != null;
         this.table = req.getPrimaryTable();
         this.listModel = new JListSQLTableModel(req);
         this.list = new JList(this.listModel);
@@ -183,6 +185,20 @@ public class JListSQLTablePanel extends JPanel {
     }
 
     int idToSelect = -1;
+
+    public void selectFirstID() {
+
+        // Wait loading
+        getModel().getIndexForId(1);
+
+        if (this.withUndefined && this.getModel().getSize() > 1) {
+            getJList().setSelectedIndex(1);
+            getJList().ensureIndexIsVisible(1);
+        } else if (this.getModel().getSize() > 0) {
+            getJList().setSelectedIndex(0);
+            getJList().ensureIndexIsVisible(0);
+        }
+    }
 
     public void selectID(final int id) {
         if (getModel().isUpdating()) {

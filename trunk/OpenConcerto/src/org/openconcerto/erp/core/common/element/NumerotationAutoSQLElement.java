@@ -17,6 +17,7 @@ import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.image.ImageIconWarning;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ClientNormalSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.CourrierClientSQLElement;
+import org.openconcerto.erp.core.customerrelationship.customer.element.CustomerSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.RelanceSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.SalarieSQLElement;
 import org.openconcerto.erp.core.sales.credit.element.AvoirClientSQLElement;
@@ -34,6 +35,7 @@ import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.IResultSetHandler;
 import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
@@ -261,7 +263,13 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
      * @throws IllegalArgumentException pattern incorrect
      */
     public static final String getNextNumero(Class<? extends SQLElement> clazz, Date d) throws IllegalArgumentException {
-        SQLRow rowNum = TABLE_NUM.getRow(2);
+        return getNextNumero(clazz, d, null);
+    }
+
+    public static final String getNextNumero(Class<? extends SQLElement> clazz, Date d, SQLRowAccessor rowNum) throws IllegalArgumentException {
+        if (rowNum == null || rowNum.isUndefined()) {
+            rowNum = TABLE_NUM.getRow(2);
+        }
         String s = map.get(clazz);
 
         if (TABLE_NUM.getFieldsName().contains(s + AUTO_MONTH) && rowNum.getBoolean(s + AUTO_MONTH)) {
@@ -269,6 +277,9 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
         }
 
         String format = rowNum.getString(s + FORMAT);
+        if (rowNum.getObject(s + START) == null) {
+            return "";
+        }
         int start = rowNum.getInt(s + START);
         return getNextNumero(format, start, d);
     }
@@ -373,13 +384,15 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
 
                 SQLElement elt = Configuration.getInstance().getDirectory().getElement(e);
 
-                sel.addSelect(elt.getTable().getKey());
+                if (elt != null) {
+                    sel.addSelect(elt.getTable().getKey());
 
-                sel.setWhere(new Where(elt.getTable().getField("NUMERO"), "LIKE", getPattern(elt, num)));
-                System.err.println("NumerotationAutoSQLElement.isNumeroExist() " + sel.asString());
-                List<SQLRow> liste = (List<SQLRow>) Configuration.getInstance().getBase().getDataSource().execute(sel.asString(), new SQLRowListRSH(elt.getTable(), true));
-                if (liste.size() > 0) {
-                    return true;
+                    sel.setWhere(new Where(elt.getTable().getField("NUMERO"), "LIKE", getPattern(elt, num)));
+                    System.err.println("NumerotationAutoSQLElement.isNumeroExist() " + sel.asString());
+                    List<SQLRow> liste = (List<SQLRow>) Configuration.getInstance().getBase().getDataSource().execute(sel.asString(), new SQLRowListRSH(elt.getTable(), true));
+                    if (liste.size() > 0) {
+                        return true;
+                    }
                 }
             }
         }
@@ -489,24 +502,28 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
         SQLRow rowNum = TABLE_NUM.getRow(2);
         String s = map.get(elt.getClass());
         if (!rowNum.getTable().contains(s + AUTO_MONTH) || !rowNum.getBoolean(s + AUTO_MONTH)) {
-            int start = rowNum.getInt(s + START);
 
-            // si le numero precedent n'existe pas
-            if (!isNumeroExist(elt, start - 1)) {
+            if (rowNum.getObject(s + START) != null) {
 
-                int i = 2;
+                int start = rowNum.getInt(s + START);
 
-                while (!isNumeroExist(elt, start - i)) {
-                    i++;
-                }
+                // si le numero precedent n'existe pas
+                if (!isNumeroExist(elt, start - 1)) {
 
-                if (start - i >= 0) {
-                    SQLRowValues rowVals = rowNum.createEmptyUpdateRow();
-                    rowVals.put(s + START, start - i + 1);
-                    try {
-                        rowVals.update();
-                    } catch (SQLException e) {
-                        e.printStackTrace();
+                    int i = 2;
+
+                    while (!isNumeroExist(elt, start - i)) {
+                        i++;
+                    }
+
+                    if (start - i >= 0) {
+                        SQLRowValues rowVals = rowNum.createEmptyUpdateRow();
+                        rowVals.put(s + START, start - i + 1);
+                        try {
+                            rowVals.update();
+                        } catch (SQLException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
             }
@@ -522,7 +539,7 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
         map.put(AvoirFournisseurSQLElement.class, "AVOIR_F");
         map.put(DevisSQLElement.class, "DEVIS");
 
-            map.put(ClientNormalSQLElement.class, "CLIENT");
+            map.put(CustomerSQLElement.class, "CLIENT");
 
         map.put(BonDeLivraisonSQLElement.class, "BON_L");
         map.put(BonReceptionSQLElement.class, "BON_R");
@@ -558,7 +575,7 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
                     public void tableModified(SQLTableEvent evt) {
                         if (evt.getMode() == Mode.ROW_UPDATED) {
                             SQLRow row = evt.getRow();
-                            if (row.isArchived()) {
+                            if (row != null && row.isArchived()) {
                                 fixNumerotation(elt);
                             }
                         }

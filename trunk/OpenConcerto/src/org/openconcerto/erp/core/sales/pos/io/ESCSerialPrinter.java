@@ -17,10 +17,12 @@ import gnu.io.CommPort;
 import gnu.io.CommPortIdentifier;
 import gnu.io.SerialPort;
 
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Enumeration;
 import java.util.List;
 
 public class ESCSerialPrinter extends DefaultTicketPrinter {
@@ -113,65 +115,59 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
     }
 
     public synchronized void printBuffer() throws Exception {
-        System.out.println("Port " + this.port);
-        SerialPort serialPort = getSerialPort();
-
-        OutputStream out = serialPort.getOutputStream();
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
         // Init
-        out.write(ESC);
-        out.write(0x40);
+        bOut.write(ESC);
+        bOut.write(0x40);
         // French characters
-        out.write(ESC);
-        out.write(0x52);
-        out.write(0x01);
+        bOut.write(ESC);
+        bOut.write(0x52);
+        bOut.write(0x01);
         //
 
-        for (int i = 0; i < this.strings.size(); i++) {
-
+        final int size = this.strings.size();
+        for (int i = 0; i < size; i++) {
             String string = this.strings.get(i);
             int mode = modes.get(i);
 
             if (mode == BARCODE) {
-
-                System.out.println("Barcode:" + string);
+                //
+                bOut.write(GS);
+                bOut.write(0x48);
+                bOut.write(0x02); // en bas
 
                 //
-                out.write(GS);
-                out.write(0x48);
-                out.write(0x02); // en bas
+                bOut.write(GS);
+                bOut.write(0x77);
+                bOut.write(0x02); // Zoom 2
 
                 //
-                out.write(GS);
-                out.write(0x77);
-                out.write(0x02); // Zoom 2
-
-                //
-                out.write(GS);
-                out.write(0x68);
-                out.write(60); // Hauteur
+                bOut.write(GS);
+                bOut.write(0x68);
+                bOut.write(60); // Hauteur
                 // Code 39
-                out.write(GS);
-                out.write(0x6B);
-                out.write(0x04); // Code 39
+                bOut.write(GS);
+                bOut.write(0x6B);
+                bOut.write(0x04); // Code 39
                 for (int k = 0; k < string.length(); k++) {
                     char c = string.charAt(k);
 
-                    out.write(c);
+                    bOut.write(c);
                 }
-                out.write(0x00); // End
+                bOut.write(0x00); // End
             } else {
                 if (mode == NORMAL) {
-                    out.write(ESC);
-                    out.write(0x21);
-                    out.write(0);// Default
+                    bOut.write(ESC);
+                    bOut.write(0x21);
+                    bOut.write(0);// Default
                 } else if (mode == BOLD) {
-                    out.write(ESC);
-                    out.write(0x21);
-                    out.write(8);// Emphasis
+                    bOut.write(ESC);
+                    bOut.write(0x21);
+                    bOut.write(8);// Emphasis
                 } else if (mode == BOLD_LARGE) {
-                    out.write(GS);
-                    out.write(0x21);
-                    out.write(0x11);//
+                    bOut.write(GS);
+                    bOut.write(0x21);
+                    bOut.write(0x11);//
                 }
 
                 for (int k = 0; k < string.length(); k++) {
@@ -191,21 +187,26 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
                     } else if (c == 'ô') {
                         c = 147;
                     }
-                    out.write(c);
+                    bOut.write(c);
                 }
             }
-            out.write(0x0A);// Retour a la ligne
+            bOut.write(0x0A);// Retour a la ligne
 
         }
         // Eject
-        out.write(0x0A);
-        out.write(0x0A);
-        out.write(0x0A);
-        out.write(0x0A);
+        bOut.write(0x0A);
+        bOut.write(0x0A);
+        bOut.write(0x0A);
+        bOut.write(0x0A);
         // Coupe
-        out.write(GS);
-        out.write(0x56); // V
-        out.write(0x01);
+        bOut.write(GS);
+        bOut.write(0x56); // V
+        bOut.write(0x01);
+
+        // Do NOT flush or use BufferedOutputStream !
+        final SerialPort serialPort = getSerialPort();
+        final OutputStream out = serialPort.getOutputStream();
+        out.write(bOut.toByteArray());
         out.close();
         serialPort.close();
     }
@@ -214,25 +215,24 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
         if (port == null || port.length() == 0) {
             throw new IllegalStateException("Invalid serial port name: " + port);
         }
-
-        CommPortIdentifier portIdentifier = CommPortIdentifier.getPortIdentifier(this.port);
+        final CommPortIdentifier portIdentifier = CommPortIdentifier.getPortIdentifier(this.port);
         if (portIdentifier.isCurrentlyOwned()) {
             throw new IllegalAccessError("Port " + this.port + " is currently in use");
         }
-        CommPort commPort = portIdentifier.open("CommUtil", 2000);
-
+        final int timeOutMs = 2000;
+        final CommPort commPort = portIdentifier.open("ESCSerialPrinter", timeOutMs);
         if (!(commPort instanceof SerialPort)) {
             throw new IllegalStateException("Invalid serial port: " + port);
         }
 
-        SerialPort serialPort = (SerialPort) commPort;
+        final SerialPort serialPort = (SerialPort) commPort;
         serialPort.setSerialPortParams(9600, SerialPort.DATABITS_8, SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
         return serialPort;
     }
 
     public static void main(String[] args) {
         listPorts();
-        ESCSerialPrinter prt = new ESCSerialPrinter("COM1");
+        final ESCSerialPrinter prt = new ESCSerialPrinter("COM1");
         prt.setPort(getSerialPortNames().get(0));
         prt.addToBuffer("ILM INFORMATIQUE", BOLD_LARGE);
         prt.addToBuffer("");
@@ -241,7 +241,7 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
         prt.addToBuffer("Tél: 00 00 00 00 00");
         prt.addToBuffer("Fax: 00 00 00 00 00");
         prt.addToBuffer("");
-        SimpleDateFormat df = new SimpleDateFormat("EEEE d MMMM yyyy à HH:mm");
+        final SimpleDateFormat df = new SimpleDateFormat("EEEE d MMMM yyyy à HH:mm");
         prt.addToBuffer(formatRight(45, "Le " + df.format(Calendar.getInstance().getTime())));
         prt.addToBuffer("");
         prt.addToBuffer(formatRight(5, "3") + " " + formatLeft(30, "ILM Informatique") + " " + formatRight(8, "3.00"));
@@ -267,7 +267,8 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
     }
 
     public static void listPorts() {
-        java.util.Enumeration<CommPortIdentifier> portEnum = CommPortIdentifier.getPortIdentifiers();
+        @SuppressWarnings("unchecked")
+        final Enumeration<CommPortIdentifier> portEnum = CommPortIdentifier.getPortIdentifiers();
         while (portEnum.hasMoreElements()) {
             CommPortIdentifier portIdentifier = portEnum.nextElement();
             System.out.println("Port: " + portIdentifier.getName() + " Type: " + getPortTypeName(portIdentifier.getPortType()));
@@ -276,7 +277,8 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
 
     private static List<String> getSerialPortNames() {
         ArrayList<String> r = new ArrayList<String>();
-        java.util.Enumeration<CommPortIdentifier> portEnum = CommPortIdentifier.getPortIdentifiers();
+        @SuppressWarnings("unchecked")
+        Enumeration<CommPortIdentifier> portEnum = CommPortIdentifier.getPortIdentifiers();
         while (portEnum.hasMoreElements()) {
             CommPortIdentifier portIdentifier = portEnum.nextElement();
             System.out.println("Port: " + portIdentifier.getName() + " Type: " + getPortTypeName(portIdentifier.getPortType()));

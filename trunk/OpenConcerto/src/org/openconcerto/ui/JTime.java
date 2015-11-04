@@ -15,6 +15,7 @@
 
 import org.openconcerto.ui.component.text.TextComponent;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
+import org.openconcerto.utils.TimeUtils;
 import org.openconcerto.utils.checks.ValidChangeSupport;
 import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
@@ -34,7 +35,8 @@ import javax.swing.text.DateFormatter;
 import javax.swing.text.JTextComponent;
 
 /**
- * Allow to edit a time. The day of the date value is always the epoch.
+ * Allow to edit a time. The day of the returned date value is always the epoch, but
+ * {@link #setValue(Date)} accepts any day.
  * 
  * @author Sylvain CUAZ
  */
@@ -66,7 +68,7 @@ public final class JTime extends JPanel implements ValueWrapper<Date>, TextCompo
         return JTime.CAL.getTime();
     }
 
-    private final boolean fillWithCurrentTime;
+    private final boolean fillWithCurrentHour;
     private final JFormattedTextField text;
     private final ValidChangeSupport validSupp;
 
@@ -80,16 +82,16 @@ public final class JTime extends JPanel implements ValueWrapper<Date>, TextCompo
     /**
      * Create the component.
      * 
-     * @param fillWithCurrentTime <code>true</code> if this should be filled with the current hour,
+     * @param fillWithCurrentHour <code>true</code> if this should be filled with the current hour,
      *        else empty.
      */
-    public JTime(final boolean fillWithCurrentTime) {
-        this(fillWithCurrentTime, false);
+    public JTime(final boolean fillWithCurrentHour) {
+        this(fillWithCurrentHour, false);
     }
 
-    public JTime(final boolean fillWithCurrentTime, final boolean withSeconds) {
+    public JTime(final boolean fillWithCurrentHour, final boolean withSeconds) {
         super(new BorderLayout());
-        this.fillWithCurrentTime = fillWithCurrentTime;
+        this.fillWithCurrentHour = fillWithCurrentHour;
 
         final DateFormatter formatter = new DateFormatter(new SimpleDateFormat(withSeconds ? "HH:mm:ss" : "HH:mm"));
         formatter.setOverwriteMode(true);
@@ -117,7 +119,7 @@ public final class JTime extends JPanel implements ValueWrapper<Date>, TextCompo
 
     @Override
     public final void resetValue() {
-        if (this.fillWithCurrentTime) {
+        if (this.fillWithCurrentHour) {
             this.setTimeInMillis(((long) Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) * 3600 * 1000);
         } else {
             this.setValue(null);
@@ -131,11 +133,7 @@ public final class JTime extends JPanel implements ValueWrapper<Date>, TextCompo
             time = null;
         } else {
             JTime.CAL.setTime(val);
-            final int year = JTime.CAL.get(Calendar.YEAR);
-            final int doy = JTime.CAL.get(Calendar.DAY_OF_YEAR);
-            JTime.CAL.clear();
-            JTime.CAL.set(Calendar.YEAR, year);
-            JTime.CAL.set(Calendar.DAY_OF_YEAR, doy);
+            TimeUtils.clearTime(JTime.CAL);
             // midnight
             final long woTime = JTime.CAL.getTimeInMillis();
             time = val.getTime() - woTime;

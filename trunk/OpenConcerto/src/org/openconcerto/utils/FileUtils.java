@@ -56,20 +56,17 @@ public final class FileUtils {
         // all static
     }
 
-    public static void browseFile(final File f) {
-        try {
-            if (Desktop.isDesktopSupported()) {
-                Desktop d = Desktop.getDesktop();
-                if (d.isSupported(Desktop.Action.BROWSE)) {
-                    d.browse(f.getCanonicalFile().toURI());
-                } else {
-                    openNative(f);
-                }
+    public static void browseFile(final File f) throws IOException {
+
+        if (Desktop.isDesktopSupported()) {
+            Desktop d = Desktop.getDesktop();
+            if (d.isSupported(Desktop.Action.BROWSE)) {
+                d.browse(f.getCanonicalFile().toURI());
             } else {
                 openNative(f);
             }
-        } catch (IOException e) {
-            ExceptionHandler.handle("Impossible de trouver le dossier " + f.getAbsolutePath(), e);
+        } else {
+            openNative(f);
         }
     }
 
@@ -597,6 +594,9 @@ public final class FileUtils {
             w.write(s);
         } finally {
             w.close();
+            // should have already been closed by the writer but the documentation is vague and
+            // there's no way to check
+            fileStream.close();
         }
     }
 

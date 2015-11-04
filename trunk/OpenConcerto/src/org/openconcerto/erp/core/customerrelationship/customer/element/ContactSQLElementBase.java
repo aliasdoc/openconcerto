@@ -19,6 +19,7 @@ import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.UISQLComponent;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.ui.EmailComposer;
 import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.ExceptionHandler;
@@ -68,6 +69,9 @@ public abstract class ContactSQLElementBase extends ConfSQLElement {
         }
         if (getTable().contains("N4DS")) {
             l.add("N4DS");
+        }
+        if (getTable().contains("NO_MAILING")) {
+            l.add("NO_MAILING");
         }
         return l;
     }
@@ -150,6 +154,9 @@ public abstract class ContactSQLElementBase extends ConfSQLElement {
             this.addView("FAX", "left");
             this.addView("EMAIL", "right");
 
+            if (getTable().contains("NO_MAILING"))
+                this.addView("NO_MAILING", "right");
+
             if (getTable().contains("SERVICE"))
                 this.addView("SERVICE");
 
@@ -179,7 +186,7 @@ public abstract class ContactSQLElementBase extends ConfSQLElement {
         }
     }
 
-    protected void sendMail(List<SQLRowAccessor> l) {
+    protected void sendMail(List<SQLRowValues> l) {
 
         String mail = "";
         for (SQLRowAccessor rowCli : l) {

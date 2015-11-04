@@ -19,6 +19,7 @@ package org.openconcerto.sql.element;
 import static org.openconcerto.sql.TM.getTM;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidObject;
 import org.openconcerto.utils.checks.ValidState;
@@ -249,10 +250,10 @@ public class DefaultElementSQLObject extends ElementSQLObject {
     }
 
     @Override
-    public void setEditable(boolean enabled) {
-        super.setEditable(enabled);
-        this.createBtn.setEnabled(enabled);
-        this.supprBtn.setEnabled(enabled);
+    public void setEditable(final InteractionMode mode) {
+        super.setEditable(mode);
+        this.createBtn.setEnabled(mode.isEditable());
+        this.supprBtn.setEnabled(mode.isEditable());
     }
 
 }

@@ -52,14 +52,18 @@ abstract class AbstractPath<T extends AbstractPath<T>> {
     }
 
     public final T append(Path p) {
-        if (this.getLast() != p.getFirst())
-            throw new IllegalArgumentException("this ends at " + this.getLast() + " while the other begins at " + p.getFirst());
+        check(p.getFirst());
         return this._append(p);
+    }
+
+    protected final void check(final SQLTable t) {
+        if (this.getLast() != t)
+            throw new IllegalArgumentException("this ends at " + this.getLast() + " while the other begins at " + t);
     }
 
     protected abstract T _append(Path p);
 
-    abstract T add(Step step);
+    public abstract T add(Step step);
 
     /**
      * Add a table at the end of the path. NOTE: the step will be composed of all the foreign fields

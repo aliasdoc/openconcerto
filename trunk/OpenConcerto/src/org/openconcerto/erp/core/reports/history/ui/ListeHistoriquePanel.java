@@ -490,7 +490,7 @@ public class ListeHistoriquePanel extends JPanel {
         int index = getIndexFromTableName(tableName);
         if (liste != null) {
             liste.addListener(listener);
-            List<TableModelListener> l = this.mapListener.get(liste);
+            List<TableModelListener> l = this.mapListener.get(index);
             if (l == null) {
                 l = new ArrayList<TableModelListener>();
                 this.mapListener.put(index, l);

@@ -41,6 +41,7 @@ import org.openconcerto.ui.DisplayabilityListener;
 import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ComboLockedMode;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.component.text.TextBehaviour;
 import org.openconcerto.ui.component.text.TextComponentUtils;
 import org.openconcerto.ui.coreanimation.Animator;
@@ -128,7 +129,7 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
     // [ValidListener]
     private final List<ValidListener> listeners;
 
-    private boolean editable;
+    private InteractionMode editable;
     private boolean alwaysEditable;
     private final Set<SQLField> hide;
     private FormLayouter additionalFieldsPanel;
@@ -150,7 +151,7 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
         this.requiredNames = this.createRequiredNames();
         this.listeners = new ArrayList<ValidListener>();
         this.hide = new HashSet<SQLField>();
-        this.editable = true;
+        this.editable = InteractionMode.READ_WRITE;
         this.setNonExistantEditable(false);
         this.requete = new SQLRowView(this.getTable());
         // enable or disable our views and forward event
@@ -413,7 +414,7 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
             }
         }
         if (dontEdit(v))
-            v.setEditable(false);
+            v.setEditable(InteractionMode.READ_ONLY);
 
         final JTextComponent textComp = TextComponentUtils.getTextComp(v.getComp());
         if (textComp != null)
@@ -430,14 +431,17 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
 
     protected final void inited() {
         super.inited();
-        for (final Entry<String, JComponent> e : this.getElement().getAdditionalFields().entrySet()) {
-            final SpecParser spec = new SpecParser(null, true);
-            final JComponent comp = e.getValue();
-            if (comp == null)
-                // infer component
-                this.addViewJComponent(e.getKey(), spec);
-            else
-                this.addView(comp, e.getKey(), spec);
+        if (!(this instanceof GroupSQLComponent)) {
+
+            for (final Entry<String, JComponent> e : this.getElement().getAdditionalFields().entrySet()) {
+                final SpecParser spec = new SpecParser(null, true);
+                final JComponent comp = e.getValue();
+                if (comp == null)
+                    // infer component
+                    this.addViewJComponent(e.getKey(), spec);
+                else
+                    this.addView(comp, e.getKey(), spec);
+            }
         }
         // assure that added views are consistent with our editable status
         this.updateChildrenEditable();
@@ -602,12 +606,12 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
      * Allow the views of this component to be edited. For this to be editable other framework
      * predicates must be <code>true</code> (e.g. {@link #isSelectionReadOnly()}).
      * 
-     * @param b true if the application allow the views to be edited.
+     * @param mode how the application allow the views to be edited.
      */
     @Override
-    public void setEditable(boolean b) {
-        if (b != this.editable) {
-            this.editable = b;
+    public void setEditable(InteractionMode mode) {
+        if (mode != this.editable) {
+            this.editable = mode;
             this.updateChildrenEditable();
         }
     }
@@ -618,7 +622,7 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
         }
     }
 
-    public final boolean isEditable() {
+    public final InteractionMode getEditable() {
         return this.editable;
     }
 
@@ -631,10 +635,10 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
 
     /**
      * Allow the passed view to be edited. For the view to be editable other framework predicates
-     * must be <code>true</code> (e.g. {@link #isEditable()}).
+     * must allow it (e.g. {@link #getEditable()}).
      * 
      * @param view the view.
-     * @param b true if the application allow the view to be edited.
+     * @param b <code>true</code> if the application allow the view to be edited.
      */
     public void allowEditable(final SQLRowItemView view, final boolean b) {
         if (view == null)
@@ -649,8 +653,15 @@ public abstract class BaseSQLComponent extends SQLComponent implements Scrollabl
             // a view can only be editable if its parent is too and if the selected row is
             // if nonExistantEditable : always editable, otherwise id must exist
             // a view can be disabled for other arbitrary application (non framework) reasons
-            o.setEditable(this.isEditable() && !this.isSelectionReadOnly() && (this.isNonExistantEditable() || this.getSelectedID() != SQLRow.NONEXISTANT_ID)
-                    && this.allowEditable.get(o.getSQLName()) != Boolean.FALSE);
+            final InteractionMode mode;
+            if (this.getEditable() != InteractionMode.READ_WRITE) {
+                mode = this.getEditable();
+            } else {
+                final boolean editable = !this.isSelectionReadOnly() && (this.isNonExistantEditable() || this.getSelectedID() != SQLRow.NONEXISTANT_ID)
+                        && this.allowEditable.get(o.getSQLName()) != Boolean.FALSE;
+                mode = editable ? InteractionMode.READ_WRITE : InteractionMode.READ_ONLY;
+            }
+            o.setEditable(mode);
         }
     }
 

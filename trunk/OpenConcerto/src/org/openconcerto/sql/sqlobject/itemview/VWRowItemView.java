@@ -18,6 +18,7 @@ import org.openconcerto.sql.element.SQLComponentItem;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.request.SQLRowItemView;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
 import org.openconcerto.utils.cc.IPredicate;
 import org.openconcerto.utils.checks.ChainValidListener;
@@ -29,7 +30,11 @@ import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
 
 import java.awt.Component;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+
+import javax.swing.SwingUtilities;
 
 /**
  * A RIV delegating most of its workings to a ValueWrapper.
@@ -39,11 +44,22 @@ import java.beans.PropertyChangeListener;
  */
 public abstract class VWRowItemView<T> extends BaseRowItemView implements SQLComponentItem {
 
+    private static final String VALUE_PROPNAME = "value";
+
     private final ValueWrapper<T> wrapper;
+    private final PropertyChangeSupport supp;
+    private final PropertyChangeListener valueL;
     private EmptyObjHelper helper;
 
     public VWRowItemView(ValueWrapper<T> wrapper) {
         this.wrapper = wrapper;
+        this.supp = new PropertyChangeSupport(this);
+        this.valueL = new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                fireValueChange(evt);
+            }
+        };
     }
 
     public final ValueWrapper<T> getWrapper() {
@@ -113,7 +129,26 @@ public abstract class VWRowItemView<T> extends BaseRowItemView implements SQLCom
 
     @Override
     public final void addValueListener(PropertyChangeListener l) {
-        this.getWrapper().addValueListener(l);
+        assert SwingUtilities.isEventDispatchThread();
+        if (!this.supp.hasListeners(VALUE_PROPNAME)) {
+            this.getWrapper().addValueListener(this.valueL);
+        }
+        this.supp.addPropertyChangeListener(VALUE_PROPNAME, l);
+    }
+
+    private final void fireValueChange(PropertyChangeEvent evt) {
+        final PropertyChangeEvent ourEvt = new PropertyChangeEvent(this, VALUE_PROPNAME, evt.getOldValue(), evt.getNewValue());
+        ourEvt.setPropagationId(evt.getPropagationId());
+        this.supp.firePropertyChange(ourEvt);
+    }
+
+    @Override
+    public void removeValueListener(PropertyChangeListener l) {
+        assert SwingUtilities.isEventDispatchThread();
+        this.supp.removePropertyChangeListener(VALUE_PROPNAME, l);
+        if (!this.supp.hasListeners(VALUE_PROPNAME)) {
+            this.getWrapper().rmValueListener(this.valueL);
+        }
     }
 
     @Override
@@ -160,4 +195,11 @@ public abstract class VWRowItemView<T> extends BaseRowItemView implements SQLCom
         return this.getWrapper().getComp();
     }
 
+    @Override
+    public void setEditable(InteractionMode mode) {
+        final Component comp = this.getComp();
+        if (comp != null) {
+            mode.applyTo(comp);
+        }
+    }
 }

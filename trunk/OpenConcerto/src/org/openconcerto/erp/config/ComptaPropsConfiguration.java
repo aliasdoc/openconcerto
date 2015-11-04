@@ -25,20 +25,23 @@ import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.element.PaysSQLElement;
 import org.openconcerto.erp.core.common.element.StyleSQLElement;
 import org.openconcerto.erp.core.common.element.TitrePersonnelSQLElement;
-import org.openconcerto.erp.core.customerrelationship.customer.element.ClientNormalSQLElement;
+import org.openconcerto.erp.core.customerrelationship.customer.element.ClientDepartementSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ContactSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ContactSQLElement.ContactAdministratifSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ContactSQLElement.ContactFournisseurSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.CourrierClientSQLElement;
+import org.openconcerto.erp.core.customerrelationship.customer.element.CustomerCategorySQLElement;
+import org.openconcerto.erp.core.customerrelationship.customer.element.CustomerSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ModeleCourrierClientSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ReferenceClientSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.RelanceSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.TypeLettreRelanceSQLElement;
-import org.openconcerto.erp.core.finance.accounting.element.AnalytiqueSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.AssociationAnalytiqueSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.AssociationCompteAnalytiqueSQLElement;
+import org.openconcerto.erp.core.finance.accounting.element.AxeAnalytiqueSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCGSQLElement;
+import org.openconcerto.erp.core.finance.accounting.element.DeviseHistoriqueSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.ExerciceCommonSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.JournalSQLElement;
@@ -155,6 +158,7 @@ import org.openconcerto.erp.generationDoc.provider.AdresseRueClientValueProvider
 import org.openconcerto.erp.generationDoc.provider.AdresseVilleCPClientValueProvider;
 import org.openconcerto.erp.generationDoc.provider.AdresseVilleClientValueProvider;
 import org.openconcerto.erp.generationDoc.provider.AdresseVilleNomClientValueProvider;
+import org.openconcerto.erp.generationDoc.provider.DateBLProvider;
 import org.openconcerto.erp.generationDoc.provider.FacturableValueProvider;
 import org.openconcerto.erp.generationDoc.provider.FormatedGlobalQtyTotalProvider;
 import org.openconcerto.erp.generationDoc.provider.LabelAccountInvoiceProvider;
@@ -435,7 +439,11 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         if (this.isMain) {
             // ATTN this works because this is executed last (i.e. if you put this in a superclass
             // this won't work since e.g. app.name won't have its correct value)
-            this.setupLogging("logs");
+            try {
+                this.setupLogging("logs");
+            } catch (Exception e) {
+                System.err.println("ComptaPropsConfiguration() error in log setup : " + e.getMessage());
+            }
             registerAccountingProvider();
             registerCellValueProvider();
         }
@@ -458,6 +466,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         FacturableValueProvider.register();
         TotalCommandeClientProvider.register();
         LabelAccountInvoiceProvider.register();
+        DateBLProvider.register();
         AdresseRueClientValueProvider.register();
         AdresseVilleClientValueProvider.register();
         AdresseVilleCPClientValueProvider.register();
@@ -666,9 +675,11 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
 
     private void setSocieteDirectory() {
         SQLElementDirectory dir = this.getDirectory();
+
         dir.addSQLElement(ArticleTarifSQLElement.class);
         dir.addSQLElement(ArticleDesignationSQLElement.class);
         dir.addSQLElement(BanqueSQLElement.class);
+        dir.addSQLElement(ClientDepartementSQLElement.class);
         dir.addSQLElement(ContactFournisseurSQLElement.class);
         dir.addSQLElement(ContactAdministratifSQLElement.class);
         dir.addSQLElement(new TitrePersonnelSQLElement());
@@ -713,7 +724,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         dir.addSQLElement(AvoirFournisseurSQLElement.class);
         dir.addSQLElement(new AcompteSQLElement());
 
-        dir.addSQLElement(new AnalytiqueSQLElement());
+        dir.addSQLElement(new AxeAnalytiqueSQLElement());
 
         dir.addSQLElement(new BonDeLivraisonItemSQLElement());
         dir.addSQLElement(new BonDeLivraisonSQLElement());
@@ -725,7 +736,8 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         dir.addSQLElement(new ChequeAEncaisserSQLElement());
         dir.addSQLElement(new ChequeAvoirClientSQLElement());
         dir.addSQLElement(new ChequeFournisseurSQLElement());
-            dir.addSQLElement(new ClientNormalSQLElement());
+            dir.addSQLElement(new CustomerCategorySQLElement());
+            dir.addSQLElement(new CustomerSQLElement());
         dir.addSQLElement(new CourrierClientSQLElement());
 
         dir.addSQLElement(new ClassementConventionnelSQLElement());
@@ -842,7 +854,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
 
         dir.addSQLElement(CalendarItemSQLElement.class);
         dir.addSQLElement(CalendarItemGroupSQLElement.class);
-
+        dir.addSQLElement(DeviseHistoriqueSQLElement.class);
         // check that all codes are unique
         Collection<SQLElement> elements = dir.getElements();
         String s = "";
@@ -894,7 +906,6 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         final ShowAs showAs = this.getShowAs();
         showAs.setRoot(getRootSociete());
 
-        showAs.show("ACTIVITE", "CODE_ACTIVITE");
         showAs.show("ADRESSE", SQLRow.toList("RUE,CODE_POSTAL,VILLE"));
         final DBRoot root = this.getRootSociete();
 
@@ -913,7 +924,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
                 if (getRootSociete().getTable("CLIENT").getFieldsName().contains("LOCALISATION")) {
                     showAs.show("CLIENT", "NOM", "LOCALISATION");
                 } else {
-                    showAs.show("CLIENT", "NOM");
+                    showAs.show("CLIENT", "ID_PAYS", "GROUPE", "NOM");
                 }
 
         showAs.show(BanqueSQLElement.TABLENAME, "NOM");
@@ -937,6 +948,8 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         listFieldDevisElt.add("NUMERO");
         listFieldDevisElt.add("DATE");
         listFieldDevisElt.add("ID_CLIENT");
+
+        listFieldDevisElt.add("ID_ETAT_DEVIS");
         showAs.showField("DEVIS_ELEMENT.ID_DEVIS", listFieldDevisElt);
 
         showAs.show("DEPARTEMENT", "NUMERO", "NOM");
@@ -964,7 +977,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         showAs.show("MODELE_COURRIER_CLIENT", "NOM", "CONTENU");
 
         showAs.show("NATURE_COMPTE", "NOM");
-        showAs.show("POSTE_ANALYTIQUE", "NOM");
+        showAs.show("POSTE_ANALYTIQUE", "NOM", "ID_AXE_ANALYTIQUE");
         showAs.show("PAYS", "CODE", "NOM");
         showAs.show("PIECE", "ID", "NOM");
 
@@ -1012,6 +1025,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         return customerName;
     }
 
+    @Override
     public void setUpSocieteDataBaseConnexion(int base) {
         final String customerName = setUpSocieteStructure(base);
         final DBRoot rootSociete = this.getRootSociete();

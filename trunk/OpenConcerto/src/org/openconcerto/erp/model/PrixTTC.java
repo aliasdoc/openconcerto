@@ -50,7 +50,7 @@ public class PrixTTC {
     }
 
     public long calculLongTVA(double taxe) {
-        return Math.round(this.value - calculLongHT(taxe));
+        return this.value - calculLongHT(taxe);
     }
 
     public long getLongValue() {

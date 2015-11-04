@@ -16,7 +16,7 @@
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.JLabelBold;
-import org.openconcerto.ui.JTime;
+import org.openconcerto.ui.JValidTime;
 import org.openconcerto.ui.TM;
 import org.openconcerto.ui.component.JRadioButtons;
 import org.openconcerto.ui.date.EventProviders.Daily;
@@ -25,6 +25,7 @@ import org.openconcerto.ui.date.EventProviders.MonthlyDayOfWeek;
 import org.openconcerto.ui.date.EventProviders.Weekly;
 import org.openconcerto.ui.date.EventProviders.Yearly;
 import org.openconcerto.ui.date.EventProviders.YearlyDayOfWeekEventProvider;
+import org.openconcerto.utils.StringInputStream;
 import org.openconcerto.utils.TimeUtils;
 import org.openconcerto.utils.i18n.TM.MissingMode;
 
@@ -41,10 +42,10 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.text.DateFormat;
 import java.text.DateFormatSymbols;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -70,41 +71,67 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import com.ibm.icu.text.RuleBasedNumberFormat;
 
 @SuppressWarnings("unqualified-field-access")
 public class DateRangePlannerPanel extends JPanel {
 
+    private static final Object[] WEEK_INDEXES = new Object[] { 1, 2, 3, 4, -2, -1 };
+
     private static final long serialVersionUID = 1006612828847678846L;
 
-    private JTime timeStart;
-    private JTime timeEnd;
+    private JValidTime timeStart;
+    private JValidTime timeEnd;
     private Component currentPanel;
     private JRadioButtons<Period> radioPeriod;
     private Map<Period, Component> panels;
 
     // Date range
-    private JRadioButton radioEndAt;
+    private JRadioButton dayRadio1;
+    private JRadioButton dayRadio2;
+
     private JDate dateStart;
     private JDate dateEnd;
+    private JSpinner duration;
     private JSpinner spinDateRangeCount;
-    private JRadioButton dayRadio;
     private JSpinner dayEveryDay;
+
+    // weekly
     private JSpinner weekIncrementSpinner;
     private Set<DayOfWeek> weekDays;
+    List<JCheckBox> weekCheckboxes = new ArrayList<JCheckBox>();
 
     // monthly
+    private JRadioButton monthRadio1;
+    private JRadioButton monthRadio2;
     private int monthIncrement = -1;
-    private JSpinner dayOfMonth;
+    private JSpinner spinDayOfMonth;
     private JComboBox comboWeekOfMonth;
     private JComboBox comboWeekDayOfMonth;
-
+    private JSpinner spinMonth2;
+    private JSpinner spinMonth3;
     // yearly
     private int yearlyMonth = -1;
     private JSpinner yearlyDayOfMonth;
     private JComboBox yearlyComboWeekOfMonth;
     private JComboBox yearlyComboWeekDayOfMonth;
+
+    private JComboBox yearMonthCombo;
+    private JComboBox yearMonthCombo2;
+    private JRadioButton yearRadio1;
+    private JRadioButton yearRadio2;
+
+    // Period
+    private JRadioButton radioPeriodEndAt;
+    private JRadioButton radioPeriodRepeat;
+    private JRadioButton radioPeriodNeverEnd;
 
     public DateRangePlannerPanel() {
         this.weekDays = new HashSet<DayOfWeek>();
@@ -139,13 +166,24 @@ public class DateRangePlannerPanel extends JPanel {
         final JPanel p = new JPanel();
         p.setLayout(new FlowLayout(FlowLayout.LEFT));
         p.add(new JLabel("Heure de début"));
-        timeStart = new JTime(true, false);
+        timeStart = new JValidTime(true);
 
         p.add(timeStart);
         p.add(new JLabel("  Fin"));
-        timeEnd = new JTime(true, false);
+        timeEnd = new JValidTime(true);
         timeEnd.setTimeInMillis(Math.min(86400000 - 1, timeStart.getTimeInMillis() + 3600 * 1000));
         p.add(timeEnd);
+        p.add(new JLabel("  Durée"));
+        duration = new JSpinner(new SpinnerNumberModel(1, 1, 1439, 1));
+        p.add(duration);
+        p.add(new JLabel("minutes"));
+
+        //
+        long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
+        if (delta < 60 * 1000) {
+            timeStart.setTimeInMillis(timeEnd.getTimeInMillis() - 60 * 1000);
+        }
+        duration.setValue(Integer.valueOf((int) (delta / (60 * 1000))));
 
         timeStart.addValueListener(new PropertyChangeListener() {
 
@@ -153,8 +191,12 @@ public class DateRangePlannerPanel extends JPanel {
             public void propertyChange(PropertyChangeEvent evt) {
                 long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
                 if (delta < 60 * 1000) {
-                    timeEnd.setTimeInMillis(timeStart.getTimeInMillis() + 60 * 1000);
+                    delta = 60 * 1000;
                 }
+                long ms = timeStart.getTimeInMillis() + ((Integer) duration.getValue()).intValue() * 60 * 1000;
+                ms = ms % (24 * 3600 * 1000);
+                setTimeEnd(ms);
+
             }
         });
 
@@ -164,10 +206,37 @@ public class DateRangePlannerPanel extends JPanel {
             public void propertyChange(PropertyChangeEvent evt) {
                 long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
                 if (delta < 60 * 1000) {
-                    timeStart.setTimeInMillis(timeEnd.getTimeInMillis() - 60 * 1000);
+                    delta = 60 * 1000;
+                    long ms = timeEnd.getTimeInMillis() - ((Integer) duration.getValue()).intValue() * 60 * 1000;
+                    if (ms < 0) {
+                        ms += 24 * 3600 * 1000;
+                    }
+                    setTimeStart(ms);
+                } else {
+                    final Integer min = Integer.valueOf((int) (delta / (60 * 1000)));
+                    setDuration(min);
                 }
             }
+
         });
+        duration.addChangeListener(new ChangeListener() {
+
+            @Override
+            public void stateChanged(ChangeEvent e) {
+                try {
+                    int min = Integer.valueOf(duration.getValue().toString());
+                    if (min > 0) {
+                        long ms = timeStart.getTimeInMillis() + min * 60 * 1000;
+                        ms = ms % (24 * 3600 * 1000);
+                        setTimeEnd(ms);
+                    }
+                } catch (Exception ex) {
+                    // Nothing
+                }
+
+            }
+        });
+
         return p;
     }
 
@@ -183,7 +252,7 @@ public class DateRangePlannerPanel extends JPanel {
         choices.put(Period.YEAR, "Annuelle");
 
         radioPeriod = new JRadioButtons<Period>(false, choices);
-        radioPeriod.setValue(Period.WEEK);
+        radioPeriod.setValue(Period.DAY);
         p.add(radioPeriod, c);
         c.gridx++;
         c.fill = GridBagConstraints.VERTICAL;
@@ -196,7 +265,7 @@ public class DateRangePlannerPanel extends JPanel {
         this.panels.put(Period.WEEK, createWeekPanel());
         this.panels.put(Period.MONTH, createMonthPanel());
         this.panels.put(Period.YEAR, createYearPanel());
-        this.currentPanel = this.panels.get(Period.WEEK);
+        this.currentPanel = this.panels.get(Period.DAY);
         p.add(currentPanel, c);
         this.currentPanel.setPreferredSize(new Dimension(currentPanel.getPreferredSize().width + 80, currentPanel.getPreferredSize().height));
 
@@ -228,9 +297,9 @@ public class DateRangePlannerPanel extends JPanel {
         dateStart = new JDate(true, true);
         p.add(dateStart, c);
         c.gridx++;
-        radioEndAt = new JRadioButton("Fin le");
-        radioEndAt.setSelected(true);
-        p.add(radioEndAt, c);
+        radioPeriodEndAt = new JRadioButton("Fin le");
+        radioPeriodEndAt.setSelected(true);
+        p.add(radioPeriodEndAt, c);
         c.gridx++;
         dateEnd = new JDate(false, true);
         Calendar cal = Calendar.getInstance();
@@ -242,8 +311,8 @@ public class DateRangePlannerPanel extends JPanel {
         c.gridy++;
         c.gridwidth = 1;
         c.gridx = 2;
-        final JRadioButton radioRepeat = new JRadioButton("Fin après");
-        p.add(radioRepeat, c);
+        radioPeriodRepeat = new JRadioButton("Fin après");
+        p.add(radioPeriodRepeat, c);
         c.gridx++;
         spinDateRangeCount = new JSpinner(new SpinnerNumberModel(1, 1, 365 * 100, 1));
         spinDateRangeCount.setEnabled(false);
@@ -251,26 +320,44 @@ public class DateRangePlannerPanel extends JPanel {
         c.gridx++;
         c.weightx = 1;
         p.add(new JLabel("occurences"), c);
+        //
+        c.gridy++;
+        c.gridwidth = 1;
+        c.gridx = 2;
+        radioPeriodNeverEnd = new JRadioButton("Pas de fin");
+        p.add(radioPeriodNeverEnd, c);
+        c.gridx++;
+
         ButtonGroup group = new ButtonGroup();
-        group.add(radioEndAt);
-        group.add(radioRepeat);
+        group.add(radioPeriodEndAt);
+        group.add(radioPeriodRepeat);
+        group.add(radioPeriodNeverEnd);
 
-        radioEndAt.addActionListener(new ActionListener() {
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                spinDateRangeCount.setEnabled(radioRepeat.isSelected());
-                dateEnd.setEnabled(!radioRepeat.isSelected());
-            }
-        });
-        radioRepeat.addActionListener(new ActionListener() {
+        radioPeriodEndAt.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                spinDateRangeCount.setEnabled(radioRepeat.isSelected());
-                dateEnd.setEnabled(!radioRepeat.isSelected());
+                spinDateRangeCount.setEnabled(radioPeriodRepeat.isSelected());
+                dateEnd.setEnabled(!radioPeriodRepeat.isSelected());
             }
         });
+        radioPeriodRepeat.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                spinDateRangeCount.setEnabled(radioPeriodRepeat.isSelected());
+                dateEnd.setEnabled(!radioPeriodRepeat.isSelected());
+            }
+        });
+        radioPeriodNeverEnd.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                spinDateRangeCount.setEnabled(false);
+                dateEnd.setEnabled(false);
+            }
+        });
+
         return p;
     }
 
@@ -283,8 +370,8 @@ public class DateRangePlannerPanel extends JPanel {
         //
         final JPanel p1 = new JPanel();
         p1.setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        dayRadio = new JRadioButton("Tous les ");
-        dayRadio.setSelected(true);
+        dayRadio1 = new JRadioButton("Tous les ");
+        dayRadio1.setSelected(true);
         dayEveryDay = new JSpinner(new SpinnerNumberModel(1, 1, 365, 1));
         final JLabel labelEvery = new JLabel("jour");
         dayEveryDay.addChangeListener(new ChangeListener() {
@@ -299,34 +386,34 @@ public class DateRangePlannerPanel extends JPanel {
 
             }
         });
-        p1.add(dayRadio);
+        p1.add(dayRadio1);
         p1.add(dayEveryDay);
         p1.add(labelEvery);
         //
         final JPanel p2 = new JPanel();
         p2.setLayout(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        final JRadioButton b2 = new JRadioButton("Tous les jours ouvrables");
-        p2.add(b2);
+        dayRadio2 = new JRadioButton("Tous les jours ouvrables");
+        p2.add(dayRadio2);
         //
-        dayRadio.addActionListener(new ActionListener() {
+        dayRadio1.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                dayEveryDay.setEnabled(dayRadio.isSelected());
+                dayEveryDay.setEnabled(dayRadio1.isSelected());
             }
         });
-        b2.addActionListener(new ActionListener() {
+        dayRadio2.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                dayEveryDay.setEnabled(dayRadio.isSelected());
+                dayEveryDay.setEnabled(dayRadio1.isSelected());
             }
         });
 
         //
-        ButtonGroup g = new ButtonGroup();
-        g.add(dayRadio);
-        g.add(b2);
+        final ButtonGroup g = new ButtonGroup();
+        g.add(dayRadio1);
+        g.add(dayRadio2);
         p1.setOpaque(false);
         p2.setOpaque(false);
         c.anchor = GridBagConstraints.NORTHWEST;
@@ -399,6 +486,8 @@ public class DateRangePlannerPanel extends JPanel {
                 }
             });
             p.add(cb, c);
+            weekCheckboxes.add(cb);
+
             if (i == midWeek) {
                 c.gridx = 0;
                 c.gridy++;
@@ -428,63 +517,63 @@ public class DateRangePlannerPanel extends JPanel {
         //
         JPanel p1 = new JPanel();
         p1.setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        final JRadioButton radio1 = new JRadioButton("Le");
-        radio1.setSelected(true);
-        p1.add(radio1);
-        this.dayOfMonth = createDayOfMonthSpinner(cal);
-        p1.add(this.dayOfMonth);
+        monthRadio1 = new JRadioButton("Le");
+        monthRadio1.setSelected(true);
+        p1.add(monthRadio1);
+        this.spinDayOfMonth = createDayOfMonthSpinner(cal);
+        p1.add(this.spinDayOfMonth);
         p1.add(new JLabel("tous les"));
-        final JSpinner spin2 = new JSpinner(new SpinnerNumberModel(1, 1, 96, 1));
+        spinMonth2 = new JSpinner(new SpinnerNumberModel(1, 1, 96, 1));
         final ChangeListener setMonthIncrementCL = new ChangeListener() {
             @Override
             public void stateChanged(ChangeEvent e) {
                 setMonthIncrement(e.getSource());
             }
         };
-        spin2.addChangeListener(setMonthIncrementCL);
-        p1.add(spin2);
+        spinMonth2.addChangeListener(setMonthIncrementCL);
+        p1.add(spinMonth2);
         p1.add(new JLabel("mois"));
         p.add(p1, c);
         //
         JPanel p2 = new JPanel();
         p2.setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        final JRadioButton radio2 = new JRadioButton("Le");
-        p2.add(radio2);
+        monthRadio2 = new JRadioButton("Le");
+        p2.add(monthRadio2);
         this.comboWeekOfMonth = createWeekOfMonthCombo();
         p2.add(comboWeekOfMonth);
 
         this.comboWeekDayOfMonth = createWeekDayOfMonthCombo(cal);
         p2.add(comboWeekDayOfMonth);
         p2.add(new JLabel("tous les"));
-        final JSpinner spin3 = new JSpinner(new SpinnerNumberModel(1, 1, 96, 1));
-        p2.add(spin3);
+        spinMonth3 = new JSpinner(new SpinnerNumberModel(1, 1, 96, 1));
+        p2.add(spinMonth3);
         p2.add(new JLabel("mois"));
-        spin3.addChangeListener(setMonthIncrementCL);
+        spinMonth3.addChangeListener(setMonthIncrementCL);
 
         c.gridy++;
         c.weighty = 1;
         p.add(p2, c);
         ButtonGroup g = new ButtonGroup();
-        g.add(radio1);
-        g.add(radio2);
+        g.add(monthRadio1);
+        g.add(monthRadio2);
 
         final ActionListener listener = new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                final boolean selected = radio1.isSelected();
-                dayOfMonth.setEnabled(selected);
-                spin2.setEnabled(selected);
+                final boolean selected = monthRadio1.isSelected();
+                spinDayOfMonth.setEnabled(selected);
+                spinMonth2.setEnabled(selected);
 
                 comboWeekOfMonth.setEnabled(!selected);
                 comboWeekDayOfMonth.setEnabled(!selected);
-                spin3.setEnabled(!selected);
+                spinMonth3.setEnabled(!selected);
 
-                setMonthIncrement(selected ? spin2 : spin3);
+                setMonthIncrement(selected ? spinMonth2 : spinMonth3);
             }
         };
-        radio1.addActionListener(listener);
-        radio2.addActionListener(listener);
+        monthRadio1.addActionListener(listener);
+        monthRadio2.addActionListener(listener);
         // initialize
         listener.actionPerformed(null);
         return p;
@@ -497,7 +586,7 @@ public class DateRangePlannerPanel extends JPanel {
     }
 
     protected JComboBox createWeekOfMonthCombo() {
-        final JComboBox res = new JComboBox(new Object[] { 1, 2, 3, 4, -2, -1 });
+        final JComboBox res = new JComboBox(WEEK_INDEXES);
         final RuleBasedNumberFormat f = new RuleBasedNumberFormat(RuleBasedNumberFormat.SPELLOUT);
         final String rule = TM.getInstance().translate(MissingMode.NULL, "day.spelloutRule");
         if (rule != null)
@@ -505,18 +594,32 @@ public class DateRangePlannerPanel extends JPanel {
         res.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                final String v;
-                final long weekIndex = ((Number) value).longValue();
-                if (weekIndex == -2)
-                    v = TM.getInstance().translate("day.spellout.beforeLast");
-                else if (weekIndex == -1)
-                    v = TM.getInstance().translate("day.spellout.last");
-                else
-                    v = f.format(weekIndex);
+                final String v = getWeekOfMonthTranslation(f, ((Number) value).longValue());
                 return super.getListCellRendererComponent(list, v, index, isSelected, cellHasFocus);
             }
+
         });
         return res;
+    }
+
+    private static String getWeekOfMonthTranslation(long weekIndex) {
+        final RuleBasedNumberFormat f = new RuleBasedNumberFormat(RuleBasedNumberFormat.SPELLOUT);
+        final String rule = TM.getInstance().translate(MissingMode.NULL, "day.spelloutRule");
+        if (rule != null) {
+            f.setDefaultRuleSet(rule);
+        }
+        return getWeekOfMonthTranslation(f, weekIndex);
+    }
+
+    private static String getWeekOfMonthTranslation(final RuleBasedNumberFormat f, long weekIndex) {
+        final String v;
+        if (weekIndex == -2)
+            v = TM.getInstance().translate("day.spellout.beforeLast");
+        else if (weekIndex == -1)
+            v = TM.getInstance().translate("day.spellout.last");
+        else
+            v = f.format(weekIndex);
+        return v;
     }
 
     protected JComboBox createWeekDayOfMonthCombo(final Calendar cal) {
@@ -562,53 +665,53 @@ public class DateRangePlannerPanel extends JPanel {
         //
         JPanel p1 = new JPanel();
         p1.setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        final JRadioButton radio1 = new JRadioButton("Chaque");
-        radio1.setSelected(true);
-        p1.add(radio1);
+        yearRadio1 = new JRadioButton("Chaque");
+        yearRadio1.setSelected(true);
+        p1.add(yearRadio1);
         this.yearlyDayOfMonth = this.createDayOfMonthSpinner(cal);
         p1.add(this.yearlyDayOfMonth);
 
-        final JComboBox combo0 = createMonthCombo();
-        p1.add(combo0);
+        yearMonthCombo = createMonthCombo();
+        p1.add(yearMonthCombo);
         p.add(p1, c);
         //
         JPanel p2 = new JPanel();
         p2.setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        final JRadioButton radio2 = new JRadioButton("Le");
-        p2.add(radio2);
+        yearRadio2 = new JRadioButton("Le");
+        p2.add(yearRadio2);
         this.yearlyComboWeekOfMonth = this.createWeekOfMonthCombo();
         p2.add(this.yearlyComboWeekOfMonth);
 
         yearlyComboWeekDayOfMonth = this.createWeekDayOfMonthCombo(cal);
         p2.add(yearlyComboWeekDayOfMonth);
         p2.add(new JLabel("de"));
-        final JComboBox combo3 = createMonthCombo();
-        p2.add(combo3);
+        yearMonthCombo2 = createMonthCombo();
+        p2.add(yearMonthCombo2);
 
         c.gridy++;
         c.weighty = 1;
         p.add(p2, c);
         ButtonGroup g = new ButtonGroup();
-        g.add(radio1);
-        g.add(radio2);
+        g.add(yearRadio1);
+        g.add(yearRadio2);
 
         final ActionListener listener = new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                final boolean selected = radio1.isSelected();
+                final boolean selected = yearRadio1.isSelected();
                 yearlyDayOfMonth.setEnabled(selected);
-                combo0.setEnabled(selected);
+                yearMonthCombo.setEnabled(selected);
 
                 yearlyComboWeekOfMonth.setEnabled(!selected);
                 yearlyComboWeekDayOfMonth.setEnabled(!selected);
-                combo3.setEnabled(!selected);
+                yearMonthCombo2.setEnabled(!selected);
 
-                setYearlyMonth(selected ? combo0 : combo3);
+                setYearlyMonth(selected ? yearMonthCombo : yearMonthCombo2);
             }
         };
-        radio1.addActionListener(listener);
-        radio2.addActionListener(listener);
+        yearRadio1.addActionListener(listener);
+        yearRadio2.addActionListener(listener);
         final ItemListener monthL = new ItemListener() {
             @Override
             public void itemStateChanged(ItemEvent e) {
@@ -617,8 +720,8 @@ public class DateRangePlannerPanel extends JPanel {
                 }
             }
         };
-        combo0.addItemListener(monthL);
-        combo3.addItemListener(monthL);
+        yearMonthCombo.addItemListener(monthL);
+        yearMonthCombo2.addItemListener(monthL);
         // initialize
         listener.actionPerformed(null);
         return p;
@@ -657,6 +760,18 @@ public class DateRangePlannerPanel extends JPanel {
                         for (DateRange dateRange : ranges) {
                             System.out.println(dateRange);
                         }
+                        final String configXML = planner.getConfigXML();
+                        System.out.println(configXML);
+                        try {
+                            planner.configureFromXML(configXML);
+                        } catch (Exception e1) {
+                            // TODO Auto-generated catch block
+                            e1.printStackTrace();
+                        }
+                        long t1 = System.currentTimeMillis();
+                        System.out.println(getDescriptionFromXML(configXML));
+                        long t2 = System.currentTimeMillis();
+                        System.out.println((t2 - t1) + "ms");
                     }
                 });
                 f.setContentPane(p);
@@ -671,14 +786,22 @@ public class DateRangePlannerPanel extends JPanel {
     public List<DateRange> getRanges() {
         final Period type = radioPeriod.getValue();
         final Date startDate = this.dateStart.getValue();
-        final int timeStartInMS = this.timeStart.getTimeInMillis().intValue();
-        final int timeEndInMS = this.timeEnd.getTimeInMillis().intValue();
+        final int timeStartInMS = (int) this.timeStart.getTimeInMillis();
+        final int timeEndInMS = (int) this.timeEnd.getTimeInMillis();
 
-        final boolean endAfterDate = this.radioEndAt.isSelected();
+        // final boolean endAfterDate = this.radioEndAt.isSelected();
         final Date endDate;
         final int eventCount;
-        if (endAfterDate) {
+        if (this.radioPeriodEndAt.isSelected()) {
             endDate = this.dateEnd.getValue();
+            if (endDate.compareTo(startDate) < 0)
+                throw new IllegalArgumentException("End before start");
+            eventCount = -1;
+        } else if (this.radioPeriodNeverEnd.isSelected()) {
+            // plan for the next 20 year
+            final Calendar c = Calendar.getInstance();
+            c.add(Calendar.YEAR, 20);
+            endDate = c.getTime();
             if (endDate.compareTo(startDate) < 0)
                 throw new IllegalArgumentException("End before start");
             eventCount = -1;
@@ -694,7 +817,7 @@ public class DateRangePlannerPanel extends JPanel {
 
         final EventProvider prov;
         if (type == Period.DAY) {
-            if (dayRadio.isSelected()) {
+            if (dayRadio1.isSelected()) {
                 final int incr = ((Number) dayEveryDay.getValue()).intValue();
                 prov = new Daily(incr);
             } else {
@@ -708,8 +831,8 @@ public class DateRangePlannerPanel extends JPanel {
                 prov = new Weekly(incr, this.weekDays);
             }
         } else if (type == Period.MONTH) {
-            if (this.dayOfMonth.isEnabled()) {
-                prov = new Monthly((Integer) this.dayOfMonth.getValue(), this.monthIncrement);
+            if (this.spinDayOfMonth.isEnabled()) {
+                prov = new Monthly((Integer) this.spinDayOfMonth.getValue(), this.monthIncrement);
             } else {
                 prov = new MonthlyDayOfWeek((Integer) this.comboWeekOfMonth.getSelectedItem(), (DayOfWeek) this.comboWeekDayOfMonth.getSelectedItem(), this.monthIncrement);
             }
@@ -722,8 +845,10 @@ public class DateRangePlannerPanel extends JPanel {
         } else {
             throw new IllegalStateException("invalid type: " + type);
         }
-        if (prov == null)
-            return Collections.emptyList();
+        if (prov == null) {
+            // Do not return Collections.emptyList() to allow reuse;
+            return new ArrayList<DateRange>(0);
+        }
 
         prov.next(c, true);
         final List<DateRange> result = new ArrayList<DateRange>();
@@ -755,6 +880,10 @@ public class DateRangePlannerPanel extends JPanel {
         return currentEventCount < eventCount;
     }
 
+    public void setStartDate(Date dateStart) {
+        this.dateStart.setDate(dateStart);
+    }
+
     protected void setStartAndStop(DateRange r, final Calendar c, final int timeStartInMS, final int timeEndInMS) {
         final int day = c.get(Calendar.DAY_OF_YEAR);
         TimeUtils.clearTime(c);
@@ -778,4 +907,389 @@ public class DateRangePlannerPanel extends JPanel {
         r.setStop(c.getTimeInMillis());
     }
 
+    public String getConfigXML() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<planner>");
+        // Horaires
+        b.append("<schedule start=\"");
+        b.append(timeStart.getTimeInMillis());
+        b.append("\" end=\"");
+        b.append(timeEnd.getTimeInMillis());
+        b.append("\" />");
+        // Periodicité
+        Period p = radioPeriod.getValue();
+        int f = p.getCalendarField();
+        b.append("<period type=\"");
+        b.append(f);
+        b.append("\">");
+        if (f == Period.DAY.getCalendarField()) {
+            b.append("<day every=\"");
+            if (this.dayRadio1.isSelected()) {
+                b.append(this.dayEveryDay.getValue());
+            } else {
+                b.append("wd");
+            }
+            b.append("\" />");
+        } else if (f == Period.WEEK.getCalendarField()) {
+            b.append("<week every=\"");
+            b.append(this.weekIncrementSpinner.getValue());
+            b.append("\">");
+            for (JCheckBox cb : this.weekCheckboxes) {
+                if (cb.isSelected()) {
+                    b.append("<true/>");
+                } else {
+                    b.append("<false/>");
+                }
+            }
+            b.append("</week>");
+        } else if (f == Period.MONTH.getCalendarField()) {
+            if (this.monthRadio1.isSelected()) {
+                b.append("<month day=\"");
+                b.append(spinDayOfMonth.getValue());
+                b.append("\" every=\"");
+                b.append(spinMonth2.getValue());
+                b.append("\" />");
+            } else {
+                b.append("<month weekOfMonth=\"");
+                b.append(comboWeekOfMonth.getSelectedIndex());
+                b.append("\" dayOfMonth=\"");
+                b.append(comboWeekDayOfMonth.getSelectedIndex());
+                b.append("\" every=\"");
+                b.append(spinMonth3.getValue());
+                b.append("\" />");
+            }
+        } else if (f == Period.YEAR.getCalendarField()) {
+            if (this.yearRadio1.isSelected()) {
+                b.append("<year day=\"");
+                b.append(this.yearlyDayOfMonth.getValue());
+                b.append("\" month=\"");
+                b.append(this.yearMonthCombo.getSelectedIndex());
+                b.append("\" />");
+            } else {
+                b.append("<year weekOfMonth=\"");
+                b.append(this.yearlyComboWeekOfMonth.getSelectedIndex());
+                b.append("\" weekDayOfMonth=\"");
+                b.append(this.yearlyComboWeekDayOfMonth.getSelectedIndex());
+                b.append("\" month=\"");
+                b.append(this.yearMonthCombo2.getSelectedIndex());
+                b.append("\" />");
+            }
+        } else {
+            throw new IllegalStateException("Unknown period:" + f);
+        }
+
+        b.append("</period>");
+        // Plage
+        b.append("<range start=\"");
+        b.append(this.dateStart.getValue().getTime());
+        b.append("\" ");
+        if (this.radioPeriodEndAt.isSelected()) {
+            b.append("end=\"");
+            b.append(this.dateEnd.getValue().getTime());
+            b.append("\"");
+        } else if (this.radioPeriodRepeat.isSelected()) {
+            b.append("repeat=\"");
+            b.append(this.spinDateRangeCount.getValue().toString());
+            b.append("\"");
+        }
+        b.append("/>");
+        b.append("</planner>");
+        return b.toString();
+    }
+
+    public void configureFromXML(String xml) throws Exception {
+        final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        final DocumentBuilder db = dbf.newDocumentBuilder();
+        final Document dom = db.parse(new StringInputStream(xml, "UTF8"));
+        // Schedule
+        final NodeList l1 = dom.getElementsByTagName("schedule");
+        final Node nSchedule = l1.item(0);
+        final long tStart = getAttributeAsLong(nSchedule, "start");
+        final long tStop = getAttributeAsLong(nSchedule, "end");
+        this.timeEnd.setTimeInMillis(tStop);
+        this.timeStart.setTimeInMillis(tStart);
+        // Period
+        final NodeList l2 = dom.getElementsByTagName("period");
+        final Node nPeriod = l2.item(0);
+        final int perioType = Integer.parseInt(nPeriod.getAttributes().getNamedItem("type").getTextContent());
+
+        if (perioType == Period.DAY.getCalendarField()) {
+            this.radioPeriod.setValue(Period.DAY);
+            final Node nDay = nPeriod.getFirstChild();
+            Integer l = getAttributeAsInteger(nDay, "every");
+            if (l != null) {
+                this.dayRadio1.setSelected(true);
+                this.dayEveryDay.setValue(l);
+            } else {
+                this.dayRadio2.setSelected(false);
+            }
+        } else if (perioType == Period.WEEK.getCalendarField()) {
+            this.radioPeriod.setValue(Period.WEEK);
+            final Node nWeek = nPeriod.getFirstChild();
+            Integer e = getAttributeAsInteger(nWeek, "every");
+            this.weekIncrementSpinner.setValue(e);
+            NodeList l = nWeek.getChildNodes();
+            for (int i = 0; i < l.getLength(); i++) {
+                Node n = l.item(i);
+                this.weekCheckboxes.get(i).setSelected(n.getNodeName().equals("true"));
+            }
+        } else if (perioType == Period.MONTH.getCalendarField()) {
+            this.radioPeriod.setValue(Period.MONTH);
+            final Node nMonth = nPeriod.getFirstChild();
+            Integer d = getAttributeAsInteger(nMonth, "day");
+            if (d != null) {
+                this.monthRadio1.setSelected(true);
+                Integer every = getAttributeAsInteger(nMonth, "every");
+                spinDayOfMonth.setValue(d);
+                spinMonth2.setValue(every);
+            } else {
+                this.monthRadio2.setSelected(true);
+                Integer weekOfMonth = getAttributeAsInteger(nMonth, "weekOfMonth");
+                Integer dayOfMonth = getAttributeAsInteger(nMonth, "dayOfMonth");
+                Integer every = getAttributeAsInteger(nMonth, "every");
+                comboWeekOfMonth.setSelectedIndex(weekOfMonth.intValue());
+                comboWeekDayOfMonth.setSelectedIndex(dayOfMonth.intValue());
+                spinMonth3.setValue(every);
+            }
+        } else if (perioType == Period.YEAR.getCalendarField()) {
+            this.radioPeriod.setValue(Period.YEAR);
+            final Node nYear = nPeriod.getFirstChild();
+            Integer d = getAttributeAsInteger(nYear, "day");
+            if (d != null) {
+                this.yearRadio1.setSelected(true);
+                Integer m = getAttributeAsInteger(nYear, "month");
+                this.yearlyDayOfMonth.setValue(d);
+                this.yearMonthCombo.setSelectedIndex(m.intValue());
+            } else {
+                this.yearRadio2.setSelected(true);
+                Integer weekOfMonth = getAttributeAsInteger(nYear, "weekOfMonth");
+                this.yearlyComboWeekOfMonth.setSelectedIndex(weekOfMonth.intValue());
+                Integer weekDayOfMonth = getAttributeAsInteger(nYear, "weekDayOfMonth");
+                this.yearlyComboWeekDayOfMonth.setSelectedIndex(weekDayOfMonth.intValue());
+                Integer m = getAttributeAsInteger(nYear, "month");
+                this.yearMonthCombo2.setSelectedIndex(m.intValue());
+            }
+        } else {
+            throw new IllegalStateException("Unknown period:" + perioType);
+        }
+
+        // Year
+        final NodeList l3 = dom.getElementsByTagName("range");
+        final Node nRange = l3.item(0);
+        final Long start = getAttributeAsLong(nRange, "start");
+        final Long end = getAttributeAsLong(nRange, "end");
+        final Integer repeat = getAttributeAsInteger(nRange, "repeat");
+        this.dateStart.setValue(new Date(start));
+        if (end != null) {
+            this.radioPeriodEndAt.setSelected(true);
+            this.dateEnd.setValue(new Date(end));
+        } else if (repeat != null) {
+            this.radioPeriodRepeat.setSelected(true);
+            this.spinDateRangeCount.setValue(repeat);
+        } else {
+            this.radioPeriodNeverEnd.setSelected(true);
+        }
+
+    }
+
+    public static String getDescriptionFromXML(String xml) {
+        String result = "";
+        try {
+            final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            final DocumentBuilder db = dbf.newDocumentBuilder();
+            final Document dom = db.parse(new StringInputStream(xml, "UTF8"));
+            // Schedule
+            final NodeList l1 = dom.getElementsByTagName("schedule");
+            final Node nSchedule = l1.item(0);
+            final long tStart = getAttributeAsLong(nSchedule, "start");
+            final long tStop = getAttributeAsLong(nSchedule, "end");
+            result += "De " + formatTime(tStart) + " à " + formatTime(tStop) + " ";
+
+            // Period
+            final NodeList l2 = dom.getElementsByTagName("period");
+            final Node nPeriod = l2.item(0);
+            final int perioType = Integer.parseInt(nPeriod.getAttributes().getNamedItem("type").getTextContent());
+
+            if (perioType == Period.DAY.getCalendarField()) {
+
+                final Node nDay = nPeriod.getFirstChild();
+                Integer l = getAttributeAsInteger(nDay, "every");
+                if (l != null) {
+                    if (l.intValue() == 1) {
+                        result += "tous les jours";
+                    } else {
+                        result += "tous les " + l + " jours";
+                    }
+                } else {
+                    result += "tous les jours ouvrables";
+                }
+            } else if (perioType == Period.WEEK.getCalendarField()) {
+
+                final Node nWeek = nPeriod.getFirstChild();
+                Integer e = getAttributeAsInteger(nWeek, "every");
+                result += "toutes les " + e + "semaines, le ";
+                NodeList l = nWeek.getChildNodes();
+                final String[] namesOfDays = DateFormatSymbols.getInstance().getWeekdays();
+                final DayOfWeek[] week = DayOfWeek.getWeek(Calendar.getInstance());
+                for (int i = 0; i < l.getLength(); i++) {
+                    Node n = l.item(i);
+                    if (n.getNodeName().equals("true")) {
+                        result += namesOfDays[week[i].getCalendarField()] + " ";
+                    }
+                }
+            } else if (perioType == Period.MONTH.getCalendarField()) {
+
+                final Node nMonth = nPeriod.getFirstChild();
+                Integer d = getAttributeAsInteger(nMonth, "day");
+                if (d != null) {
+                    result += "le " + d;
+                    int every = getAttributeAsInteger(nMonth, "every");
+                    if (every == 1) {
+                        result += " tous les mois";
+                    } else {
+                        result += " tous les " + every + " mois";
+                    }
+
+                } else {
+                    Integer weekOfMonth = getAttributeAsInteger(nMonth, "weekOfMonth");
+                    Integer dayOfMonth = getAttributeAsInteger(nMonth, "dayOfMonth");
+                    int every = getAttributeAsInteger(nMonth, "every");
+                    Integer index = (Integer) WEEK_INDEXES[weekOfMonth.intValue()];
+
+                    result += "le " + getWeekOfMonthTranslation(index);
+                    final String[] namesOfDays = DateFormatSymbols.getInstance().getWeekdays();
+                    final DayOfWeek[] week = DayOfWeek.getWeek(Calendar.getInstance());
+                    result += " " + namesOfDays[week[dayOfMonth].getCalendarField()];
+                    if (every == 1) {
+                        result += " tous les mois";
+                    } else {
+                        result += " tous les " + every + " mois";
+                    }
+                }
+            } else if (perioType == Period.YEAR.getCalendarField()) {
+                final Node nYear = nPeriod.getFirstChild();
+                Integer d = getAttributeAsInteger(nYear, "day");
+                if (d != null) {
+                    result += "chaque " + d;
+                    final String[] namesOfMonths = DateFormatSymbols.getInstance().getMonths();
+                    Integer m = getAttributeAsInteger(nYear, "month");
+                    result += " " + namesOfMonths[m.intValue()];
+                } else {
+                    Integer weekOfMonth = getAttributeAsInteger(nYear, "weekOfMonth");
+                    result += "le ";
+                    Integer index = (Integer) WEEK_INDEXES[weekOfMonth.intValue()];
+                    result += getWeekOfMonthTranslation(index);
+                    final String[] namesOfDays = DateFormatSymbols.getInstance().getWeekdays();
+                    final DayOfWeek[] week = DayOfWeek.getWeek(Calendar.getInstance());
+                    int i = getAttributeAsInteger(nYear, "weekDayOfMonth").intValue();
+                    result += " " + namesOfDays[week[i].getCalendarField()];
+                    final String[] namesOfMonths = DateFormatSymbols.getInstance().getMonths();
+                    Integer m = getAttributeAsInteger(nYear, "month");
+                    result += " de " + namesOfMonths[m.intValue()];
+                }
+            } else {
+                throw new IllegalStateException("Unknown period:" + perioType);
+            }
+            result += ", ";
+            // Year
+            final NodeList l3 = dom.getElementsByTagName("range");
+            final Node nRange = l3.item(0);
+            final Long start = getAttributeAsLong(nRange, "start");
+            final Long end = getAttributeAsLong(nRange, "end");
+            final Integer repeat = getAttributeAsInteger(nRange, "repeat");
+            DateFormat df = DateFormat.getDateInstance(DateFormat.FULL);
+            result += "à partir du " + df.format(new Date(start));
+
+            if (end != null) {
+                result += " jusqu'au " + df.format(new Date(end)) + ".";
+            } else if (repeat != null) {
+
+                result += " " + repeat + " fois.";
+            } else {
+                result += ".";
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+
+        }
+        return result;
+    }
+
+    private static String formatTime(long time) {
+        long minutes = time / (60 * 1000);
+
+        String h = String.valueOf((int) (minutes / 60));
+        if (h.length() < 2) {
+            h = "0" + h;
+        }
+        String m = String.valueOf((int) (minutes % 60));
+        if (m.length() < 2) {
+            m = "0" + m;
+        }
+        return h + ":" + m;
+    }
+
+    private static Long getAttributeAsLong(Node item, String attrName) {
+        final Node n = item.getAttributes().getNamedItem(attrName);
+        if (n == null)
+            return null;
+        try {
+            final long l = Long.parseLong(n.getTextContent());
+            return l;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Integer getAttributeAsInteger(Node item, String attrName) {
+        final Node n = item.getAttributes().getNamedItem(attrName);
+        if (n == null)
+            return null;
+        try {
+            final int l = Integer.parseInt(n.getTextContent());
+            return l;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public JDate getJDateStart() {
+        return dateStart;
+    }
+
+    public JDate getJDateEnd() {
+        return dateEnd;
+    }
+
+    public void setTimeEnd(final long ms) {
+        SwingUtilities.invokeLater(new Runnable() {
+
+            @Override
+            public void run() {
+                if (timeEnd.getTimeInMillis() != ms) {
+                    timeEnd.setTimeInMillis(ms);
+                }
+
+            }
+        });
+    }
+
+    public void setTimeStart(final long ms) {
+        SwingUtilities.invokeLater(new Runnable() {
+
+            @Override
+            public void run() {
+                if (timeStart.getTimeInMillis() != ms) {
+                    timeStart.setTimeInMillis(ms);
+                }
+
+            }
+        });
+    }
+
+    public void setDuration(final Integer min) {
+        if (!((Integer) duration.getValue()).equals(min)) {
+            duration.setValue(min);
+        }
+    }
 }

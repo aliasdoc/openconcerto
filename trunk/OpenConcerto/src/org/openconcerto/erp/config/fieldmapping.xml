@@ -49,7 +49,7 @@
 		<field id="sales.product.purchase.quantity" name="QTE_ACHAT" />
 		<field id="sales.product.sales.price" name="PV_HT" />
 		<field id="sales.product.sales.price.total" name="PV_TTC" />
-		<field id="sales.product.sales.unit" name="ID_MODE_VENTE_ARTICLE" />
+		<field id="sales.product.sales.unit" name="ID_UNITE_VENTE" />
 		<field id="sales.product.weight" name="POIDS" />
 		<field id="sales.product.unit1" name="ID_METRIQUE_1" />
 		<field id="sales.product.unit2" name="ID_METRIQUE_2" />

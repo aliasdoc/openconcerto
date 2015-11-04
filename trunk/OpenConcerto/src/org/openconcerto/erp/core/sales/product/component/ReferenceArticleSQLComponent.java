@@ -17,6 +17,7 @@ import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.ui.CodeFournisseurItemTable;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
+import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.sales.product.element.UniteVenteArticleSQLElement;
@@ -55,6 +56,7 @@ import java.beans.PropertyChangeListener;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
+import java.util.Date;
 import java.util.List;
 
 import javax.swing.JButton;
@@ -91,33 +93,24 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
     private ArticleTarifTable tableTarifVente = new ArticleTarifTable(this);
     private final JTextField textMarge = new JTextField(15);
 
-    private DocumentListener pieceHAArticle = new DocumentListener() {
+    private DocumentListener pieceHAArticle = new SimpleDocumentListener() {
 
-        public void changedUpdate(DocumentEvent arg0) {
-            ReferenceArticleSQLComponent.this.textMetrique1HA.setText(ReferenceArticleSQLComponent.this.textPAHT.getText());
-        }
+        @Override
+        public void update(DocumentEvent e) {
 
-        public void insertUpdate(DocumentEvent arg0) {
-            ReferenceArticleSQLComponent.this.textMetrique1HA.setText(ReferenceArticleSQLComponent.this.textPAHT.getText());
-        }
-
-        public void removeUpdate(DocumentEvent arg0) {
-            ReferenceArticleSQLComponent.this.textMetrique1HA.setText(ReferenceArticleSQLComponent.this.textPAHT.getText());
+            if (!ReferenceArticleSQLComponent.this.textPAHT.getText().equalsIgnoreCase(ReferenceArticleSQLComponent.this.textMetrique1HA.getText())) {
+                ReferenceArticleSQLComponent.this.textMetrique1HA.setText(ReferenceArticleSQLComponent.this.textPAHT.getText());
+            }
         }
 
     };
-    private DocumentListener pieceVTArticle = new DocumentListener() {
+    private DocumentListener pieceVTArticle = new SimpleDocumentListener() {
 
-        public void changedUpdate(DocumentEvent arg0) {
-            ReferenceArticleSQLComponent.this.textMetrique1VT.setText(ReferenceArticleSQLComponent.this.textPVHT.getText());
-        }
-
-        public void insertUpdate(DocumentEvent arg0) {
-            ReferenceArticleSQLComponent.this.textMetrique1VT.setText(ReferenceArticleSQLComponent.this.textPVHT.getText());
-        }
-
-        public void removeUpdate(DocumentEvent arg0) {
-            ReferenceArticleSQLComponent.this.textMetrique1VT.setText(ReferenceArticleSQLComponent.this.textPVHT.getText());
+        @Override
+        public void update(DocumentEvent e) {
+            if (!ReferenceArticleSQLComponent.this.textPVHT.getText().equalsIgnoreCase(ReferenceArticleSQLComponent.this.textMetrique1VT.getText())) {
+                ReferenceArticleSQLComponent.this.textMetrique1VT.setText(ReferenceArticleSQLComponent.this.textPVHT.getText());
+            }
         }
 
     };
@@ -295,8 +288,8 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
         SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
         // Gestion des unités de vente
         final boolean gestionUV = prefs.getBoolean(GestionArticleGlobalPreferencePanel.UNITE_VENTE, true);
+        c.gridy++;
         if (gestionUV) {
-            c.gridy++;
             c.gridx = 0;
             c.weightx = 0;
             this.add(new JLabel(getLabelFor("ID_UNITE_VENTE"), SwingConstants.RIGHT), c);
@@ -309,6 +302,17 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
             this.addView(boxUnite, "ID_UNITE_VENTE");
             c.fill = GridBagConstraints.HORIZONTAL;
         }
+        c.gridx = 2;
+        c.weightx = 0;
+        this.add(new JLabel(getLabelFor("SKU"), SwingConstants.RIGHT), c);
+        c.gridx++;
+        c.weightx = 1;
+        JTextField fieldSKU = new JTextField();
+        DefaultGridBagConstraints.lockMinimumSize(fieldSKU);
+        this.add(fieldSKU, c);
+        this.addView(fieldSKU, "SKU");
+        c.fill = GridBagConstraints.HORIZONTAL;
+
         DefaultProps props = DefaultNXProps.getInstance();
 
         // Article détaillé
@@ -515,10 +519,8 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setOpaque(false);
         GridBagConstraints c = new DefaultGridBagConstraints();
-        DefaultProps props = DefaultNXProps.getInstance();
-        String stockMin = props.getStringProperty("ArticleStockMin");
-        Boolean bStockMin = !stockMin.equalsIgnoreCase("false");
-        boolean gestionStockMin = (bStockMin == null || bStockMin.booleanValue());
+        SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
+        boolean gestionStockMin = prefs.getBoolean("ArticleStockMin", true);
         c.gridx = 0;
         c.gridy++;
 
@@ -827,8 +829,10 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
                     if (ha == null) {
                         ha = BigDecimal.ZERO;
                     }
-                    final BigDecimal taux = (BigDecimal) boxDevise.getSelectedRow().getObject("TAUX");
-                    textPAHT.setText(taux.multiply(ha, DecimalUtils.HIGH_PRECISION).setScale(getTable().getField("PA_DEVISE").getType().getDecimalDigits(), RoundingMode.HALF_UP).toString());
+                    CurrencyConverter c = new CurrencyConverter();
+                    String devCode = boxDevise.getSelectedRow().getString("TAUX");
+                    textPAHT.setText(c.convert(ha, devCode, c.getCompanyCurrencyCode(), new Date(), true).setScale(getTable().getField("PA_DEVISE").getType().getDecimalDigits(), RoundingMode.HALF_UP)
+                            .toString());
 
                 }
             }

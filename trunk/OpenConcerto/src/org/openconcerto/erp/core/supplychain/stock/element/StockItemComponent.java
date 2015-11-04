@@ -15,6 +15,12 @@
 
 import java.math.BigDecimal;
 
+/**
+ * Composant des nomenclatures
+ * 
+ * @author Utilisateur
+ * 
+ */
 public class StockItemComponent {
 
     private final StockItem item;

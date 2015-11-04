@@ -41,14 +41,14 @@ public class GenerationMvtAvoirClient extends GenerationEcritures {
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
 
-    public GenerationMvtAvoirClient(int idAvoirClient) {
-        this.idMvt = 1;
-        this.idAvoirClient = idAvoirClient;
+    public GenerationMvtAvoirClient(SQLRow row) {
+        this(row, 1);
     }
 
-    public GenerationMvtAvoirClient(int idAvoirClient, int idMvt) {
+    public GenerationMvtAvoirClient(SQLRow row, int idMvt) {
         this.idMvt = idMvt;
-        this.idAvoirClient = idAvoirClient;
+        setRowAnalytiqueSource(row);
+        this.idAvoirClient = row.getID();
     }
 
     public int genereMouvement() throws Exception {
@@ -107,7 +107,7 @@ public class GenerationMvtAvoirClient extends GenerationEcritures {
                 this.mEcritures.put("DEBIT", Long.valueOf(b));
                 this.mEcritures.put("CREDIT", Long.valueOf(0));
                 SQLRow rowEcr = ajoutEcriture();
-                addAssocAnalytiqueFromProvider(rowEcr, avoirRow);
+                // addAssocAnalytiqueFromProvider(rowEcr, avoirRow);
             }
         }
 
@@ -173,7 +173,7 @@ public class GenerationMvtAvoirClient extends GenerationEcritures {
         }
 
         if (avoirRow.getInt("ID_MODE_REGLEMENT") > 1) {
-            new GenerationMvtReglementAvoir(this.idAvoirClient, this.idMvt);
+            new GenerationMvtReglementAvoir(avoirRow, this.idMvt);
         } else {
             valAvoir.put("SOLDE", Boolean.FALSE);
             valAvoir.update(this.idAvoirClient);

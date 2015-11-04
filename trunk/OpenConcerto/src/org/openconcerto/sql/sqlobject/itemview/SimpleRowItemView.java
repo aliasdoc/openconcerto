@@ -25,10 +25,4 @@ public class SimpleRowItemView<T> extends VWRowItemView<T> {
     protected final SQLTable getTable() {
         return this.getField().getTable();
     }
-
-    @Override
-    public void setEditable(boolean b) {
-        if (this.getComp() != null)
-            this.getComp().setEnabled(b);
-    }
 }

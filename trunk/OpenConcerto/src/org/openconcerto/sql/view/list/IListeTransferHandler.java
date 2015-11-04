@@ -13,8 +13,8 @@
  
  package org.openconcerto.sql.view.list;
 
-import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.ui.SwingThreadUtils;
+import org.openconcerto.utils.ExceptionHandler;
 
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -29,12 +29,12 @@ import javax.swing.TransferHandler;
 public class IListeTransferHandler extends TransferHandler {
     static private final class Data {
         private final IListe list;
-        private final List<SQLRowAccessor> selection;
+        private final List<Number> selection;
 
-        private Data(IListe list, List<SQLRowAccessor> selection) {
+        private Data(IListe list, List<? extends Number> selection) {
             super();
             this.list = list;
-            this.selection = new ArrayList<SQLRowAccessor>(selection);
+            this.selection = new ArrayList<Number>(selection);
         }
     }
 
@@ -48,9 +48,10 @@ public class IListeTransferHandler extends TransferHandler {
     @Override
     protected Transferable createTransferable(JComponent c) {
         final IListe list = SwingThreadUtils.getAncestorOrSelf(IListe.class, c);
-        if (!list.getModel().isEditable() || list.isSorted() || !list.getSource().getPrimaryTable().isOrdered())
+        // return null right away to prevent the displaying of the drag UI
+        if (list.isSorted() || !list.getModel().canOrder())
             return null;
-        final List<SQLRowAccessor> selection = list.getSelectedRows();
+        final List<Integer> selection = list.getSelection().getSelectedIDs();
         return new Transferable() {
 
             @Override
@@ -95,7 +96,13 @@ public class IListeTransferHandler extends TransferHandler {
         if (!this.canImport(support))
             return false;
         final Data data = getData(support);
-        data.list.getModel().moveTo(data.selection, ((javax.swing.JTable.DropLocation) support.getDropLocation()).getRow());
-        return true;
+        // the user has made an action, if it cannot be carried he should be notified
+        try {
+            data.list.getModel().moveTo(data.selection, ((javax.swing.JTable.DropLocation) support.getDropLocation()).getRow(), false);
+            return true;
+        } catch (Exception e) {
+            ExceptionHandler.handle(data.list, "Couldn't move", e);
+            return false;
+        }
     }
 }

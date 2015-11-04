@@ -13,6 +13,9 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONconverter;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -21,7 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class ColumnsSpec implements Externalizable {
+public class ColumnsSpec implements Externalizable, JSONAble {
     private String id;
     // All the columns that could be displayed
     private List<ColumnSpec> columns;
@@ -53,7 +56,7 @@ public class ColumnsSpec implements Externalizable {
         this.visibleIds = visibleIds;
         // Sort checks
         if (sortedIds == null) {
-            sortedIds = Collections.EMPTY_LIST;
+            sortedIds = Collections.emptyList();
         }
 
         this.sortedIds = sortedIds;
@@ -61,19 +64,19 @@ public class ColumnsSpec implements Externalizable {
     }
 
     public String getId() {
-        return id;
+        return this.id;
     }
 
     public List<String> getVisibleIds() {
-        return visibleIds;
+        return this.visibleIds;
     }
 
     public List<String> getSortedIds() {
-        return sortedIds;
+        return this.sortedIds;
     }
 
     public int getFixedColumns() {
-        return fixedColumns;
+        return this.fixedColumns;
 
     }
 
@@ -96,8 +99,8 @@ public class ColumnsSpec implements Externalizable {
 
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
-        out.writeUTF(id);
-        out.writeInt(fixedColumns);
+        out.writeUTF(this.id);
+        out.writeInt(this.fixedColumns);
         out.writeObject(this.columns);
         out.writeObject(this.visibleIds);
         out.writeObject(this.sortedIds);
@@ -138,5 +141,19 @@ public class ColumnsSpec implements Externalizable {
             }
         }
         return null;
+    }
+
+    @Override
+    public String toJSON() {
+        final StringBuilder result = new StringBuilder("{");
+
+        result.append("\"id\":" + JSONconverter.getJSON(this.id) + ",");
+        result.append("\"fixedColumns\":" + JSONconverter.getJSON(this.fixedColumns) + ",");
+        result.append("\"sortedIds\":" + JSONconverter.getJSON(this.sortedIds) + ",");
+        result.append("\"visibleIds\":" + JSONconverter.getJSON(this.visibleIds) + ",");
+        result.append("\"columns\":" + JSONconverter.getJSON(this.columns));
+
+        result.append("}");
+        return result.toString();
     }
 }

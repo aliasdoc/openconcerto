@@ -7,6 +7,8 @@
 	</TABLE>
 
 	<TABLE name="ADRESSE">
+		<FIELD name="TYPE" label="Type" titlelabel="Type" />
+		<FIELD name="LIBELLE" label="Libellé" titlelabel="Libellé" />
 		<FIELD name="RAISON_SOCIALE" label="Raison sociale" titlelabel="Raison sociale" />
 		<FIELD name="RUE" label="Rue" titlelabel="Rue" />
 		<FIELD name="PROVINCE" label="Province / état" titlelabel="Province" />
@@ -127,6 +129,7 @@
 		<FIELD name="ID_ECOTAXE" label="Ecotaxe" titlelabel="Ecotaxe" />
 		<FIELD name="ID_COMPTE_PCE" label="Compte spécifique de vente" titlelabel="Compte spécifique de vente" />
 		<FIELD name="ID_COMPTE_PCE_ACHAT" label="Compte spécifique d'achat" titlelabel="Compte spécifique d'achat" />
+		<FIELD name="SKU" label="SKU" />
 	</TABLE>
 
 	<TABLE name="ARTICLE_TARIF">
@@ -168,6 +171,9 @@
 	</TABLE>
 
 	<TABLE name="AVOIR_CLIENT">
+		<FIELD name="ID_ADRESSE" label="Adresse fact. spéc." titlelabel="Adresse fact. spéc." />
+		<FIELD name="ID_ADRESSE_LIVRAISON" label="Adresse livr. spéc." titlelabel="Adresse livr. spéc." />
+		<FIELD name="ID_CLIENT_DEPARTEMENT" label="Service" />
 		<FIELD name="ID_SECRETAIRE" label="Secrétaire" titlelabel="Secrétaire" />
 		<FIELD name="ID_ECHEANCIER_CCI" label="Echeancier CCI" titlelabel="Echeancier CCI" />
 		<FIELD name="REF_CLIENT" label="Références client" titlelabel="Références client" />
@@ -203,6 +209,7 @@
 	</TABLE>
 
 	<TABLE name="AVOIR_CLIENT_ELEMENT">
+		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />
 		<FIELD name="NB_COLIS" label="Nb Colis" titlelabel="Nb Colis" />
 		<FIELD name="POIDS_COLIS_NET" label="Pds Colis" titlelabel="Pds Colis" />
 		<FIELD name="T_POIDS_COLIS_NET" label="Pds Colis Total" titlelabel="Pds Colis Total" />
@@ -288,7 +295,7 @@
 	</TABLE>
 
 	<TABLE name="AXE_ANALYTIQUE">
-		<FIELD name="NOM" label="Libellé" titlelabel="Libellé" />
+		<FIELD name="NOM" label="Axe" titlelabel="Axe" />
 	</TABLE>
 
 	<TABLE name="BANQUE_POLE_PRODUIT">
@@ -384,6 +391,11 @@
 	</TABLE>
 
 	<TABLE name="BON_DE_LIVRAISON">
+		<FIELD name="ID_ADRESSE" label="Adresse fact. spéc." titlelabel="Adresse fact. spéc." />
+		<FIELD name="ID_ADRESSE_LIVRAISON" label="Adresse livr. spéc." titlelabel="Adresse livr. spéc." />
+		<FIELD name="ID_CLIENT_DEPARTEMENT" label="Service" />
+		<FIELD name="ID_CONTACT" label="Contact" titlelabel="Contact" />
+		<FIELD name="ID_TARIF" label="Tarif à appliquer" />
 		<FIELD name="DATE" label="Date" titlelabel="Date" />
 		<FIELD name="DATE_LIVRAISON" label="Date livraison" titlelabel="Date livraison" />
 		<FIELD name="ID_SAISIE_VENTE_FACTURE" label="Facture" titlelabel="Facture" />
@@ -397,9 +409,12 @@
 		<FIELD name="NOM" label="Référence" titlelabel="Référence" />
 		<FIELD name="T_ECOTAXE" label="Dont ecotaxe" titlelabel="Dont ecotaxe" />
 		<FIELD name="T_DEVISE" label="Total Devise" titlelabel="Total Devise" />
+		<FIELD name="PORT_HT" label="Frais de port HT" />
+		<FIELD name="REMISE_HT" label="Remise HT" />
+		<FIELD name="ID_TAXE_PORT" label="TVA sur Port" />
 	</TABLE>
 	<TABLE name="BON_DE_LIVRAISON_ELEMENT">
-
+		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />
 		<FIELD name="NB_COLIS" label="Nb Colis" titlelabel="Nb Colis" />
 		<FIELD name="POIDS_COLIS_NET" label="Pds Colis" titlelabel="Pds Colis" />
 		<FIELD name="T_POIDS_COLIS_NET" label="Pds Colis Total" titlelabel="Pds Colis Total" />
@@ -512,6 +527,7 @@
 	</TABLE>
 
 	<TABLE name="CLIENT">
+		<FIELD name="ID_COMPTE_PCE_SERVICE" label="Compte de service spécifique" titlelabel="Compte de service spécifique" />
 		<FIELD name="ID_TARIF_MISSION_LIBELLE" label="Tarif" titlelabel="Tarif" />
 		<FIELD name="ID_TYPE_CLIENT" label="Type de client" />
 		<FIELD name="ID_GROUPE_CLIENT" label="Groupe" />
@@ -537,6 +553,7 @@
 		<FIELD name="TEL_P_TECH" label="Portable" titlelabel="Portable" />
 		<FIELD name="MAIL_TECH" label="E-mail" titlelabel="E-mail" />
 		<FIELD name="ID_COMPTE_PCE" label="Compte PCE associé" titlelabel="Compte PCE associé" />
+		<FIELD name="ID_COMPTE_PCE_PRODUIT" label="Compte PCE Produit associé" titlelabel="Compte PCE Produit associé" />
 		<FIELD name="ID_ADRESSE" label="Adr. Principale" titlelabel="Adr. Principale" />
 		<FIELD name="ID_ADRESSE_L" label="Adr. Livraison" titlelabel="Adr. Livraison" />
 		<FIELD name="ID_ADRESSE_F" label="Adr. Facturation" titlelabel="Adr. Facturation" />
@@ -545,6 +562,8 @@
 		<FIELD name="MARCHE_PUBLIC" label="Marché public" titlelabel="Marché public" />
 		<FIELD name="MARCHE_PRIVE" label="Marché privé" titlelabel="Marché privé" />
 		<FIELD name="ID_ADRESSE_L" label="Adresse de livraison" titlelabel="Adresse livraison" />
+		<FIELD name="ID_ADRESSE_L_2" label="Adresse de livraison" titlelabel="Adresse livraison 2" />
+		<FIELD name="ID_ADRESSE_L_3" label="Adresse de livraison" titlelabel="Adresse livraison 3" />
 		<FIELD name="RIB" label="RIB" titlelabel="RIB" />
 		<FIELD name="SIRET" label="SIRET" titlelabel="SIRET" />
 		<FIELD name="ID_SECTEUR_ACTIVITE" label="Secteur d'activité" titlelabel="Secteur d'activité" />
@@ -559,6 +578,31 @@
 		<FIELD name="ID_TARIF" label="Tarif" titlelabel="Tarif" />
 		<FIELD name="EXTRANET_LOGIN" label="Identifiant extranet" />
 		<FIELD name="EXTRANET_PASSWORD" label="Mot de passe extranet" />
+
+		<FIELD name="DATE" label="Date de création" />
+		<FIELD name="SITE_INTERNET" label="Site web" />
+		<FIELD name="CATEGORIES" label="Catégories" />
+		<FIELD name="ID_DEVISE" label="Devise" />
+		<FIELD name="ENCOURS_MAX" label="Encours max." />
+		<FIELD name="NOTE_FINANCIERE" label="Note financière" />
+		<FIELD name="METHODE_RELANCE" label="Méthode de relance" />
+		<FIELD name="ID_COMMERCIAL" label="Commercial" />
+		<FIELD name="CENTRE_GESTION" label="Centre de gestion" />
+		<FIELD name="ID_ADRESSE" label="Adresse du siège" />
+		<FIELD name="ID_ADRESSE_F" label="Adresse de facturation" />
+		<FIELD name="COMMENTAIRES" label="Commentaires" />
+		<FIELD name="BLOQUE" label="Bloquer les interactions" />
+		<FIELD name="GROUPE" label="Groupe" />
+		<FIELD name="BLOQUE_LIVRAISON" label="Bloquer les livraisons" />
+
+
+	</TABLE>
+
+	<TABLE name="CLIENT_DEPARTEMENT">
+		<FIELD name="INFOS" label="Informations" />
+		<FIELD name="ID_ADRESSE" label="Adresse de facturation spécifique" />
+		<FIELD name="NOM" label="Nom du service" />
+		<FIELD name="ID_CLIENT" label="Client" />
 	</TABLE>
 
 	<TABLE name="CODE_REGIME">
@@ -625,6 +669,7 @@
 		<FIELD name="FAX" label="Fax" titlelabel="Fax" />
 		<FIELD name="FONCTION" label="Fonction" titlelabel="Fonction" />
 		<FIELD name="ID_CLIENT" label="Client" titlelabel="Client" />
+		<FIELD name="NO_MAILING" label="Pas de mailing" />
 	</TABLE>
 
 	<TABLE name="CONTACT_FOURNISSEUR">
@@ -737,24 +782,36 @@
 	</TABLE>
 
 	<TABLE name="COMMANDE_CLIENT">
+		<FIELD name="ID_ADRESSE" label="Adresse fact. spéc." titlelabel="Adresse fact. spéc." />
+		<FIELD name="ID_ADRESSE_LIVRAISON" label="Adresse livr. spéc." titlelabel="Adresse livr. spéc." />
+		<FIELD name="ID_CLIENT_DEPARTEMENT" label="Service" />
+		<FIELD name="ID_CONTACT" label="Contact" titlelabel="Contact" />
 		<FIELD name="NOM" label="Référence" titlelabel="Référence" />
+		<FIELD name="NUMERO_EXPEDITION" label="Numéro d'expédition" />
+		<FIELD name="EMBALLAGE" label="Type d'emballage" />
+		<FIELD name="ETAT_COMMANDE" label="Etat commande" />
 		<FIELD name="NUMERO" label="Numéro" titlelabel="Numéro" />
 		<FIELD name="DATE" label="Date" titlelabel="Date" />
 		<FIELD name="DATE_ECHEANCE" label="Date d'échéance" titlelabel="Date d'échéance" />
 		<FIELD name="ID_CLIENT" label="Client" titlelabel="Client" />
+		<FIELD name="PORT_HT" label="Frais de port HT" />
+		<FIELD name="REMISE_HT" label="Remise HT" />
+		<FIELD name="ID_TAXE_PORT" label="TVA sur Port" />
 		<FIELD name="T_HT" label="Total HT" titlelabel="Total HT" />
 		<FIELD name="T_TVA" label="Total TVA" titlelabel="Total TVA" />
 		<FIELD name="T_TTC" label="Total TTC" titlelabel="Total TTC" />
-		<FIELD name="T_DEVISE" label="Total Devise" titlelabel="Total Devise" />
-		<FIELD name="INFOS" label="Informations" titlelabel="Informations" />
-		<FIELD name="SOURCE" label="Source" titlelabel="Source" />
-		<FIELD name="T_POIDS" label="Poids total" titlelabel="Poids total" />
-		<FIELD name="ID_COMMERCIAL" label="Commercial" titlelabel="Commercial" />
-		<FIELD name="ID_POLE_PRODUIT" label="Pôle produit" titlelabel="Pôle produit" />
+		<FIELD name="T_DEVISE" label="Total Devise" />
+		<FIELD name="INFOS" label="Informations" />
+		<FIELD name="SOURCE" label="Source" />
+		<FIELD name="T_POIDS" label="Poids total" />
+		<FIELD name="ID_COMMERCIAL" label="Commercial" />
+		<FIELD name="ID_POLE_PRODUIT" label="Pôle produit" />
+		<FIELD name="TYPE_EXPEDITION" label="Type d'envoi" />
+		<FIELD name="ID_TARIF" label="Tarif à appliquer" />
 	</TABLE>
 
 	<TABLE name="COMMANDE_CLIENT_ELEMENT">
-
+		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />
 		<FIELD name="NB_COLIS" label="Nb Colis" titlelabel="Nb Colis" />
 		<FIELD name="POIDS_COLIS_NET" label="Pds Colis" titlelabel="Pds Colis" />
 		<FIELD name="T_POIDS_COLIS_NET" label="Pds Colis Total" titlelabel="Pds Colis Total" />
@@ -868,6 +925,13 @@
 	</TABLE>
 
 	<TABLE name="DEVIS">
+		<FIELD name="ID_TAXE_PORT" label="TVA sur Port" />
+		<FIELD name="DATE_SAISIE" label="Date de saisie du rapport" />
+		<FIELD name="ACCEPTE_EN_SAISIE" label="Accepté en saisie" />
+		<FIELD name="RAPPORT_A_SAISIR" label="Rapport à saisir" />
+		<FIELD name="ID_CLIENT_DEPARTEMENT" label="Service" />
+		<FIELD name="ID_ADRESSE" label="Adresse fact. spéc." titlelabel="Adresse fact. spéc." />
+		<FIELD name="ID_ADRESSE_LIVRAISON" label="Adresse livr. spéc." titlelabel="Adresse livr. spéc." />
 		<FIELD name="CONTACT_MAIL_RAPPORT" label="Email dest. suppl." />
 		<FIELD name="SITE_DIFF" label="Site d'intervention différent du donneur d'ordre" titlelabel="Site d'intervention différent du donneur d'ordre" />
 		<FIELD name="DESIGNATION_SITE" label="Désignation du site" />
@@ -913,9 +977,11 @@
 		<FIELD name="ID_ADRESSE" label="Adresse" titlelabel="Adresse" />
 		<FIELD name="ID_CONTACT" label="Contact" titlelabel="Contact" />
 		<FIELD name="ADRESSE_IDENTIQUE" label="Adresse identique" titlelabel="Adresse identique" />
-		<FIELD name="T_DEVISE" label="Total Devise" titlelabel="Total Devise" />	
+		<FIELD name="T_DEVISE" label="Total Devise" titlelabel="Total Devise" />
+		<FIELD name="DUNNING_DATE" label="Date de relance" titlelabel="Date de relance" />
 	</TABLE>
 	<TABLE name="DEVIS_ELEMENT">
+		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />
 		<FIELD name="QTE_UNITAIRE" label="Qté U.V." titlelabel="Qté U.V." />
 		<FIELD name="ID_UNITE_VENTE" label="Unité de vente" titlelabel="Unité de vente" />
 		<FIELD name="ID_ARTICLE" label="Article" titlelabel="Article" />
@@ -988,6 +1054,14 @@
 		<FIELD name="DATE_SIGN" label="Date de signature" />
 	</TABLE>
 
+	<TABLE name="DEVISE_HISTORIQUE">
+		<FIELD name="DATE" label="Date" />
+		<FIELD name="SRC" label="De" />
+		<FIELD name="DST" label="Vers" />
+		<FIELD name="TAUX" label="Taux de change" />
+		<FIELD name="TAUX_COMMERCIAL" label="Taux commercial" />
+	</TABLE>
+
 	<TABLE name="ECHANTILLON_ELEMENT">
 		<FIELD name="NOM" label="Nom" titlelabel="Nom" />
 		<FIELD name="QTE" label="Quantité" titlelabel="Quantité" />
@@ -1034,6 +1108,7 @@
 
 	<TABLE name="ECRITURE">
 		<FIELD name="ID" label="N° Ecriture" titlelabel="N° Ecriture" />
+		<FIELD name="NOM_PIECE" label="Pièce commerciale"/>
 		<FIELD name="JOURNAL_NOM" label="Journal" titlelabel="Journal" />
 		<FIELD name="JOURNAL_CODE" label="Code journal" titlelabel="Code journal" />
 		<FIELD name="COMPTE_NUMERO" label="Numéro de compte" titlelabel="Numéro de compte" />
@@ -1610,6 +1685,15 @@
 		<FIELD name="MONTANT" label="Montant" titlelabel="Montant" />
 		<FIELD name="ID_MODE_REGLEMENT" label="Mode de règlement" titlelabel="Mode de règlement" />
 		<FIELD name="ID_ECHEANCE_FOURNISSEUR" label="Echéance fournisseur" titlelabel="échéance" />
+		<FIELD name="ID_FOURNISSEUR" label="Fournisseur" />
+	</TABLE>
+
+	<TABLE name="REGLER_MONTANT_ELEMENT">
+		<FIELD name="ID_ECHEANCE_FOURNISSEUR" label="Echéance" />
+		<FIELD name="ID_MOUVEMENT_ECHEANCE" label="Facture fournisseur" />
+		<FIELD name="DATE" label="Date" />
+		<FIELD name="MONTANT_REGLE" label="Montant réglé" />
+		<FIELD name="MONTANT_A_REGLER" label="Montant dû" />
 	</TABLE>
 
 	<TABLE name="RELANCE">
@@ -1663,6 +1747,7 @@
 		<FIELD name="DEBIT" label="Débit" titlelabel="Débit" />
 		<FIELD name="CREDIT" label="Crédit" titlelabel="Crédit" />
 		<FIELD name="ID_ECRITURE" label="Ecriture" titlelabel="Ecriture" />
+		<FIELD name="NOM_PIECE" label="Pièce commerciale"/>
 	</TABLE>
 
 
@@ -1684,6 +1769,8 @@
 		<FIELD name="CREATION_AUTO" label="Article généré" titlelabel="généré" />
 	</TABLE>
 	<TABLE name="SAISIE_VENTE_FACTURE">
+		<FIELD name="ID_CLIENT_DEPARTEMENT" label="Service" />
+		<FIELD name="ID_ADRESSE_LIVRAISON" label="Adresse livr. spéc." titlelabel="Adresse livr. spéc." />
 		<FIELD name="ID_COMPTE_PCE_VENTE" label="Compte vente" titlelabel="Compte vente" />
 		<FIELD name="ID_ADRESSE" label="Adresse spécifique" titlelabel="Adresse spécifique" />
 		<FIELD name="T_HA" label="Total achat" titlelabel="Total achat" />
@@ -1730,8 +1817,11 @@
 		<FIELD name="ID_MODELE" label="Modéle" titlelabel="Modéle" />
 		<FIELD name="CONTROLE_TECHNIQUE" label="Facture CTC" titlelabel="Facture CTC" />
 		<FIELD name="COMPTE_SERVICE_AUTO" label="Gestion automatique du compte de service" titlelabel="Gestion automatique du compte de service" />
+		<FIELD name="ID_TARIF" label="Tarif à appliquer" />
+
 	</TABLE>
 	<TABLE name="SAISIE_VENTE_FACTURE_ELEMENT">
+		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />
 		<FIELD name="NB_COLIS" label="Nb Colis" titlelabel="Nb Colis" />
 		<FIELD name="POIDS_COLIS_NET" label="Pds Colis" titlelabel="Pds Colis" />
 		<FIELD name="T_POIDS_COLIS_NET" label="Pds Colis Total" titlelabel="Pds Colis Total" />
@@ -1803,6 +1893,7 @@
 		<FIELD name="ID_PERIODICITE" label="Périodicité" titlelabel="Périodicité" />
 		<FIELD name="DATE" label="Date d'intervention" titlelabel="Date d'intervention" />
 		<FIELD name="POURCENT_SERVICE" label="Pourcentage service" titlelabel="Pourcentage service" />
+		<FIELD name="POURCENT_FACTURABLE" label="Facturable (€ ou %)" titlelabel="Facturable (€ ou %)" />
 		<FIELD name="POURCENT_CCIP" label="CCIP" titlelabel="CCIP" />
 		<FIELD name="DATE_FIN" label="Date de fin d'intervention" titlelabel="Date de fin d'intervention" />
 	</TABLE>

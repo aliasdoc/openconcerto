@@ -29,7 +29,7 @@ public class SQLTableModelSourceOffline extends SQLTableModelSource {
 
     public SQLTableModelSourceOffline(final SQLRowValuesListFetcher fetcher, final SQLElement elem) {
         super(fetcher.getGraph());
-        this.fetcher = fetcher;
+        this.fetcher = fetcher.toUnmodifiable();
         this.elem = elem;
         if (!this.getPrimaryTable().equals(this.elem.getTable()))
             throw new IllegalArgumentException("not the same table: " + this.getPrimaryTable() + " != " + this.elem);
@@ -41,6 +41,11 @@ public class SQLTableModelSourceOffline extends SQLTableModelSource {
 
     public SQLElement getElem() {
         return this.elem;
+    }
+
+    @Override
+    protected SQLTableModelSourceState createState() {
+        return new SQLTableModelSourceStateOffline(this.getAllColumns(), this.getFetcher());
     }
 
     @Override

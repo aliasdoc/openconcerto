@@ -32,6 +32,7 @@ public class EvolutionCAAction extends CreateFrameAbstractAction {
 
     public JFrame createFrame() {
         final PanelFrame panelFrame = new PanelFrame(new GraphCAPanel(false), TITLE);
+        panelFrame.pack();
         panelFrame.setResizable(false);
         return panelFrame;
     }

@@ -39,7 +39,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 /**
- * Allow to find which rows must be unarchived to maintain coherency.
+ * Allow to find which rows must be unarchived to maintain coherence.
  * 
  * @author Sylvain
  */
@@ -88,7 +88,9 @@ final class ArchivedGraph {
             final SQLElement elem = getElement(e.getKey());
             final Set<Number> ids = e.getValue();
             final SQLRowValues privateGraph = elem.getPrivateGraph(ARCHIVE_AND_FOREIGNS);
+            // if the element has privates to expand
             if (privateGraph.getGraph().size() > 1) {
+                // fetch the main row and its privates
                 final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(privateGraph, false);
                 setWhereAndArchivePolicy(fetcher, ids, ArchiveMode.BOTH);
                 final List<SQLRowValues> fetchedRows = fetcher.fetch();
@@ -99,15 +101,21 @@ final class ArchivedGraph {
                     for (final SQLRowValues v : new ArrayList<SQLRowValues>(valsFetched.getGraph().getItems())) {
                         final SQLRow row = v.asRow();
                         if (v == valsFetched) {
+                            // get the row already in the graph
                             final SQLRowValues toExpandVals = this.graphRows.get(row);
+                            // load local values and foreign rows
                             toExpandVals.load(valsFetched, null);
                             assert valsFetched.getFields().isEmpty();
-                            for (final Entry<SQLField, ? extends Collection<SQLRowValues>> refEntry : new ListMap<SQLField, SQLRowValues>(valsFetched.getReferentsMap()).entrySet()) {
-                                for (final SQLRowValues ref : refEntry.getValue()) {
-                                    ref.put(e.getKey().getName(), toExpandVals);
+                            // load referents rows
+                            if (valsFetched.hasReferents()) {
+                                for (final Entry<SQLField, ? extends Collection<SQLRowValues>> refEntry : new ListMap<SQLField, SQLRowValues>(valsFetched.getReferentsMap()).entrySet()) {
+                                    final SQLField refField = refEntry.getKey();
+                                    for (final SQLRowValues ref : refEntry.getValue()) {
+                                        ref.put(refField.getName(), toExpandVals);
+                                    }
                                 }
                             }
-                            assert valsFetched.getGraph().size() == 1;
+                            assert valsFetched.getGraphSize() == 1;
                         } else {
                             this.toExpand.add(row);
                             this.graphRows.put(row, v);

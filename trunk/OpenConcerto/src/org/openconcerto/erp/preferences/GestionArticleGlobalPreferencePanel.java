@@ -29,8 +29,11 @@ public class GestionArticleGlobalPreferencePanel extends JavaPrefPreferencePanel
     public static String USE_CREATED_ARTICLE = "UseCreatedArticle";
     public static String CREATE_ARTICLE_AUTO = "CreateArticleAuto";
     public static String SUPPLIER_PRODUCT_CODE = "SupplierProductCode";
+    public static String WARNING_STOCK_MIN = "ArticleStockMin";
+
     public static String SHOW_PRODUCT_BAR_CODE = "ShowProductBarCode";
     public static String ITEM_PACKAGING = "ItemPackaging";
+    public static String FILTER_BY_FAMILY = "FilterByFamily";
 
     public GestionArticleGlobalPreferencePanel() {
         super("Gestion des articles", null);
@@ -43,6 +46,10 @@ public class GestionArticleGlobalPreferencePanel extends JavaPrefPreferencePanel
         PrefView<Boolean> viewAchat = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer les codes articles fournisseurs", SUPPLIER_PRODUCT_CODE);
         viewAchat.setDefaultValue(Boolean.FALSE);
         this.addView(viewAchat);
+
+        PrefView<Boolean> viewStockWarning = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer les alertes de stocks minimum", WARNING_STOCK_MIN);
+        viewStockWarning.setDefaultValue(Boolean.TRUE);
+        this.addView(viewStockWarning);
 
         PrefView<Boolean> view = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer les sorties de stock avec les factures et non les bons de livraison", STOCK_FACT);
         view.setDefaultValue(Boolean.TRUE);
@@ -59,6 +66,10 @@ public class GestionArticleGlobalPreferencePanel extends JavaPrefPreferencePanel
         PrefView<Boolean> view3 = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Utiliser uniquement des articles existant", USE_CREATED_ARTICLE);
         view3.setDefaultValue(Boolean.FALSE);
         this.addView(view3);
+
+        PrefView<Boolean> viewFilter = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Filtrer les articles par familles dans le corps des piéces commerciales", FILTER_BY_FAMILY);
+        viewFilter.setDefaultValue(Boolean.FALSE);
+        this.addView(viewFilter);
 
         PrefView<Boolean> view4 = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Créer automatiquement les articles (si il n'y a aucune correspondance CODE, DESIGNATION)", CREATE_ARTICLE_AUTO);
         view4.setDefaultValue(Boolean.TRUE);

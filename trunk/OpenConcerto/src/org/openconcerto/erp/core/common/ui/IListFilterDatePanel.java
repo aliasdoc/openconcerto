@@ -55,6 +55,7 @@ public class IListFilterDatePanel extends JPanel {
     // Liste des filtres
     private Map<String, Tuple2<Date, Date>> map;
     private static LinkedHashMap<String, Tuple2<Date, Date>> mapDefault;
+    public static boolean LOAD_STATE = true;
 
     private JComboBox combo;
 
@@ -73,13 +74,12 @@ public class IListFilterDatePanel extends JPanel {
     public IListFilterDatePanel(IListe l, SQLField fieldDate) {
         this(l, fieldDate, null);
         if (l.getRequest() == Configuration.getInstance().getDirectory().getElement(l.getSource().getPrimaryTable()).getListRequest()) {
-            System.err.println("Attention il ne faut pas utiliser la listrequest par défaut sinon les filtres restes !!!");
+            System.err.println("Attention il ne faut pas utiliser la ListRequest par défaut sinon les filtres restent !!!");
             Thread.dumpStack();
         }
     }
 
     public static Map<String, Tuple2<Date, Date>> getDefaultMap() {
-
         if (mapDefault == null) {
             initDefaultMap();
         }
@@ -243,17 +243,16 @@ public class IListFilterDatePanel extends JPanel {
         }
         // Filtre
         this.add(new JLabel("Du"), c);
-        c.weightx = 1;
         this.add(this.dateDu, c);
-        c.weightx = 0;
         this.add(new JLabel("Au"), c);
-        c.weightx = 1;
         this.add(this.dateAu, c);
         this.dateAu.addValueListener(this.listener);
         this.dateDu.addValueListener(this.listener);
 
         IListFilterDateStateManager stateManager = new IListFilterDateStateManager(this, getConfigFile(mapList), true);
-        stateManager.loadState();
+        if (LOAD_STATE) {
+            stateManager.loadState();
+        }
     }
 
     public void setDateDu(Date d) {
@@ -308,7 +307,6 @@ public class IListFilterDatePanel extends JPanel {
     }
 
     public void fireDateChanged() {
-        System.err.println("FIRE");
         if (this.dateAu.getValue() == null && this.dateDu.getValue() == null) {
             for (IListe list : this.mapList.keySet()) {
                 list.getRequest().setSelectTransf(this.mapListTransformer.get(list));

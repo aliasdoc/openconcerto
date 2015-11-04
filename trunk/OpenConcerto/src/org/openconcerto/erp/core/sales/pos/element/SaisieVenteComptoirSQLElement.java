@@ -13,42 +13,6 @@
  
  package org.openconcerto.erp.core.sales.pos.element;
 
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.erp.core.common.ui.DeviseField;
-import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
-import org.openconcerto.erp.core.sales.product.element.UniteVenteArticleSQLElement;
-import org.openconcerto.erp.core.supplychain.stock.element.MouvementStockSQLElement;
-import org.openconcerto.erp.generationEcritures.GenerationMvtSaisieVenteComptoir;
-import org.openconcerto.erp.model.PrixTTC;
-import org.openconcerto.erp.preferences.ModeReglementDefautPrefPanel;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.element.BaseSQLComponent;
-import org.openconcerto.sql.element.ElementSQLObject;
-import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLSelect;
-import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.Where;
-import org.openconcerto.sql.sqlobject.ElementComboBox;
-import org.openconcerto.sql.sqlobject.SQLSearchableTextCombo;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.ui.JDate;
-import org.openconcerto.ui.TitledSeparator;
-import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.ui.warning.JLabelWarning;
-import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.GestionDevise;
-import org.openconcerto.utils.ListMap;
-import org.openconcerto.utils.StringUtils;
-import org.openconcerto.utils.checks.EmptyListener;
-import org.openconcerto.utils.checks.EmptyObj;
-import org.openconcerto.utils.checks.ValidState;
-import org.openconcerto.utils.text.SimpleDocumentListener;
-
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -81,6 +45,43 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
+
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.DeviseField;
+import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
+import org.openconcerto.erp.core.sales.product.element.UniteVenteArticleSQLElement;
+import org.openconcerto.erp.core.supplychain.stock.element.MouvementStockSQLElement;
+import org.openconcerto.erp.generationEcritures.GenerationMvtSaisieVenteComptoir;
+import org.openconcerto.erp.model.PrixTTC;
+import org.openconcerto.erp.preferences.ModeReglementDefautPrefPanel;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.element.BaseSQLComponent;
+import org.openconcerto.sql.element.ElementSQLObject;
+import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.sqlobject.SQLSearchableTextCombo;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.JDate;
+import org.openconcerto.ui.TitledSeparator;
+import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.InteractionMode;
+import org.openconcerto.ui.warning.JLabelWarning;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.GestionDevise;
+import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.StringUtils;
+import org.openconcerto.utils.checks.EmptyListener;
+import org.openconcerto.utils.checks.EmptyObj;
+import org.openconcerto.utils.checks.ValidState;
+import org.openconcerto.utils.text.SimpleDocumentListener;
 
 public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
 
@@ -433,7 +434,7 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
                     public void actionPerformed(java.awt.event.ActionEvent e) {
                         boolean b = checkCommande.isSelected();
                         comboFournisseur.setEnabled(b);
-                        comboFournisseur.setEditable(b);
+                        comboFournisseur.setInteractionMode((b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
 
                         textEcheance.setEditable(b);
                         textEcheance.setEnabled(b);
@@ -524,7 +525,7 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
                 this.textMontantService.setEnabled(false);
 
                 this.checkCommande.setSelected(false);
-                this.comboFournisseur.setEditable(false);
+                this.comboFournisseur.setInteractionMode(InteractionMode.DISABLED);
                 this.comboFournisseur.setEnabled(false);
                 this.textEcheance.setEditable(false);
                 this.textEcheance.setEnabled(false);
@@ -782,8 +783,8 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
 
                             try {
                                 final SQLRow row = rowVals.insert();
-                                final ListMap<SQLRow, SQLRowValues> map = ((MouvementStockSQLElement) Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK")).updateStock(
-                                        Arrays.asList(row), false);
+                                final ListMap<SQLRow, SQLRowValues> map = ((MouvementStockSQLElement) Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK"))
+                                        .updateStock(Arrays.asList(row), false);
                                 MouvementStockSQLElement.createCommandeF(map, null);
 
                             } catch (SQLException e) {
@@ -932,8 +933,8 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
                         rowVals.put("DATE", row.getObject("DATE"));
                         try {
                             SQLRow rowNew = rowVals.insert();
-                            final ListMap<SQLRow, SQLRowValues> map = ((MouvementStockSQLElement) Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK")).updateStock(
-                                    Arrays.asList(rowNew), false);
+                            final ListMap<SQLRow, SQLRowValues> map = ((MouvementStockSQLElement) Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK"))
+                                    .updateStock(Arrays.asList(rowNew), false);
                             ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
 
                                 @Override

@@ -19,9 +19,12 @@ import org.openconcerto.utils.cc.ITransformer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import net.jcip.annotations.Immutable;
 
 import org.apache.commons.collections.functors.InstanceofPredicate;
 
@@ -31,6 +34,7 @@ import org.apache.commons.collections.functors.InstanceofPredicate;
  * 
  * @author ILM Informatique 27 sept. 2004
  */
+@Immutable
 public class Where {
 
     static public final Where FALSE = Where.createRaw("1=0");
@@ -39,7 +43,7 @@ public class Where {
     static public final String NULL_IS_DATA_NEQ = new String("IS DISTINCT FROM");
 
     private static abstract class Combiner {
-        public final Where combine(Where w1, Where w2) {
+        public final Where combine(final Where w1, final Where w2) {
             if (w1 == null)
                 return w2;
             else
@@ -50,18 +54,20 @@ public class Where {
     }
 
     private static Combiner AndCombiner = new Combiner() {
-        protected Where combineNotNull(Where where1, Where where2) {
+        @Override
+        protected Where combineNotNull(final Where where1, final Where where2) {
             return where1.and(where2);
         }
     };
 
     private static Combiner OrCombiner = new Combiner() {
-        protected Where combineNotNull(Where where1, Where where2) {
+        @Override
+        protected Where combineNotNull(final Where where1, final Where where2) {
             return where1.or(where2);
         }
     };
 
-    static private Where combine(Collection<Where> wheres, Combiner c) {
+    static private Where combine(final Collection<Where> wheres, final Combiner c) {
         Where res = null;
         for (final Where w : wheres) {
             res = c.combine(res, w);
@@ -69,7 +75,7 @@ public class Where {
         return res;
     }
 
-    static public Where and(Collection<Where> wheres) {
+    static public Where and(final Collection<Where> wheres) {
         return combine(wheres, AndCombiner);
     }
 
@@ -81,7 +87,7 @@ public class Where {
         return and(res);
     }
 
-    static public Where or(Collection<Where> wheres) {
+    static public Where or(final Collection<Where> wheres) {
         return combine(wheres, OrCombiner);
     }
 
@@ -92,23 +98,23 @@ public class Where {
      * @param where2 le 2ème, peut être <code>null</code>.
      * @return le ET, peut être <code>null</code>.
      */
-    static public Where and(Where where1, Where where2) {
+    static public Where and(final Where where1, final Where where2) {
         return AndCombiner.combine(where1, where2);
     }
 
-    static public Where isNull(FieldRef ref) {
+    static public Where isNull(final FieldRef ref) {
         return new Where(ref, "is", (Object) null);
     }
 
-    static public Where isNotNull(FieldRef ref) {
+    static public Where isNotNull(final FieldRef ref) {
         return new Where(ref, "is not", (Object) null);
     }
 
-    static public Where createRaw(String clause, FieldRef... refs) {
+    static public Where createRaw(final String clause, final FieldRef... refs) {
         return createRaw(clause, Arrays.asList(refs));
     }
 
-    static public Where createRaw(String clause, Collection<? extends FieldRef> refs) {
+    static public Where createRaw(final String clause, final Collection<? extends FieldRef> refs) {
         if (clause == null)
             return null;
         return new Where(clause, refs);
@@ -125,11 +131,18 @@ public class Where {
      *         3007 , |MISSION.DATE_DBT|}.
      */
     @SuppressWarnings("unchecked")
-    static public Where quote(String pattern, Object... params) {
+    static public Where quote(final String pattern, final Object... params) {
         return new Where(SQLSelect.quote(pattern, params), org.apache.commons.collections.CollectionUtils.select(Arrays.asList(params), new InstanceofPredicate(FieldRef.class)));
     }
 
-    static private final String comparison(FieldRef ref, String op, String y) {
+    static private final String normalizeOperator(final String op) {
+        String res = op.trim();
+        if (res.equals("!="))
+            res = "<>";
+        return res;
+    }
+
+    static private final String comparison(final FieldRef ref, final String op, final String y) {
         if (op == NULL_IS_DATA_EQ || op == NULL_IS_DATA_NEQ) {
             return ref.getField().getServer().getSQLSystem().getSyntax().getNullIsDataComparison(ref.getFieldRef(), op == NULL_IS_DATA_EQ, y);
         } else {
@@ -137,26 +150,20 @@ public class Where {
         }
     }
 
-    static private final String getInClause(FieldRef field1, final boolean in, final String inParens) {
+    static private final String getInClause(final FieldRef field1, final boolean in, final String inParens) {
         final String op = in ? " in (" : " not in (";
         return field1.getFieldRef() + op + inParens + ")";
     }
 
     private final List<FieldRef> fields;
-    private String clause;
+    private final String clause;
 
-    {
-        this.fields = new ArrayList<FieldRef>();
-        this.clause = "";
+    public Where(final FieldRef field1, final String op, final FieldRef field2) {
+        this.fields = Arrays.asList(field1, field2);
+        this.clause = comparison(field1, normalizeOperator(op), field2.getFieldRef());
     }
 
-    public Where(FieldRef field1, String op, FieldRef field2) {
-        this.fields.add(field1);
-        this.fields.add(field2);
-        this.clause = comparison(field1, op, field2.getFieldRef());
-    }
-
-    public Where(FieldRef field1, String op, int scalar) {
+    public Where(final FieldRef field1, final String op, final int scalar) {
         this(field1, op, (Integer) scalar);
     }
 
@@ -171,12 +178,13 @@ public class Where {
      * @param op an arbitrary operator.
      * @param o the object to compare <code>ref</code> to.
      */
-    public Where(FieldRef ref, String op, Object o) {
-        this.fields.add(ref);
+    public Where(final FieldRef ref, String op, final Object o) {
+        this.fields = Collections.singletonList(ref);
+        op = normalizeOperator(op);
         if (o == null) {
-            if (op.trim().equals("="))
+            if (op.equals("="))
                 op = "is";
-            else if (op.trim().equals("<>"))
+            else if (op.equals("<>"))
                 op = "is not";
         }
         this.clause = comparison(ref, op, ref.getField().getType().toString(o));
@@ -189,7 +197,7 @@ public class Where {
      * @param field1 le champs à tester.
      * @param values les valeurs.
      */
-    public Where(final FieldRef field1, Collection<?> values) {
+    public Where(final FieldRef field1, final Collection<?> values) {
         this(field1, true, values);
     }
 
@@ -200,22 +208,23 @@ public class Where {
      * @param in <code>true</code> for "in", <code>false</code> for "not in".
      * @param values les valeurs.
      */
-    public Where(final FieldRef field1, final boolean in, Collection<?> values) {
+    public Where(final FieldRef field1, final boolean in, final Collection<?> values) {
         if (values.isEmpty()) {
+            this.fields = Collections.emptyList();
             this.clause = in ? FALSE.getClause() : TRUE.getClause();
         } else {
-            this.fields.add(field1);
+            this.fields = Collections.singletonList(field1);
             this.clause = getInClause(field1, in, CollectionUtils.join(values, ",", new ITransformer<Object, String>() {
                 @Override
-                public String transformChecked(Object input) {
+                public String transformChecked(final Object input) {
                     return field1.getField().getType().toString(input);
                 }
             }));
         }
     }
 
-    public Where(final FieldRef field1, final boolean in, SQLSelect subQuery) {
-        this.fields.add(field1);
+    public Where(final FieldRef field1, final boolean in, final SQLSelect subQuery) {
+        this.fields = Collections.singletonList(field1);
         this.clause = getInClause(field1, in, subQuery.asString());
     }
 
@@ -226,9 +235,9 @@ public class Where {
      * @param borneInf la valeur minimum.
      * @param borneSup la valeur maximum.
      */
-    public Where(FieldRef ref, Object borneInf, Object borneSup) {
+    public Where(final FieldRef ref, final Object borneInf, final Object borneSup) {
         final SQLField field1 = ref.getField();
-        this.fields.add(ref);
+        this.fields = Collections.singletonList(ref);
         this.clause = ref.getFieldRef() + " BETWEEN " + field1.getType().toString(borneInf) + " AND " + field1.getType().toString(borneSup);
     }
 
@@ -243,56 +252,41 @@ public class Where {
      * @param borneSup the upper bound, eg "SMITH".
      * @param supInclusive <code>true</code> if the upper bound should be included.
      */
-    public Where(FieldRef ref, Object borneInf, boolean infInclusive, Object borneSup, boolean supInclusive) {
-        this.fields.add(ref);
+    public Where(final FieldRef ref, final Object borneInf, final boolean infInclusive, final Object borneSup, final boolean supInclusive) {
+        this.fields = Collections.singletonList(ref);
         final String infClause = new Where(ref, infInclusive ? ">=" : ">", borneInf).getClause();
         final String supClause = new Where(ref, supInclusive ? "<=" : "<", borneSup).getClause();
         this.clause = infClause + " AND " + supClause;
     }
 
     // raw ctor, see static methods
-    private Where(String clause, Collection<? extends FieldRef> refs) {
-        this.fields.addAll(refs);
+    private Where(final String clause, final Collection<? extends FieldRef> refs) {
+        this.fields = Collections.unmodifiableList(new ArrayList<FieldRef>(refs));
         this.clause = clause;
     }
 
-    private Where() {
-        /* Pour combine() */
-    }
-
-    /**
-     * Clone un Where.
-     * 
-     * @param orig l'instance à cloner.
-     */
-    public Where(Where orig) {
-        this(orig.clause, orig.fields);
-    }
-
-    public Where or(Where w) {
+    public Where or(final Where w) {
         return this.combine(w, "OR");
     }
 
-    public Where and(Where w) {
+    public Where and(final Where w) {
         return this.combine(w, "AND");
     }
 
     public Where not() {
-        final Where res = new Where(this);
-        res.clause = "NOT (" + this.clause + ")";
-        return res;
+        return new Where("NOT (" + this.clause + ")", this.fields);
     }
 
-    private Where combine(Where w, String op) {
+    private Where combine(final Where w, final String op) {
         if (w == null)
             return this;
 
-        Where res = new Where();
-        res.fields.addAll(this.fields);
-        res.fields.addAll(w.fields);
+        final List<FieldRef> fields = new ArrayList<FieldRef>();
+        fields.addAll(this.fields);
+        fields.addAll(w.fields);
 
-        res.clause = "(" + this.clause + ") " + op + " (" + w.clause + ")";
-        return res;
+        final String clause = "(" + this.clause + ") " + op + " (" + w.clause + ")";
+        return new Where(clause, fields);
     }
 
     /**
@@ -313,18 +307,21 @@ public class Where {
         return this.fields;
     }
 
+    @Override
     public String toString() {
         return this.getClause();
     }
 
-    public boolean equals(Object obj) {
+    @Override
+    public boolean equals(final Object obj) {
         if (obj instanceof Where) {
-            Where o = ((Where) obj);
+            final Where o = ((Where) obj);
             return this.getClause().equals(o.getClause()) && this.getFields().equals(o.getFields());
         } else
             return false;
     }
 
+    @Override
     public int hashCode() {
         return this.getClause().hashCode() + this.getFields().hashCode();
     }

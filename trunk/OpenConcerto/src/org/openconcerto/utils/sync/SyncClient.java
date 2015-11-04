@@ -229,12 +229,6 @@ public class SyncClient {
         }
     }
 
-    private File localHashDirectory;
-
-    private void setLocalHashDirectory(File file) {
-        localHashDirectory = file;
-    }
-
     public void sendFile(File localFile, String remotePath, String remoteName) throws Exception {
         sendFile(localFile, remotePath, remoteName, null);
     }
@@ -276,7 +270,7 @@ public class SyncClient {
             int remoteFileSize = in.readInt();
             this.byteReceived += 4;
 
-            final float a = (float) remoteFileSize / HashWriter.blockSize;
+            final float a = (float) remoteFileSize / HashWriter.BLOCK_SIZE;
 
             int nb = (int) Math.ceil(a);
 
@@ -311,7 +305,7 @@ public class SyncClient {
 
                 // compare delta
                 RollingChecksum32 checksum = new RollingChecksum32();
-                byte[] buffer = new byte[HashWriter.blockSize];
+                byte[] buffer = new byte[HashWriter.BLOCK_SIZE];
 
                 BufferedInputStream fb = new BufferedInputStream(new FileInputStream(localFile));
                 final int read = fb.read(buffer);
@@ -337,12 +331,12 @@ public class SyncClient {
 
                             // Block found!!!
                             // Copy block to: mapBlock.get(r32)*blockSize;
-                            int offset = mapBlock.get(r32) * HashWriter.blockSize;
+                            int offset = mapBlock.get(r32) * HashWriter.BLOCK_SIZE;
                             //
-                            MoveOperation m = new MoveOperation(offset, start, HashWriter.blockSize);
+                            MoveOperation m = new MoveOperation(offset, start, HashWriter.BLOCK_SIZE);
                             moves.add(m);
                             //
-                            rangesOk.add(new Range(start, start + HashWriter.blockSize));
+                            rangesOk.add(new Range(start, start + HashWriter.BLOCK_SIZE));
                         }
 
                     }
@@ -604,7 +598,7 @@ public class SyncClient {
             }
 
             if (needToResync) {
-                if (localFile.length() > HashWriter.blockSize) {
+                if (localFile.length() > HashWriter.BLOCK_SIZE) {
                     retrieveFileWithDelta(localFile, remotePath, remoteName, token);
                 } else {
                     downloadFile(localFile, remotePath, remoteName, fileSize, token);
@@ -645,7 +639,7 @@ public class SyncClient {
         this.byteReceived += 4;
         this.byteSyncDownload = fileSize;
 
-        final float a = (float) fileSize / HashWriter.blockSize;
+        final float a = (float) fileSize / HashWriter.BLOCK_SIZE;
 
         int nb = (int) Math.ceil(a);
 
@@ -671,7 +665,7 @@ public class SyncClient {
         RandomAccessFile rNewFile = new RandomAccessFile(newFile, "rw");
         // compare delta
         RollingChecksum32 checksum = new RollingChecksum32();
-        byte[] buffer = new byte[HashWriter.blockSize];
+        byte[] buffer = new byte[HashWriter.BLOCK_SIZE];
 
         BufferedInputStream fb = new BufferedInputStream(new FileInputStream(localFile));
         final int read = fb.read(buffer);
@@ -696,12 +690,12 @@ public class SyncClient {
 
                     // Block found!!!
                     // Copy block to: mapBlock.get(r32)*blockSize;
-                    int offset = mapBlock.get(r32) * HashWriter.blockSize;
+                    int offset = mapBlock.get(r32) * HashWriter.BLOCK_SIZE;
                     //
                     rNewFile.seek(offset);
                     rNewFile.write(buffer);
                     //
-                    rangesOk.add(new Range(offset, offset + HashWriter.blockSize));
+                    rangesOk.add(new Range(offset, offset + HashWriter.BLOCK_SIZE));
                 }
 
             }

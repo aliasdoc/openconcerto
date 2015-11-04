@@ -80,7 +80,7 @@ public class EcheanceFournisseurSQLElement extends ComptaSQLConfElement {
                 }
             }, false) {
                 @Override
-                public boolean enabledFor(List<SQLRowAccessor> selection) {
+                public boolean enabledFor(List<SQLRowValues> selection) {
                     if (selection != null && selection.size() == 1) {
                         SQLRowAccessor row = selection.get(0);
                         return row.getBoolean("REG_COMPTA");
@@ -121,7 +121,7 @@ public class EcheanceFournisseurSQLElement extends ComptaSQLConfElement {
                 }
             }, false) {
                 @Override
-                public boolean enabledFor(List<SQLRowAccessor> selection) {
+                public boolean enabledFor(List<SQLRowValues> selection) {
                     if (selection != null && selection.size() == 1) {
                         SQLRowAccessor row = selection.get(0);
                         return !row.getBoolean("REG_COMPTA");

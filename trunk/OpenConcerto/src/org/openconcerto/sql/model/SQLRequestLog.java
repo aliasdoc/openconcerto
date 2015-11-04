@@ -103,7 +103,10 @@ public class SQLRequestLog {
         this.threadId = "[" + Thread.currentThread().getId() + "] " + Thread.currentThread().getName();
     }
 
+    static long count = 0;
+
     public static void log(String query, String comment, int connectionId, long starAtMs, long startTime, long afterCache, long afterQueryInfo, long afterExecute, long afterHandle, long endTime) {
+
         if (enabled) {
             final String ex = ExceptionUtils.getStackTrace(new Exception());
 
@@ -111,7 +114,7 @@ public class SQLRequestLog {
             fireEvent();
 
         }
-
+        count++;
     }
 
     public static void log(String query, String comment, long starAtMs, long startTime) {
@@ -464,9 +467,14 @@ public class SQLRequestLog {
         f.setVisible(true);
     }
 
-    protected static synchronized void clear() {
+    public static synchronized void clear() {
         list.clear();
         fireEvent();
+        count = 0;
+    }
+
+    public static long getCount() {
+        return count;
     }
 
     public static synchronized int getSize() {

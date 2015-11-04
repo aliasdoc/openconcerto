@@ -35,6 +35,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
 public class ExportFEC extends AbstractExport {
@@ -164,6 +167,8 @@ public class ExportFEC extends AbstractExport {
                 line.add(ecritureDateValid);
             } else {
                 line.add("");
+                bufOut.close();
+                JOptionPane.showMessageDialog(new JFrame(), "Erreur", "Une écriture n'est pas validée (pas de date):\n" + line, JOptionPane.ERROR_MESSAGE);
             }
             // Montantdevise
             addAmountField(line, ((Number) array[8]).longValue() + ((Number) array[9]).longValue());
@@ -176,8 +181,7 @@ public class ExportFEC extends AbstractExport {
                 // blank field
                 if (zone != null)
                     bufOut.write(zone);
-                if (i < fieldsCount - 1)
-                    bufOut.write(this.zoneSep);
+                bufOut.write(this.zoneSep);
             }
             bufOut.write(this.recordSep);
         }

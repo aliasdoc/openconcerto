@@ -34,11 +34,11 @@ public class SearchList implements SearchSpec {
         this.items = new OrderedSet<SearchSpec>();
     }
 
-    void addSearchItem(SearchSpec item) {
+    public void addSearchItem(SearchSpec item) {
         this.items.add(item);
     }
 
-    void removeSearchItem(SearchSpec item) {
+    public void removeSearchItem(SearchSpec item) {
         this.items.remove(item);
     }
 

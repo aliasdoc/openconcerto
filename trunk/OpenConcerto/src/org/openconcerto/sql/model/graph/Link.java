@@ -198,6 +198,12 @@ public class Link extends DirectedEdge<SQLTable> {
         return this.cols;
     }
 
+    /**
+     * Get the one and only field of this link.
+     * 
+     * @return the one and only field of this link, <code>null</code> if there's more than one.
+     * @see #getLabel()
+     */
     public final SQLField getSingleField() {
         return CollectionUtils.getSole(this.cols);
     }
@@ -206,7 +212,14 @@ public class Link extends DirectedEdge<SQLTable> {
         return this.colsNames;
     }
 
-    public final SQLField getLabel() {
+    /**
+     * Get the one and only field of this link.
+     * 
+     * @return the one and only field of this link.
+     * @see #getSingleField()
+     * @throws IllegalStateException if there's more than one.
+     */
+    public final SQLField getLabel() throws IllegalStateException {
         if (this.cols.size() == 1)
             return this.cols.get(0);
         else

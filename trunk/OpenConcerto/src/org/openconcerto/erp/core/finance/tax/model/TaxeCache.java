@@ -24,6 +24,7 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.utils.ExceptionHandler;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -98,4 +99,9 @@ public final class TaxeCache {
         }
         return null;
     }
+
+    public Set<SQLRowAccessor> getAllTaxe() {
+        return Collections.unmodifiableSet(this.mapRowTaux.keySet());
+    }
+
 }

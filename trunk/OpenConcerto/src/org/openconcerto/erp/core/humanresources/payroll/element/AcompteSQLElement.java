@@ -102,7 +102,7 @@ public class AcompteSQLElement extends ComptaSQLConfElement {
                 int id = super.insert(order);
                 try {
                     SQLRow rowTmp = getTable().getRow(id);
-                    new GenerationMvtAcompte(id);
+                    new GenerationMvtAcompte(rowTmp);
 
                     SQLTable tableSal = getTable().getBase().getTable("SALARIE");
                     SQLTable tableFichePaye = getTable().getBase().getTable("FICHE_PAYE");

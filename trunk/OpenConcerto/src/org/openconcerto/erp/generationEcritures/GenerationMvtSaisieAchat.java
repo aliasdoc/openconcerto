@@ -30,38 +30,32 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
 
     public static final String ID = "accounting.records.supply.order";
 
-    private int idSaisieAchat;
+    private final SQLRow saisieRow;
     private static final String source = "SAISIE_ACHAT";
     private static final Integer journal = new Integer(JournalSQLElement.ACHATS);
     private static final SQLTable tableSaisieAchat = base.getTable("SAISIE_ACHAT");
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLTable tableFournisseur = base.getTable("FOURNISSEUR");
-    private static final SQLTable tableMvt = base.getTable("MOUVEMENT");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
 
-    public GenerationMvtSaisieAchat(int idSaisieAchat, int idMvt) {
-        this.idSaisieAchat = idSaisieAchat;
+    public GenerationMvtSaisieAchat(SQLRow row, int idMvt) {
+        setRowAnalytiqueSource(row);
+        this.saisieRow = row;
         this.idMvt = idMvt;
         (new Thread(GenerationMvtSaisieAchat.this)).start();
     }
 
-    public GenerationMvtSaisieAchat(int idSaisieAchat) {
+    public GenerationMvtSaisieAchat(SQLRow row) {
 
-        this.idSaisieAchat = idSaisieAchat;
-        this.idMvt = 1;
-        (new Thread(GenerationMvtSaisieAchat.this)).start();
+        this(row, 1);
     }
 
     public void genereMouvement() throws Exception {
-
-        SQLRow saisieRow = tableSaisieAchat.getRow(this.idSaisieAchat);
-        // SQLRow taxeRow = base.getTable("TAXE").getRow(saisieRow.getInt("ID_TAXE"));
-
-        SQLRow rowFournisseur = tableFournisseur.getRow(saisieRow.getInt("ID_FOURNISSEUR"));
+        SQLRow rowFournisseur = tableFournisseur.getRow(this.saisieRow.getInt("ID_FOURNISSEUR"));
 
         // iniatilisation des valeurs de la map
         this.date = (Date) saisieRow.getObject("DATE");
-        this.nom = "Achat : " + rowFournisseur.getString("NOM") + " Facture : " + saisieRow.getObject("NUMERO_FACTURE").toString() + " " + saisieRow.getObject("NOM").toString();
+        this.nom = "Achat : " + rowFournisseur.getString("NOM") + " Facture : " + this.saisieRow.getObject("NUMERO_FACTURE").toString() + " " + saisieRow.getObject("NOM").toString();
         this.mEcritures.put("DATE", this.date);
         AccountingRecordsProvider provider = AccountingRecordsProviderManager.get(ID);
         provider.putLabel(saisieRow, this.mEcritures);
@@ -70,18 +64,18 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
         this.mEcritures.put("ID_MOUVEMENT", new Integer(1));
 
         // Calcul des montants
-        PrixTTC prixTTC = new PrixTTC(((Long) saisieRow.getObject("MONTANT_TTC")).longValue());
-        PrixHT prixTVA = new PrixHT(((Long) saisieRow.getObject("MONTANT_TVA")).longValue());
-        PrixHT prixHT = new PrixHT(((Long) saisieRow.getObject("MONTANT_HT")).longValue());
+        PrixTTC prixTTC = new PrixTTC(this.saisieRow.getLong("MONTANT_TTC"));
+        PrixHT prixTVA = new PrixHT(this.saisieRow.getLong("MONTANT_TVA"));
+        PrixHT prixHT = new PrixHT(this.saisieRow.getLong("MONTANT_HT"));
 
         // on calcule le nouveau numero de mouvement
         if (this.idMvt == 1) {
             SQLRowValues rowValsPiece = new SQLRowValues(pieceTable);
             provider.putPieceLabel(saisieRow, rowValsPiece);
-            getNewMouvement(GenerationMvtSaisieAchat.source, this.idSaisieAchat, 1, rowValsPiece);
+            getNewMouvement(GenerationMvtSaisieAchat.source, this.saisieRow.getID(), 1, rowValsPiece);
         } else {
             SQLRowValues rowValsPiece = pieceTable.getTable("MOUVEMENT").getRow(idMvt).getForeign("ID_PIECE").asRowValues();
-            provider.putPieceLabel(saisieRow, rowValsPiece);
+            provider.putPieceLabel(this.saisieRow, rowValsPiece);
             rowValsPiece.update();
 
             this.mEcritures.put("ID_MOUVEMENT", new Integer(this.idMvt));
@@ -90,10 +84,10 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
         // generation des ecritures + maj des totaux du compte associe
 
         // compte Achat
-        int idCompteAchat = saisieRow.getInt("ID_COMPTE_PCE");
+        int idCompteAchat = this.saisieRow.getInt("ID_COMPTE_PCE");
 
         if (idCompteAchat <= 1) {
-            idCompteAchat = rowPrefsCompte.getInt("ID_COMPTE_PCE_ACHAT");
+            idCompteAchat = this.rowPrefsCompte.getInt("ID_COMPTE_PCE_ACHAT");
             if (idCompteAchat <= 1) {
                 idCompteAchat = ComptePCESQLElement.getIdComptePceDefault("Achats");
             }
@@ -103,7 +97,7 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
         this.mEcritures.put("CREDIT", new Long(0));
         SQLRow rowEcr = ajoutEcriture();
 
-        addAssocAnalytiqueFromProvider(rowEcr, saisieRow);
+        // addAssocAnalytiqueFromProvider(rowEcr, saisieRow);
 
         // compte TVA
         if (prixTVA.getLongValue() > 0) {
@@ -154,18 +148,13 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
         }
         ajoutEcriture();
 
-        new GenerationMvtReglementAchat(this.idSaisieAchat, this.idMvt);
+        new GenerationMvtReglementAchat(this.saisieRow, this.idMvt);
 
         // Mise à jour de la clef etrangere mouvement sur la saisie achat
-        SQLRowValues valEcriture = new SQLRowValues(tableSaisieAchat);
-        valEcriture.put("ID_MOUVEMENT", new Integer(this.idMvt));
-
-        if (valEcriture.getInvalid() == null) {
-            // ajout de l'ecriture
-            valEcriture.update(this.idSaisieAchat);
-            displayMvtNumber();
-        }
-
+        SQLRowValues valAchat = this.saisieRow.createEmptyUpdateRow();
+        valAchat.put("ID_MOUVEMENT", new Integer(this.idMvt));
+        valAchat.update();
+        displayMvtNumber();
     }
 
     public void run() {

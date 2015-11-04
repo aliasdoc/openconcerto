@@ -16,6 +16,19 @@
  */
 package org.openconcerto.erp.core.supplychain.supplier.component;
 
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.event.ActionListener;
+import java.sql.SQLException;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ContactItemTable;
@@ -39,19 +52,7 @@ import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
-
-import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.event.ActionListener;
-import java.sql.SQLException;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
+import org.openconcerto.ui.component.InteractionMode;
 
 public class FournisseurSQLComponent extends BaseSQLComponent {
 
@@ -248,12 +249,12 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
                 System.out.println("Click");
                 if (checkEnlevement.isSelected()) {
                     System.out.println("Mode 1");
-                    comp2.setEditable(false);
+                    comp2.setEditable(InteractionMode.DISABLED);
                     comp2.setCreated(false);
                     sep2.setVisible(false);
                 } else {
                     System.out.println("Mode 2");
-                    comp2.setEditable(true);
+                    comp2.setEditable(InteractionMode.READ_WRITE);
                     comp2.setCreated(true);
                     sep2.setVisible(true);
                 }
@@ -381,12 +382,12 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
     public void select(SQLRowAccessor r) {
         if (r != null && r.isForeignEmpty("ID_ADRESSE_E")) {
             this.checkEnlevement.setSelected(true);
-            this.comp2.setEditable(false);
+            this.comp2.setEditable(InteractionMode.DISABLED);
             this.comp2.setCreated(false);
             this.sep2.setVisible(false);
         } else {
             this.checkEnlevement.setSelected(false);
-            this.comp2.setEditable(true);
+            this.comp2.setEditable(InteractionMode.READ_WRITE);
             this.comp2.setCreated(true);
             this.sep2.setVisible(true);
         }

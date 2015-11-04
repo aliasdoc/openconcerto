@@ -134,7 +134,7 @@ public class GestionChequesModel {
         m.put(fieldSelect, Boolean.TRUE);
         m.put(this.chequeType.getDateFieldName(), d);
 
-        final List<SQLRowAccessor> selection = this.getList().getSelectedRows();
+        final List<SQLRowValues> selection = this.getList().getSelectedRows();
         List<Integer> listeCheque = new ArrayList<Integer>();
         for (final SQLRowAccessor rowCheque : selection) {
             SQLRowValues valChq = new SQLRowValues(this.chqTable, m);
@@ -169,7 +169,7 @@ public class GestionChequesModel {
     private void print(final boolean preview, final Date d) {
         final String fieldSelect = this.chequeType.getDoneFieldName();
 
-        final List<SQLRowAccessor> selection = this.getList().getSelectedRows();
+        final List<SQLRowValues> selection = this.getList().getSelectedRows();
         List<Integer> listeCheque = new ArrayList<Integer>();
         for (final SQLRowAccessor rowCheque : selection) {
             Number id = rowCheque.getIDNumber();

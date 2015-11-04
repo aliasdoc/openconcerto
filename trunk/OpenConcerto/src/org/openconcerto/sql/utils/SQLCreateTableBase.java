@@ -17,6 +17,7 @@ import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLName;
 import org.openconcerto.sql.model.SQLSyntax;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.Tuple2.List2;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.util.ArrayList;
@@ -86,6 +87,17 @@ public abstract class SQLCreateTableBase<T extends SQLCreateTableBase<T>> extend
 
     public final String asString(final NameTransformer transf, final boolean includeConstraint) {
         return this.asString(transf, includeConstraint ? EnumSet.allOf(ClauseType.class) : EnumSet.complementOf(EnumSet.of(ClauseType.ADD_CONSTRAINT)));
+    }
+
+    /**
+     * Get the creation of this table in two part to allow to insert data with cycles.
+     * 
+     * @param transf how to change names.
+     * @return the first item is the creation of the table, the second is an ALTER TABLE to add
+     *         indexes and constraints.
+     */
+    public final List2<String> getCreateAndAlter(final NameTransformer transf) {
+        return new List2<String>(this.asString(transf, ConcatStep.ALTER_TABLE), this.asString(transf, ConcatStep.ADD_INDEX) + '\n' + this.asString(transf, ConcatStep.ADD_FOREIGN));
     }
 
     @Override

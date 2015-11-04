@@ -22,20 +22,29 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
+
 /**
  * Holds items and give them one at a time to {@link #process(Object)}. At any time this process can
- * be put on hold by setting it to sleep.
+ * be put on hold by setting it to sleep. All actions in a thread modifying ({@link #put(Object)},
+ * {@link #itemsDo(IClosure)}) the queue happens-before the processing of this modification.
  * 
  * @author Sylvain
  * @param <T> type of item
  */
+@ThreadSafe
 public abstract class DropperQueue<T> extends Thread {
 
+    @GuardedBy("itemsLock")
     private final Deque<T> items;
     private final Lock itemsLock;
     private final Condition notEmpty;
+    @GuardedBy("this")
     private boolean stop;
+    @GuardedBy("this")
     private boolean sleeping;
+    @GuardedBy("this")
     private boolean executing;
 
     /**
@@ -152,7 +161,7 @@ public abstract class DropperQueue<T> extends Thread {
      */
     public final boolean isDead() {
         // either we're dead because die() has been called, or because process() threw an Error
-        return !this.isAlive();
+        return this.getState().equals(State.TERMINATED);
     }
 
     public synchronized final boolean dieCalled() {
@@ -198,7 +207,8 @@ public abstract class DropperQueue<T> extends Thread {
     // *** items
 
     /**
-     * Adds an item to this queue.
+     * Adds an item to this queue. Actions in the thread prior to calling this method happen-before
+     * the passed argument is {@link #process(Object) processed}.
      * 
      * @param item the item to add.
      */

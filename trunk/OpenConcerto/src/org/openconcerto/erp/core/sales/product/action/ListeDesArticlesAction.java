@@ -78,42 +78,50 @@ public class ListeDesArticlesAction extends CreateFrameAbstractAction {
         // frame.getPanel().getListe().getJTable().setDefaultRenderer(Long.class, new
         // DeviseNiceTableCellRenderer());
         final SQLTableModelSourceOnline createTableSource = elt.createTableSource(getWhere(panelFam));
-        final BaseSQLTableModelColumn colStock = new BaseSQLTableModelColumn("Valeur HT du stock", BigDecimal.class) {
+        createTableSource.init();
+        SQLTableModelColumn colStock;
+        if (elt.getTable().getDBRoot().contains("ARTICLE_PRIX_REVIENT")) {
+            colStock = createTableSource.getColumn(createTableSource.getColumns().size() - 1);
+        } else {
 
-            @Override
-            protected Object show_(SQLRowAccessor r) {
+            colStock = new BaseSQLTableModelColumn("Valeur HT du stock", BigDecimal.class) {
 
-                SQLRowAccessor stock = r.getForeign("ID_STOCK");
-                if (stock == null || stock.isUndefined()) {
-                    return BigDecimal.ZERO;
-                } else {
-                    float qte = stock.getFloat("QTE_REEL");
-                    BigDecimal ha = r.getBigDecimal("PA_HT");
+                @Override
+                protected Object show_(SQLRowAccessor r) {
 
-                    BigDecimal total = ha.multiply(new BigDecimal(qte), DecimalUtils.HIGH_PRECISION);
-                    if (total.signum() == 1) {
-                        return total;
-                    } else {
+                    SQLRowAccessor stock = r.getForeign("ID_STOCK");
+                    if (stock == null || stock.isUndefined()) {
                         return BigDecimal.ZERO;
+                    } else {
+                        float qte = stock.getFloat("QTE_REEL");
+                        BigDecimal ha = r.getBigDecimal("PA_HT");
+
+                        BigDecimal total = ha.multiply(new BigDecimal(qte), DecimalUtils.HIGH_PRECISION);
+                        if (total.signum() == 1) {
+                            return total;
+                        } else {
+                            return BigDecimal.ZERO;
+                        }
                     }
                 }
-            }
 
-            @Override
-            public Set<FieldPath> getPaths() {
-                final SQLTable table = elt.getTable();
-                Path p = new Path(table);
-                Path p2 = new Path(table).addForeignField("ID_STOCK");
-                return CollectionUtils.createSet(new FieldPath(p, "PA_HT"), new FieldPath(p2, "QTE_REEL"));
-            }
-        };
-        colStock.setRenderer(ComptaSQLConfElement.CURRENCY_RENDERER);
-        createTableSource.getColumns().add(colStock);
+                @Override
+                public Set<FieldPath> getPaths() {
+                    final SQLTable table = elt.getTable();
+                    Path p = new Path(table);
+                    Path p2 = new Path(table).addForeignField("ID_STOCK");
+                    return CollectionUtils.createSet(new FieldPath(p, "PA_HT"), new FieldPath(p2, "QTE_REEL"));
+                }
+            };
+            colStock.setRenderer(ComptaSQLConfElement.CURRENCY_RENDERER);
+            createTableSource.getColumns().add(colStock);
+        }
         IListe liste = new IListe(createTableSource);
         final ListeAddPanel panel = new ListeAddPanel(elt, liste);
 
         List<Tuple2<? extends SQLTableModelColumn, IListTotalPanel.Type>> fields = new ArrayList<Tuple2<? extends SQLTableModelColumn, IListTotalPanel.Type>>(1);
-        fields.add(Tuple2.create(liste.getSource().getColumn(liste.getSource().getColumns().size() - 1), IListTotalPanel.Type.SOMME));
+        fields.add(Tuple2.create(colStock, IListTotalPanel.Type.SOMME));
+
         IListTotalPanel total = new IListTotalPanel(liste, fields, null, "Total");
         GridBagConstraints c2 = new DefaultGridBagConstraints();
         c2.gridy = 4;

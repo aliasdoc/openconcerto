@@ -214,7 +214,6 @@ public class TabbedListeModifyPanel extends JPanel {
     public void initTab() {
         this.setOpaque(false);
         this.setLayout(new GridLayout(1, 1));
-        System.err.println("this" + this);
         final TabbedListeModifyPanel me = this;
         listPanel = new TabbedIListPanel(element, liste, this);
         tabbedPane.addTab("Liste des " + element.getPluralName() + " [F8]", listPanel);
@@ -226,7 +225,6 @@ public class TabbedListeModifyPanel extends JPanel {
         this.tabbedPane.addChangeListener(new ChangeListener() {
 
             public void stateChanged(ChangeEvent e) {
-                System.err.println("TabbedListeModify.stateChanged()");
                 if (tabbedPane.getSelectedComponent() == emptyPanelModify) {
                     final int indexOfComponent = tabbedPane.indexOfComponent(emptyPanelModify);
                     tabbedPane.removeTabAt(indexOfComponent);

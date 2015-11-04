@@ -33,6 +33,12 @@ public class FactureBonSQLInjector extends SQLInjector {
         if (tableFacture.contains("ID_POLE_PRODUIT") && tableBon.contains("ID_POLE_PRODUIT")) {
             map(tableFacture.getField("ID_POLE_PRODUIT"), tableBon.getField("ID_POLE_PRODUIT"));
         }
+        if (getSource().getTable().contains("ID_CONTACT") && getDestination().getTable().contains("ID_CONTACT")) {
+            map(getSource().getField("ID_CONTACT"), getDestination().getField("ID_CONTACT"));
+        }
+        if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
+            map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
+        }
     }
 
     @Override

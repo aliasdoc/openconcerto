@@ -74,6 +74,12 @@ public class TaskPropsConfiguration extends ComptaBasePropsConfiguration {
         super.initDS(ds);
         // don't wait when testing for LAN connection
         ds.setLoginTimeout(1);
-        ds.setRetryWait(0);
+        ds.setRetryWait(-1);
+    }
+
+    @Override
+    public void setUpSocieteDataBaseConnexion(int base) {
+        // TODO Auto-generated method stub
+
     }
 }

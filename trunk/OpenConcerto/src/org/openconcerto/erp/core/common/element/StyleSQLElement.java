@@ -65,6 +65,37 @@ public class StyleSQLElement extends ComptaSQLConfElement {
         return m;
     }
 
+    public final Map<String, Integer> getAllStyleByName() {
+        Map<String, Integer> m = new HashMap<String, Integer>();
+        SQLSelect sel = new SQLSelect();
+
+        sel.addSelect(getTable().getField("NOM"));
+        sel.addSelect(getTable().getKey());
+        String req = sel.asString();
+        List<Map<String, Object>> l = getTable().getDBSystemRoot().getDataSource().execute(req);
+
+        for (Map<String, Object> map : l) {
+            m.put((String) map.get("NOM"), ((Number) map.get(getTable().getKey().getName())).intValue());
+        }
+
+        return m;
+    }
+
+    public final Map<Integer, String> getAllStyleByID() {
+        Map<Integer, String> m = new HashMap<Integer, String>();
+        SQLSelect sel = new SQLSelect();
+        sel.addSelect(getTable().getKey());
+        sel.addSelect(getTable().getField("NOM"));
+        String req = sel.asString();
+        List<Map<String, Object>> l = getTable().getDBSystemRoot().getDataSource().execute(req);
+
+        for (Map<String, Object> map : l) {
+            m.put(((Number) map.get(getTable().getKey().getName())).intValue(), (String) map.get("NOM"));
+        }
+
+        return m;
+    }
+
     public SQLComponent createComponent() {
         return new UISQLComponent(this) {
             public void addViews() {
