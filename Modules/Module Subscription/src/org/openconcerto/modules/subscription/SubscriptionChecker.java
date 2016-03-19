@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.model.AliasedTable;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -53,7 +54,7 @@ public class SubscriptionChecker {
             public SQLSelect transformChecked(SQLSelect sel) {
 
                 TableRef tableFAlias = sel.getAlias(SubscriptionChecker.this.table);
-                SQLSelectJoin join = sel.addJoin("RIGHT", SubscriptionChecker.this.table, "f2", new Where(tableFAlias.getField("ARCHIVE"), "=", 0));
+                SQLSelectJoin join = sel.addJoin("RIGHT", new AliasedTable(SubscriptionChecker.this.table, "f2"), new Where(tableFAlias.getField("ARCHIVE"), "=", 0));
                 Where w = new Where(join.getJoinedTable().getField("DATE"), "<=", tableFAlias.getField("DATE"));
                 w = w.and(new Where(join.getJoinedTable().getField("ID_ABONNEMENT"), "=", tableFAlias.getField("ID_ABONNEMENT")));
                 join.setWhere(w);

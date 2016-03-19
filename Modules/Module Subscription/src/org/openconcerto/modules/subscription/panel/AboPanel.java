@@ -81,9 +81,9 @@ public class AboPanel extends JPanel {
             @Override
             public void actionPerformed(ActionEvent arg0) {
 
-                List<SQLRowAccessor> list = IListe.get(arg0).getSelectedRows();
+                List<SQLRowValues> list = IListe.get(arg0).getSelectedRows();
 
-                for (SQLRowAccessor sqlRowAccessor : list) {
+                for (SQLRowValues sqlRowAccessor : list) {
                     validItem(sqlRowAccessor);
                 }
 
@@ -246,30 +246,33 @@ public class AboPanel extends JPanel {
 
         for (SQLRow rowAbonnement : listLastCreateElt.keySet()) {
 
-            // On duplique le devis
-            SQLRow rowsCmd = rowAbonnement.getForeignRow("ID_" + elt.getTable().getName());
-            Calendar date = listLastCreateElt.get(rowAbonnement);
-            if (date == null) {
-                date = rowsCmd.getDate("DATE");
-                date.add(Calendar.MONTH, rowAbonnement.getInt("NB_MOIS_" + type));
-            }
+            // FIXME On recupere des abonnements archives (à tester sur BD 2Si)
+            if (!rowAbonnement.isArchived()) {
+                // On duplique le devis
+                SQLRow rowsCmd = rowAbonnement.getForeignRow("ID_" + elt.getTable().getName());
+                Calendar date = listLastCreateElt.get(rowAbonnement);
+                if (date == null) {
+                    date = rowsCmd.getDate("DATE");
+                    date.add(Calendar.MONTH, rowAbonnement.getInt("NB_MOIS_" + type));
+                }
 
-            // Si l'abonnement n'est pas expiré
-            if (date.compareTo(rowAbonnement.getDate("DATE_FIN_" + type)) <= 0) {
+                // Si l'abonnement n'est pas expiré
+                if (rowAbonnement.getObject("DATE_FIN_" + type) == null || date.compareTo(rowAbonnement.getDate("DATE_FIN_" + type)) <= 0) {
 
-                final SQLRowValues rowVals = new SQLRowValues(elt.getTable());
+                    final SQLRowValues rowVals = new SQLRowValues(elt.getTable());
 
-                injectRow(rowsCmd, rowVals, date.getTime(), rowAbonnement);
-                // On duplique items
-                copyItems(rowsCmd, itemsElement.getTable(), rowVals);
+                    injectRow(rowsCmd, rowVals, date.getTime(), rowAbonnement);
+                    // On duplique items
+                    copyItems(rowsCmd, itemsElement.getTable(), rowVals);
 
-                try {
+                    try {
 
-                    rowVals.commit();
-                    // FIXME Voir avec Guillaume create or not create document
-                } catch (SQLException exn) {
+                        rowVals.commit();
+                        // FIXME Voir avec Guillaume create or not create document
+                    } catch (SQLException exn) {
 
-                    ExceptionHandler.handle("Erreur lors de la création  " + elt.getSingularName() + " d'abonnement.", exn);
+                        ExceptionHandler.handle("Erreur lors de la création  " + elt.getSingularName() + " d'abonnement.", exn);
+                    }
                 }
             }
         }

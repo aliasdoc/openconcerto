@@ -8,6 +8,8 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.sql.SQLException;
+import java.util.Date;
 
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
@@ -17,9 +19,16 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 
+import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
+import org.openconcerto.erp.core.sales.quote.element.DevisSQLElement;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.sqlobject.JUniqueTextField;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
@@ -27,10 +36,29 @@ import org.openconcerto.ui.component.ITextArea;
 public class SubscriptionSQLComponent extends BaseSQLComponent {
 
     private static final long serialVersionUID = 4274010869219769289L;
+    private final SQLTable tableNum = getTable().getBase().getTable("NUMEROTATION_AUTO");
+
+    final JLabel labelNumero = new JLabel(getLabelFor("NUMERO"), SwingConstants.RIGHT);
+    final JLabel labelDate = new JLabel(getLabelFor("DATE"), SwingConstants.RIGHT);
+    final JDate date = new JDate(true);
+    final JLabel labelClient = new JLabel(getLabelFor("ID_CLIENT"), SwingConstants.RIGHT);
+    final ElementComboBox client = new ElementComboBox();
 
     public SubscriptionSQLComponent(SQLElement element) {
         super(element);
     }
+
+    public void setLightUI(boolean b) {
+        labelClient.setVisible(b);
+        labelNumero.setVisible(b);
+        labelDate.setVisible(b);
+        textNumero.setVisible(b);
+
+        date.setVisible(b);
+        client.setVisible(b);
+    }
+
+    final JUniqueTextField textNumero = new JUniqueTextField(8);
 
     @Override
     public void addViews() {
@@ -39,18 +67,19 @@ public class SubscriptionSQLComponent extends BaseSQLComponent {
         final GridBagConstraints c = new DefaultGridBagConstraints();
         // Numéro
         c.weightx = 0;
-        this.add(new JLabel(getLabelFor("NUMERO"), SwingConstants.RIGHT), c);
+
+        this.add(labelNumero, c);
         c.gridx++;
         c.weightx = 1;
-        final JTextField textNumero = new JTextField(8);
         this.add(textNumero, c);
+
         // Date
         c.gridx++;
         c.weightx = 0;
-        this.add(new JLabel(getLabelFor("DATE"), SwingConstants.RIGHT), c);
+        this.add(labelDate, c);
         c.gridx++;
         c.weightx = 1;
-        final JDate date = new JDate(true);
+
         this.add(date, c);
         // Libellé
         c.gridy++;
@@ -93,11 +122,11 @@ public class SubscriptionSQLComponent extends BaseSQLComponent {
         c.gridy++;
         c.gridx = 0;
         c.weightx = 0;
-        this.add(new JLabel(getLabelFor("ID_CLIENT"), SwingConstants.RIGHT), c);
+        this.add(labelClient, c);
         c.gridx++;
         c.weightx = 1;
         c.gridwidth = 3;
-        final ElementComboBox client = new ElementComboBox();
+
         this.add(client, c);
 
         //
@@ -178,7 +207,7 @@ public class SubscriptionSQLComponent extends BaseSQLComponent {
         panel.add(new JLabel(getLabelFor(fieldStop), SwingConstants.RIGHT), c);
         c.gridx++;
         c.weightx = 1;
-        final JDate stopDate = new JDate(true);
+        final JDate stopDate = new JDate();
         c.fill = GridBagConstraints.NONE;
         panel.add(stopDate, c);
 
@@ -220,10 +249,51 @@ public class SubscriptionSQLComponent extends BaseSQLComponent {
 
     public void setFieldEnabled(JComponent item, JComponent startDate, JComponent stopDate, JComponent textPeriod, boolean b) {
         System.err.println(b);
-        Thread.dumpStack();
+        // Thread.dumpStack();
         item.setEnabled(b);
         startDate.setEnabled(b);
         stopDate.setEnabled(b);
         textPeriod.setEnabled(b);
+    }
+
+    @Override
+    protected SQLRowValues createDefaults() {
+        SQLRowValues vals = new SQLRowValues(getTable());
+        vals.put("NUMERO", NumerotationAutoSQLElement.getNextNumero(this.getElement().getClass(), new Date()));
+        return vals;
+    }
+
+    @Override
+    public void select(SQLRowAccessor r) {
+        // TODO Auto-generated method stub
+        super.select(r);
+        if (r != null) {
+            this.textNumero.setIdSelected(r.getID());
+        }
+    }
+
+    @Override
+    public int insert(SQLRow order) {
+        // TODO Auto-generated method stub
+        int id = super.insert(order);
+        // incrémentation du numéro auto
+        if (NumerotationAutoSQLElement.getNextNumero(DevisSQLElement.class).equalsIgnoreCase(this.textNumero.getText().trim())) {
+            final SQLRowValues rowVals = new SQLRowValues(this.tableNum);
+            int val = this.tableNum.getRow(2).getInt(NumerotationAutoSQLElement.getLabelNumberFor(DevisSQLElement.class));
+            val++;
+            rowVals.put(NumerotationAutoSQLElement.getLabelNumberFor(DevisSQLElement.class), new Integer(val));
+            try {
+                rowVals.update(2);
+            } catch (final SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return id;
+    }
+
+    @Override
+    public void update() {
+        // TODO Auto-generated method stub
+        super.update();
     }
 }

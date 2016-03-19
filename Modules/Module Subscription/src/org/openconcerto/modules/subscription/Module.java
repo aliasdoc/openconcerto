@@ -2,30 +2,42 @@ package org.openconcerto.modules.subscription;
 
 import java.awt.event.ActionEvent;
 import java.io.IOException;
+import java.util.Calendar;
 
 import javax.swing.AbstractAction;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 
 import org.openconcerto.erp.action.CreateFrameAbstractAction;
 import org.openconcerto.erp.config.MainFrame;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
+import org.openconcerto.erp.core.sales.invoice.element.SaisieVenteFactureSQLElement;
+import org.openconcerto.erp.core.sales.invoice.element.SaisieVenteFactureSQLElement.DoWithRow;
 import org.openconcerto.erp.modules.AbstractModule;
 import org.openconcerto.erp.modules.AlterTableRestricted;
 import org.openconcerto.erp.modules.ComponentsContext;
 import org.openconcerto.erp.modules.DBContext;
 import org.openconcerto.erp.modules.MenuContext;
 import org.openconcerto.erp.modules.ModuleFactory;
+import org.openconcerto.modules.subscription.element.SubscriptionSQLComponent;
 import org.openconcerto.modules.subscription.element.SubscriptionSQLElement;
 import org.openconcerto.modules.subscription.panel.BonCommandeAboPanel;
 import org.openconcerto.modules.subscription.panel.DevisAboPanel;
 import org.openconcerto.modules.subscription.panel.FacturesAboPanel;
 import org.openconcerto.modules.subscription.panel.HistoriqueAbonnement;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.SQLElementDirectory;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.utils.SQLCreateTable;
 import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.sql.view.EditPanel.EditMode;
 import org.openconcerto.sql.view.IListFrame;
 import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
 import org.openconcerto.utils.i18n.TranslationManager;
 
@@ -107,11 +119,57 @@ public final class Module extends AbstractModule {
     }
 
     @Override
-    protected void setupElements(SQLElementDirectory dir) {
+    protected void setupElements(final SQLElementDirectory dir) {
         super.setupElements(dir);
         TranslationManager.getInstance().addTranslationStreamFromClass(this.getClass());
         dir.addSQLElement(SubscriptionSQLElement.class);
         NumerotationAutoSQLElement.addClass(SubscriptionSQLElement.class, "ABONNEMENT");
+        ((SaisieVenteFactureSQLElement) dir.getElement("SAISIE_VENTE_FACTURE")).putSpecialAction("subscription.autocreate", new DoWithRow() {
+            @Override
+            public void process(SQLRow row) {
+                createAbonnement(row);
+            }
+        });
+        PredicateRowAction action = new PredicateRowAction(new AbstractAction("Créer un abonnement") {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                final SQLRowAccessor r = IListe.get(e).getSelectedRow();
+                createAbonnement(r);
+
+            }
+        }, true);
+        action.setPredicate(IListeEvent.getSingleSelectionPredicate());
+        dir.getElement("SAISIE_VENTE_FACTURE").getRowActions().add(action);
+        NumerotationAutoSQLElement.addClass(SubscriptionSQLElement.class, "ABONNEMENT");
+
+    }
+
+    private void createAbonnement(SQLRowAccessor r) {
+
+        SQLElement aboElt = Configuration.getInstance().getDirectory().getElement("ABONNEMENT");
+        if (r.getReferentRows(aboElt.getTable()).size() == 0) {
+            final SubscriptionSQLComponent createComponent = (SubscriptionSQLComponent) aboElt.createComponent(SQLElement.DEFAULT_COMP_ID);
+            EditFrame frame = new EditFrame(createComponent, EditMode.CREATION);
+            SQLRowValues rowVals = new SQLRowValues(aboElt.getTable());
+            SQLRowAccessor rowClient = r.getForeign("ID_CLIENT");
+            rowVals.put("ID_CLIENT", rowClient.getID());
+            rowVals.put("ID_SAISIE_VENTE_FACTURE", r.getID());
+            rowVals.put("CREATE_FACTURE", Boolean.TRUE);
+            rowVals.put("NOM", "Abonnement");
+            rowVals.put("INTITULE_FACTURE", r.getString("NOM"));
+            Calendar c = Calendar.getInstance();
+            rowVals.put("DATE_DEBUT_FACTURE", c.getTime());
+            c.add(Calendar.YEAR, 2);
+            rowVals.put("NB_MOIS_FACTURE", 12);
+
+            createComponent.setLightUI(false);
+
+            createComponent.select(rowVals);
+            frame.setVisible(true);
+        } else {
+            JOptionPane.showMessageDialog(null, "Cette facture est déjà associée à un abonnement!");
+        }
     }
 
     @Override
