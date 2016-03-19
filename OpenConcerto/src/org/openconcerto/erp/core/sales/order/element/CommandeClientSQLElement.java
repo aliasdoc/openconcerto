@@ -13,11 +13,41 @@
  
  package org.openconcerto.erp.core.sales.order.element;
 
+import java.awt.Component;
+import java.awt.event.ActionEvent;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.swing.AbstractAction;
+import javax.swing.JLabel;
+import javax.swing.JTable;
+import javax.swing.SwingUtilities;
+import javax.swing.table.DefaultTableCellRenderer;
+
+import org.apache.commons.dbutils.ResultSetHandler;
+import org.apache.commons.dbutils.handlers.ArrayListHandler;
+
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
+import org.openconcerto.erp.core.common.component.TransfertGroupSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.sales.account.VenteFactureSituationSQLComponent;
+import org.openconcerto.erp.core.sales.account.VenteFactureSoldeSQLComponent;
 import org.openconcerto.erp.core.sales.order.component.CommandeClientSQLComponent;
+import org.openconcerto.erp.core.sales.order.report.CommandeClientXmlSheet;
 import org.openconcerto.erp.core.sales.order.ui.EtatCommandeClient;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.supplychain.stock.element.MouvementStockSQLElement;
+import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
@@ -28,6 +58,7 @@ import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLRowValuesListFetcher;
@@ -39,6 +70,7 @@ import org.openconcerto.sql.request.UpdateBuilder;
 import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
+import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
@@ -46,29 +78,8 @@ import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.NumberUtils;
 import org.openconcerto.utils.cc.ITransformer;
-
-import java.awt.Component;
-import java.awt.event.ActionEvent;
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.swing.AbstractAction;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JTable;
-import javax.swing.SwingUtilities;
-import javax.swing.table.DefaultTableCellRenderer;
-
-import org.apache.commons.dbutils.ResultSetHandler;
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
 public class CommandeClientSQLElement extends ComptaSQLConfElement {
 
@@ -134,6 +145,106 @@ public class CommandeClientSQLElement extends ComptaSQLConfElement {
             getRowActions().add(actionFacture);
 
         }
+
+        final List<RowAction> allowedActions = new ArrayList<RowAction>();
+        // Transfert vers facture
+        PredicateRowAction bonAction = new PredicateRowAction(new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                transfertBonLivraisonClient(IListe.get(e).getSelectedRows());
+            }
+        }, false, "sales.order.create.deliverynote");
+
+        // Transfert vers facture
+        RowAction factureAction = new RowAction(new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                transfertFactureClient(IListe.get(e).getSelectedRows());
+            }
+        }, false, "sales.order.create.invoice") {
+
+            @Override
+            public boolean enabledFor(List<SQLRowValues> selection) {
+                if (selection.isEmpty()) {
+                    return false;
+                } else if (selection.size() > 1) {
+                    return true;
+                } else {
+                    BigDecimal d = getAvancement(selection.get(0));
+                    return d.signum() == 0;
+                }
+            }
+        };
+
+        // Transfert vers facture intermédiaire
+        RowAction acompteAction = new RowAction(new AbstractAction("Créer une facture intermédiaire") {
+            public void actionPerformed(ActionEvent e) {
+                transfertAcompteClient(IListe.get(e).getSelectedRows());
+            }
+        }, false, "sales.order.create.account") {
+            BigDecimal cent = BigDecimal.ONE.movePointRight(2);
+
+            @Override
+            public boolean enabledFor(List<SQLRowValues> selection) {
+                if (selection.isEmpty() || selection.size() > 1) {
+                    return false;
+                } else {
+                    BigDecimal d = getAvancement(selection.get(0));
+                    return NumberUtils.compare(d, cent) != 0;
+                }
+            }
+        };
+
+        // Transfert vers facture solde
+        RowAction soldeAction = new RowAction(new AbstractAction("Facturer le solde") {
+            public void actionPerformed(ActionEvent e) {
+                transfertSoldeClient(IListe.get(e).getSelectedRows());
+            }
+        }, false, "sales.order.create.account.solde") {
+            BigDecimal cent = BigDecimal.ONE.movePointRight(2);
+
+            @Override
+            public boolean enabledFor(List<SQLRowValues> selection) {
+                if (selection.isEmpty() || selection.size() > 1) {
+                    return false;
+                } else {
+                    BigDecimal d = getAvancement(selection.get(0));
+                    return NumberUtils.compare(d, cent) != 0 && NumberUtils.compare(d, BigDecimal.ZERO) != 0;
+                }
+            }
+        };
+
+        // Transfert vers commande
+        PredicateRowAction cmdAction = new PredicateRowAction(new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                final int selectedId = IListe.get(e).getSelectedId();
+                ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        final CommandeClientSQLElement elt = (CommandeClientSQLElement) Configuration.getInstance().getDirectory().getElement("COMMANDE_CLIENT");
+                        elt.transfertCommande(selectedId);
+
+                    }
+                });
+
+            }
+
+        }, false, "sales.order.create.supplier.order");
+
+        cmdAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
+
+        bonAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
+
+        MouseSheetXmlListeListener mouseSheetXmlListeListener = new MouseSheetXmlListeListener(CommandeClientXmlSheet.class);
+        mouseSheetXmlListeListener.setGenerateHeader(true);
+        mouseSheetXmlListeListener.setShowHeader(true);
+
+        allowedActions.add(bonAction);
+        allowedActions.add(factureAction);
+        allowedActions.add(acompteAction);
+        allowedActions.add(soldeAction);
+        allowedActions.add(cmdAction);
+        allowedActions.addAll(mouseSheetXmlListeListener.getRowActions());
+        getRowActions().addAll(allowedActions);
     }
 
     public SQLRow getNextCommandeToPrepare() {
@@ -465,10 +576,65 @@ public class CommandeClientSQLElement extends ComptaSQLConfElement {
             rowValsElt.put("T_PA_HT", ((BigDecimal) rowValsElt.getObject("PA_HT")).multiply(new BigDecimal(rowValsElt.getInt("QTE")), DecimalUtils.HIGH_PRECISION));
             rowValsElt.put("T_PA_TTC",
                     ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal((rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0)), DecimalUtils.HIGH_PRECISION));
-
+            rowValsElt.put("ID_DEVISE", rowCmd.getForeignRow("ID_TARIF").getForeignID("ID_DEVISE"));
             map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
 
         }
         MouvementStockSQLElement.createCommandeF(map, rowCmd.getForeignRow("ID_TARIF").getForeignRow("ID_DEVISE"), rowCmd.getString("NUMERO") + " - " + rowCmd.getString("NOM"));
+    }
+
+    /**
+     * Transfert en BL
+     * 
+     * @param row
+     */
+    public void transfertBonLivraisonClient(List<SQLRowValues> rows) {
+        TransfertBaseSQLComponent.openTransfertFrame(rows, "BON_DE_LIVRAISON");
+    }
+
+    /**
+     * Transfert en Facture
+     * 
+     * @param row
+     */
+    public void transfertFactureClient(List<SQLRowValues> rows) {
+        TransfertBaseSQLComponent.openTransfertFrame(rows, "SAISIE_VENTE_FACTURE");
+
+    }
+
+    /**
+     * Transfert en Facture
+     * 
+     * @param row
+     */
+    public void transfertAcompteClient(List<SQLRowValues> rows) {
+        TransfertGroupSQLComponent.openTransfertFrame(rows, "SAISIE_VENTE_FACTURE", VenteFactureSituationSQLComponent.ID);
+    }
+
+    /**
+     * Transfert en Facture
+     * 
+     * @param row
+     */
+    public void transfertSoldeClient(List<SQLRowValues> rows) {
+        TransfertGroupSQLComponent.openTransfertFrame(rows, "SAISIE_VENTE_FACTURE", VenteFactureSoldeSQLComponent.ID);
+    }
+
+    private BigDecimal getAvancement(SQLRowAccessor r) {
+        Collection<? extends SQLRowAccessor> rows = r.getReferentRows(r.getTable().getTable("TR_COMMANDE_CLIENT"));
+        long totalFact = 0;
+        long total = r.getLong("T_HT");
+        for (SQLRowAccessor row : rows) {
+            if (!row.isForeignEmpty("ID_SAISIE_VENTE_FACTURE")) {
+                SQLRowAccessor rowFact = row.getForeign("ID_SAISIE_VENTE_FACTURE");
+                Long l = rowFact.getLong("T_HT");
+                totalFact += l;
+            }
+        }
+        if (total > 0) {
+            return new BigDecimal(totalFact).divide(new BigDecimal(total), DecimalUtils.HIGH_PRECISION).movePointRight(2).setScale(2, RoundingMode.HALF_UP);
+        } else {
+            return BigDecimal.ONE.movePointRight(2);
+        }
     }
 }

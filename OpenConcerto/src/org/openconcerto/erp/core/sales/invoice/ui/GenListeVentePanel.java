@@ -30,6 +30,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.JButton;
@@ -113,8 +114,12 @@ public class GenListeVentePanel extends JPanel implements ActionListener {
                         sel2.addSelectStar(tableAvoir);
                         sel2.setWhere(new Where(tableAvoir.getField("DATE"), GenListeVentePanel.this.du.getDate(), GenListeVentePanel.this.au.getDate()));
                         sel2.setDistinct(true);
-                        l.addAll((List<SQLRow>) dataSource.execute(sel2.asString(), SQLRowListRSH.createFromSelect(sel2, tableAvoir)));
-                        ListeVenteXmlSheet sheet = new ListeVenteXmlSheet(l, GenListeVentePanel.this.du.getDate(), GenListeVentePanel.this.au.getDate(), GenListeVentePanel.this.bar);
+                        List<SQLRow> l2 = (List<SQLRow>) dataSource.execute(sel2.asString(), SQLRowListRSH.createFromSelect(sel2, tableAvoir));
+
+                        List<SQLRow> lTotal = new ArrayList<SQLRow>();
+                        lTotal.addAll(l);
+                        lTotal.addAll(l2);
+                        ListeVenteXmlSheet sheet = new ListeVenteXmlSheet(lTotal, GenListeVentePanel.this.du.getDate(), GenListeVentePanel.this.au.getDate(), GenListeVentePanel.this.bar);
 
                         sheet.createDocumentAsynchronous().get();
                         sheet.showPrintAndExport(true, false, false);

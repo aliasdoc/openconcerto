@@ -24,6 +24,7 @@ import org.openconcerto.ui.preferences.PrefView;
 import org.openconcerto.utils.PrefType;
 
 public class GestionClientPreferencePanel extends JavaPrefPreferencePanel {
+    public static String LOAD_CITIES = "LoadCities";
     public static String DISPLAY_CLIENT_DPT = "DisplayClientDpt";
 
     public GestionClientPreferencePanel() {
@@ -36,5 +37,9 @@ public class GestionClientPreferencePanel extends JavaPrefPreferencePanel {
         PrefView<Boolean> viewTransfert = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer les différents services du client", DISPLAY_CLIENT_DPT);
         viewTransfert.setDefaultValue(Boolean.FALSE);
         this.addView(viewTransfert);
+
+        PrefView<Boolean> viewCity = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Charger les villes connues", LOAD_CITIES);
+        viewCity.setDefaultValue(Boolean.TRUE);
+        this.addView(viewCity);
     }
 }

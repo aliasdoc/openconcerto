@@ -209,6 +209,7 @@
 
 	<!-- Supplier order -->
 	<action id="supplychain.order.create.purchase" label="Transfert vers saisie achat" />
+	<action id="supplychain.order.valid" label="Marquer comme validée" />
 	<action id="supplychain.order.create.receipt" label="Transfert vers bon de réception" />
 
 	<!-- Customer order -->
@@ -224,6 +225,8 @@
 	<item id="sales.order.state.cancelled" label="Annulée" />
 
 	<!-- Customer -->
+	<item id="delivery.address.same.main.address" label="Adresse identique à l'adresse du siège" />
+	<item id="invoice.address.same.main.address" label="Adresse identique à l'adresse du siège" />
 	<item id="customerrelationship.customer.address" label="Adresses" />
 	<item id="customerrelationship.customer.contact" label="Contacts" />
 	<item id="customerrelationship.customer.sales" label="Ventes" />
@@ -243,6 +246,7 @@
 
 	<item id="product.bom.expand" label="Eclater la nomenclature" />
 	<item id="product.bom.expose" label="Exposer la nomenclature" />
+	<item id="product.bom.flat" label="Applatir la nomenclature" />
 
 
 </translation>

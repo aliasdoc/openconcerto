@@ -328,7 +328,7 @@ public class ProductHelper {
                 int id = v.getForeignID("ID_ARTICLE");
                 int qte = v.getInt("QTE");
                 final BigDecimal unitCost = costs.get(Long.valueOf(id));
-                BigDecimal lineCost = unitCost.multiply(BigDecimal.valueOf(qte));
+                BigDecimal lineCost = unitCost.multiply(BigDecimal.valueOf(qte)).multiply(v.getBigDecimal("QTE_UNITAIRE"));
                 if (cost == null) {
                     cost = BigDecimal.ZERO;
                 }

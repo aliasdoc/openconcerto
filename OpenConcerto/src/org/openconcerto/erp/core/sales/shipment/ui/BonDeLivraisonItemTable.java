@@ -15,9 +15,12 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
+import org.openconcerto.erp.core.common.ui.Acompte;
+import org.openconcerto.erp.core.common.ui.AcompteCellEditor;
 import org.openconcerto.erp.core.common.ui.DeviseNumericHTConvertorCellEditor;
 import org.openconcerto.erp.core.common.ui.DeviseTableCellRenderer;
 import org.openconcerto.erp.core.common.ui.QteCellEditor;
+import org.openconcerto.erp.core.common.ui.Remise;
 import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
@@ -46,6 +49,7 @@ import org.openconcerto.sql.view.list.ValidStateChecker;
 import org.openconcerto.ui.table.XTableColumnModel;
 import org.openconcerto.utils.DecimalUtils;
 
+import java.awt.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -54,7 +58,10 @@ import java.util.List;
 import java.util.Vector;
 
 import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JTable;
 import javax.swing.ToolTipManager;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 
 public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
@@ -93,14 +100,19 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         // Désignation de l'article
         final SQLTableElement tableElementNom = new SQLTableElement(e.getTable().getField("NOM"));
         list.add(tableElementNom);
+
+        // Désignation de l'article
+        final SQLTableElement tableElementDesc = new SQLTableElement(e.getTable().getField("DESCRIPTIF"));
+        list.add(tableElementDesc);
+
         // Valeur des métriques
         final SQLTableElement tableElement_ValeurMetrique2 = new SQLTableElement(e.getTable().getField("VALEUR_METRIQUE_2"), Float.class) {
             @Override
             public boolean isCellEditable(SQLRowValues vals) {
                 Number modeNumber = (Number) vals.getObject("ID_MODE_VENTE_ARTICLE");
                 // int mode = vals.getInt("ID_MODE_VENTE_ARTICLE");
-                if (modeNumber != null
-                        && (modeNumber.intValue() == ReferenceArticleSQLElement.A_LA_PIECE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_METRE_LONGUEUR)) {
+                if (modeNumber != null && (modeNumber.intValue() == ReferenceArticleSQLElement.A_LA_PIECE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE
+                        || modeNumber.intValue() == ReferenceArticleSQLElement.AU_METRE_LONGUEUR)) {
                     return false;
                 } else {
                     return super.isCellEditable(vals);
@@ -140,8 +152,8 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
             public boolean isCellEditable(SQLRowValues vals) {
 
                 Number modeNumber = (Number) vals.getObject("ID_MODE_VENTE_ARTICLE");
-                if (modeNumber != null
-                        && (modeNumber.intValue() == ReferenceArticleSQLElement.A_LA_PIECE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_METRE_LARGEUR)) {
+                if (modeNumber != null && (modeNumber.intValue() == ReferenceArticleSQLElement.A_LA_PIECE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE
+                        || modeNumber.intValue() == ReferenceArticleSQLElement.AU_METRE_LARGEUR)) {
                     return false;
                 } else {
                     return super.isCellEditable(vals);
@@ -330,6 +342,45 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
             list.add(tableElementTotalDevise);
         }
 
+        final SQLField fieldRemise = e.getTable().getField("POURCENT_REMISE");
+
+        if (e.getTable().getFieldsName().contains("MONTANT_REMISE")) {
+            tableElementRemise = new SQLTableElement(e.getTable().getField("POURCENT_REMISE"), Acompte.class, new AcompteCellEditor("POURCENT_REMISE", "MONTANT_REMISE")) {
+                @Override
+                public void setValueFrom(SQLRowValues row, Object value) {
+
+                    if (value != null) {
+                        Acompte a = (Acompte) value;
+                        row.put("MONTANT_REMISE", a.getMontant());
+                        row.put("POURCENT_REMISE", a.getPercent());
+                    } else {
+                        row.put("MONTANT_REMISE", null);
+                        row.put("POURCENT_REMISE", BigDecimal.ZERO);
+                    }
+                    fireModification(row);
+                }
+            };
+            tableElementRemise.setRenderer(new DefaultTableCellRenderer() {
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    SQLRowValues rowVals = ((RowValuesTable) table).getRowValuesTableModel().getRowValuesAt(row);
+                    JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    BigDecimal percent = rowVals.getBigDecimal("POURCENT_REMISE");
+                    BigDecimal amount = rowVals.getBigDecimal("MONTANT_REMISE");
+                    Remise a = new Remise(percent, amount);
+                    label.setText(a.toPlainString());
+                    return label;
+                }
+            });
+        } else {
+            tableElementRemise = new SQLTableElement(fieldRemise) {
+                protected Object getDefaultNullValue() {
+                    return BigDecimal.ZERO;
+                }
+            };
+        }
+        list.add(tableElementRemise);
+
         // Total HT
         this.totalHT = new SQLTableElement(e.getTable().getField("T_PV_HT"), BigDecimal.class);
         this.totalHT.setRenderer(new DeviseTableCellRenderer());
@@ -457,6 +508,7 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         this.qte.addModificationListener(tableElement_PrixMetrique1_VenteHT);
         this.qte.addModificationListener(totalHT);
         qteU.addModificationListener(totalHT);
+        tableElementRemise.addModificationListener(this.totalHT);
         tableElement_PrixVente_HT.addModificationListener(totalHT);
         this.totalHT.setModifier(new CellDynamicModifier() {
             public Object computeValueFrom(final SQLRowValues row, SQLTableElement source) {
@@ -466,6 +518,13 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
                 System.out.println("Qte:" + qte + " et PV_HT:" + f);
                 BigDecimal b = (row.getObject("QTE_UNITAIRE") == null) ? BigDecimal.ONE : (BigDecimal) row.getObject("QTE_UNITAIRE");
                 BigDecimal r = b.multiply(f.multiply(BigDecimal.valueOf(qte)), DecimalUtils.HIGH_PRECISION).setScale(totalHT.getDecimalDigits(), BigDecimal.ROUND_HALF_UP);
+
+                if (row.getTable().getFieldsName().contains("MONTANT_REMISE")) {
+                    final BigDecimal acomptePercent = row.getBigDecimal("POURCENT_REMISE");
+                    final BigDecimal acompteMontant = row.getBigDecimal("MONTANT_REMISE");
+                    Remise remise = new Remise(acomptePercent, acompteMontant);
+                    r = remise.getResultFrom(r);
+                }
                 return r;
             }
 
@@ -568,7 +627,7 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
 
             if (eltUnitDevise != null) {
                 tableElement_PrixMetrique1_VenteHT.addModificationListener(eltUnitDevise);
-
+                tableElementRemise.addModificationListener(this.tableElementTotalDevise);
                 eltUnitDevise.setModifier(new CellDynamicModifier() {
                     public Object computeValueFrom(SQLRowValues row, SQLTableElement source) {
                         if (source != null && source.getField().getName().equals("PV_U_DEVISE")) {
@@ -587,6 +646,31 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
                         }
                     }
 
+                });
+                tableElementRemise.addModificationListener(this.tableElementTotalDevise);
+                tableElementTotalDevise.setModifier(new CellDynamicModifier() {
+                    @Override
+                    public Object computeValueFrom(SQLRowValues row, SQLTableElement source) {
+                        int qte = row.getInt("QTE");
+                        BigDecimal prixDeVenteUnitaireDevise = (row.getObject("PV_U_DEVISE") == null) ? BigDecimal.ZERO : (BigDecimal) row.getObject("PV_U_DEVISE");
+                        BigDecimal qUnitaire = (row.getObject("QTE_UNITAIRE") == null) ? BigDecimal.ONE : (BigDecimal) row.getObject("QTE_UNITAIRE");
+                        // r = prixUnitaire x qUnitaire x qte
+                        BigDecimal prixVente = qUnitaire.multiply(prixDeVenteUnitaireDevise.multiply(BigDecimal.valueOf(qte), DecimalUtils.HIGH_PRECISION), DecimalUtils.HIGH_PRECISION);
+
+                        if (row.getTable().getFieldsName().contains("MONTANT_REMISE")) {
+                            final BigDecimal acomptePercent = row.getBigDecimal("POURCENT_REMISE");
+                            final BigDecimal acompteMontant = row.getBigDecimal("MONTANT_REMISE");
+                            Remise remise = new Remise(acomptePercent, acompteMontant);
+                            prixVente = remise.getResultFrom(prixVente);
+                        }
+
+                        // if (lremise.compareTo(BigDecimal.ZERO) > 0 &&
+                        // lremise.compareTo(BigDecimal.valueOf(100)) < 100) {
+                        // r = r.multiply(BigDecimal.valueOf(100).subtract(lremise),
+                        // DecimalUtils.HIGH_PRECISION).movePointLeft(2);
+                        // }
+                        return prixVente.setScale(tableElementTotalDevise.getDecimalDigits(), BigDecimal.ROUND_HALF_UP);
+                    }
                 });
             }
         }

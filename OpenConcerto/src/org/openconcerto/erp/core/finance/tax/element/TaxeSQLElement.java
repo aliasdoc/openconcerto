@@ -158,6 +158,33 @@ public class TaxeSQLElement extends ComptaSQLConfElement {
                 ISQLCompteSelector compteDed = new ISQLCompteSelector();
                 this.add(compteDed, c);
 
+                
+                JLabel labelCompteVente = new JLabel(getLabelFor("ID_COMPTE_PCE_VENTE"), SwingConstants.RIGHT);
+                c.fill = GridBagConstraints.HORIZONTAL;
+                c.gridwidth = 1;
+                c.gridx = 0;
+                c.gridy++;
+                this.add(labelCompteVente, c);
+                c.gridx++;
+                c.weightx = 1;
+                c.gridwidth = GridBagConstraints.REMAINDER;
+                ISQLCompteSelector compteVente = new ISQLCompteSelector();
+                this.add(compteVente, c);
+
+                JLabel labelCompteVenteS = new JLabel(getLabelFor("ID_COMPTE_PCE_VENTE_SERVICE"), SwingConstants.RIGHT);
+                c.gridx = 0;
+                c.gridy++;
+                c.weightx = 0;
+                c.gridwidth = 1;
+                c.fill = GridBagConstraints.HORIZONTAL;
+                this.add(labelCompteVenteS, c);
+                c.gridx++;
+                c.weightx = 1;
+
+                c.gridwidth = GridBagConstraints.REMAINDER;
+                ISQLCompteSelector compteVenteS = new ISQLCompteSelector();
+                this.add(compteVenteS, c);
+                
                 // Spacer
                 c.gridy++;
                 c.weighty = 1;
@@ -166,6 +193,9 @@ public class TaxeSQLElement extends ComptaSQLConfElement {
 
                 this.addSQLObject(compteCol, "ID_COMPTE_PCE_COLLECTE");
                 this.addSQLObject(compteDed, "ID_COMPTE_PCE_DED");
+                this.addSQLObject(compteVente, "ID_COMPTE_PCE_VENTE");
+                this.addSQLObject(compteVenteS, "ID_COMPTE_PCE_VENTE_SERVICE");
+
 
                 this.addRequiredSQLObject(fieldNom, "NOM");
                 this.addRequiredSQLObject(fieldTaux, "TAUX");

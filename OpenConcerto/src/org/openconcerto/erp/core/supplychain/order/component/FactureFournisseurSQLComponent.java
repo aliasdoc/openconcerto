@@ -13,6 +13,24 @@
  
  package org.openconcerto.erp.core.supplychain.order.component;
 
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
+
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
@@ -22,7 +40,9 @@ import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.supplychain.order.ui.FactureFournisseurItemTable;
+import org.openconcerto.erp.generationDoc.gestcomm.FactureFournisseurXmlSheet;
 import org.openconcerto.erp.generationEcritures.GenerationMvtFactureFournisseur;
+import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.DefaultElementSQLObject;
@@ -44,34 +64,16 @@ import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.preferences.DefaultProps;
-
-import java.awt.Color;
-import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
+import org.openconcerto.utils.text.SimpleDocumentListener;
 
 public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
 
     private FactureFournisseurItemTable table = new FactureFournisseurItemTable();
-    private final JCheckBox checkImpression = new JCheckBox("Imprimer");
-    private final JCheckBox checkVisu = new JCheckBox("Visualiser");
     private final ITextArea infos = new ITextArea(3, 3);
     private ElementComboBox fourn = new ElementComboBox();
     private ElementComboBox comptePCE = new ElementComboBox();
     private DefaultElementSQLObject compAdr;
+    private PanelOOSQLComponent panelOO;
     final JPanel panelAdrSpec = new JPanel(new GridBagLayout());
     private JDate dateCommande = new JDate();
 
@@ -148,6 +150,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         c.gridwidth = 1;
 
         final ElementComboBox boxDevise = new ElementComboBox();
+        final JTextField fieldTaux = new JTextField(15);
         if (DefaultNXProps.getInstance().getBooleanValue(AbstractVenteArticleItemTable.ARTICLE_SHOW_DEVISE, false)) {
             // Devise
             c.gridx = 0;
@@ -156,13 +159,31 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
             c.fill = GridBagConstraints.HORIZONTAL;
             this.add(new JLabel(getLabelFor("ID_DEVISE"), SwingConstants.RIGHT), c);
 
-            c.gridx = GridBagConstraints.RELATIVE;
+            c.gridx++;
             c.gridwidth = 1;
             c.weightx = 1;
             c.weighty = 0;
             c.fill = GridBagConstraints.NONE;
             this.add(boxDevise, c);
             this.addView(boxDevise, "ID_DEVISE");
+
+            if (getTable().contains("TAUX_APPLIQUE")) {
+                // Devise
+                c.gridx++;
+                c.weightx = 0;
+                c.fill = GridBagConstraints.HORIZONTAL;
+                this.add(new JLabel(getLabelFor("TAUX_APPLIQUE"), SwingConstants.RIGHT), c);
+
+                c.gridx++;
+                c.gridwidth = 1;
+                c.weightx = 1;
+                c.weighty = 0;
+                c.fill = GridBagConstraints.NONE;
+                DefaultGridBagConstraints.lockMinimumSize(fieldTaux);
+                this.add(fieldTaux, c);
+                this.addView(fieldTaux, "TAUX_APPLIQUE");
+
+            }
         }
 
         // Compte pce
@@ -235,6 +256,18 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
 
                 }
             });
+
+            fieldTaux.getDocument().addDocumentListener(new SimpleDocumentListener() {
+
+                @Override
+                public void update(DocumentEvent e) {
+                    BigDecimal tauxConversion = null;
+                    if (fieldTaux.getText().trim().length() > 0) {
+                        tauxConversion = new BigDecimal(fieldTaux.getText());
+                    }
+                    table.setTauxConversion(tauxConversion);
+                }
+            });
         }
 
         this.fourn.addModelListener("wantedID", new PropertyChangeListener() {
@@ -260,11 +293,14 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         c.fill = GridBagConstraints.HORIZONTAL;
         c.anchor = GridBagConstraints.WEST;
 
-        JPanel panelOO = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        panelOO.add(this.checkImpression, c);
-        panelOO.add(this.checkVisu, c);
+        c.gridx = 0;
+        c.gridy++;
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.SOUTHEAST;
         c.gridwidth = GridBagConstraints.REMAINDER;
-        this.add(panelOO, c);
+
+        this.panelOO = new PanelOOSQLComponent(this);
+        this.add(this.panelOO, c);
 
         addSQLObject(textNom, "NOM");
         addRequiredSQLObject(dateCommande, "DATE");
@@ -388,6 +424,14 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
 
         addRequiredSQLObject(fieldTTC, "T_TTC");
         addRequiredSQLObject(fieldService, "T_SERVICE");
+
+        // Disable
+        this.allowEditable("T_HT", false);
+        this.allowEditable("T_TVA", false);
+        this.allowEditable("T_TTC", false);
+        this.allowEditable("T_SERVICE", false);
+        this.allowEditable("T_POIDS", false);
+
         final TotalPanel totalTTC = new TotalPanel(this.table, fieldHT, fieldTVA, fieldTTC, textPortHT, textRemiseHT, fieldService, null, fieldDevise, null, null,
                 (getTable().contains("ID_TAXE_PORT") ? comboTaxePort : null));
 
@@ -470,6 +514,10 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
 
         new GenerationMvtFactureFournisseur(getTable().getRow(idFacture));
 
+        final FactureFournisseurXmlSheet sheet = new FactureFournisseurXmlSheet(getTable().getRow(idFacture));
+        sheet.createDocumentAsynchronous();
+        sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
+
         return idFacture;
     }
 
@@ -492,6 +540,9 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         } else {
             new GenerationMvtFactureFournisseur(row);
         }
+        final FactureFournisseurXmlSheet sheet = new FactureFournisseurXmlSheet(row);
+        sheet.createDocumentAsynchronous();
+        sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
     }
 
     public void setDefaults() {

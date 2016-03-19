@@ -91,6 +91,8 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
         init(fromTableElement, fillFrom, table, tableModel, modeCompletion, req, foreign, new ValidStateChecker());
     }
 
+    private ITextArticleWithCompletionCellEditor articleCombo;
+
     public void init(final SQLTableElement fromTableElement, final SQLField fillFrom, RowValuesTable table, RowValuesTableModel tableModel, int modeCompletion, ComboSQLRequest req, boolean foreign,
             ValidStateChecker validStateChecker) {
 
@@ -142,8 +144,8 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
 
             }
         } else if (cellEdit instanceof ITextArticleWithCompletionCellEditor) {
-            final ITextArticleWithCompletionCellEditor combo = (ITextArticleWithCompletionCellEditor) cellEdit;
-            combo.addSelectionListener(this);
+            this.articleCombo = (ITextArticleWithCompletionCellEditor) cellEdit;
+            this.articleCombo.addSelectionListener(this);
         } else {
 
             this.t = new ITextWithCompletion(req, true);
@@ -286,6 +288,8 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
             this.t.setWhere(w);
         } else if (this.textComboCellEdit != null) {
             this.textComboCellEdit.setWhere(w);
+        } else if (this.articleCombo != null) {
+            this.articleCombo.setWhere(w);
         }
     }
 

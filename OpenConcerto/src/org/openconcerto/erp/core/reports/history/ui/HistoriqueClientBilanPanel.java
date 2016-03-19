@@ -455,7 +455,7 @@ public class HistoriqueClientBilanPanel extends JPanel {
                     } else if (HistoriqueClientBilanPanel.this.nbChequesNonEncaisses == nb) {
                         HistoriqueClientBilanPanel.this.labelCheques.setText(" " + nb + " chèques non encaissés d'un montant total de " + total + " € HT");
                     } else {
-                        HistoriqueClientBilanPanel.this.labelCheques.setText(" " + nb + " chèques non d'un montant total de " + total + " € HT dont "
+                        HistoriqueClientBilanPanel.this.labelCheques.setText(" " + nb + " chèques d'un montant total de " + total + " € HT dont "
                                 + HistoriqueClientBilanPanel.this.nbChequesNonEncaisses + " non encaissés");
                     }
                 }

@@ -13,7 +13,6 @@
  
  package org.openconcerto.ui;
 
-import java.awt.Dimension;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.Calendar;

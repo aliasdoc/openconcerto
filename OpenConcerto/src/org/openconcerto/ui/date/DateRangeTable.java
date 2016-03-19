@@ -29,6 +29,9 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -40,8 +43,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 
@@ -200,7 +201,7 @@ public class DateRangeTable extends JPanel {
                 } catch (final Exception e) {
                     e.printStackTrace();
                 }
-
+                // enableFocusLogging();
                 final JFrame f = new JFrame();
                 f.setContentPane(new DateRangeTable(true, false));
                 f.setSize(400, 300);
@@ -210,6 +211,19 @@ public class DateRangeTable extends JPanel {
             }
         });
 
+    }
+
+    private static void enableFocusLogging() {
+        // Obtain a reference to the logger
+        Logger focusLog = Logger.getLogger("java.awt.focus.Component");
+        // The logger should log all messages
+        focusLog.setLevel(Level.ALL);
+        // Create a new handler
+        ConsoleHandler handler = new ConsoleHandler();
+        // The handler must handle all messages
+        handler.setLevel(Level.ALL);
+        // Add the handler to the logger
+        focusLog.addHandler(handler);
     }
 
     @SuppressWarnings("unchecked")

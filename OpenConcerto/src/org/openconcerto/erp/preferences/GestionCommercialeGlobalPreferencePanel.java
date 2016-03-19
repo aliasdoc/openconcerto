@@ -31,6 +31,9 @@ public class GestionCommercialeGlobalPreferencePanel extends JavaPrefPreferenceP
     public static String TRANSFERT_MULTI_REF = "TransfertMultiRef";
     public static String TRANSFERT_NO_REF = "TransfertNoRef";
     public static String ORDER_PACKAGING_MANAGEMENT = "OrderPackagingManagement";
+    public static String ADDRESS_SPEC = "AddressSpec";
+    public static String GESTION_TIMBRE_FISCAL = "GestionTimbreFiscal";
+    public static String TAUX_TIMBRE_FISCAL = "TauxTimbreFiscal";
 
     public GestionCommercialeGlobalPreferencePanel() {
         super("Gestion des pièces commerciales", null);
@@ -54,6 +57,18 @@ public class GestionCommercialeGlobalPreferencePanel extends JavaPrefPreferenceP
         PrefView<Boolean> orderPackaging = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer la préparation des commandes clients", ORDER_PACKAGING_MANAGEMENT);
         orderPackaging.setDefaultValue(Boolean.TRUE);
         this.addView(orderPackaging);
+
+        PrefView<Boolean> addressSpec = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Afficher les sélecteurs d'adresse spécifique", ADDRESS_SPEC);
+        addressSpec.setDefaultValue(Boolean.TRUE);
+        this.addView(addressSpec);
+
+        PrefView<Boolean> gestTimbreFisc = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Activer la gestion du timbre fiscal", GESTION_TIMBRE_FISCAL);
+        gestTimbreFisc.setDefaultValue(Boolean.FALSE);
+        this.addView(gestTimbreFisc);
+
+        PrefView<Double> tauxTimbreFisc = new PrefView<Double>(PrefType.DOUBLE_TYPE, "Taux du timbre fiscal", TAUX_TIMBRE_FISCAL);
+        tauxTimbreFisc.setDefaultValue(Double.valueOf(1));
+        this.addView(tauxTimbreFisc);
 
         ButtonGroup group = new ButtonGroup();
         group.add((JCheckBox) viewMultiTransfert.getVW().getComp());

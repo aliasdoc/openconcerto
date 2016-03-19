@@ -13,12 +13,12 @@
  
  package org.openconcerto.utils;
 
-import org.openconcerto.utils.convertor.NumberConvertor;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.openconcerto.utils.convertor.NumberConvertor;
 
 public class NumberUtils {
 
@@ -275,5 +275,12 @@ public class NumberUtils {
             res = (int) Math.signum(n.doubleValue());
         }
         return res;
+    }
+
+    public static int ensureInt(long l) {
+        if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("long value " + String.valueOf(l) + " cannot be cast to int without changing its value.");
+        }
+        return (int) l;
     }
 }

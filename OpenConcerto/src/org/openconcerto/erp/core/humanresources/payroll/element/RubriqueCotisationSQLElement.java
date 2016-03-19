@@ -23,6 +23,7 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.NoneSelectedButtonGroup;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -65,8 +66,9 @@ public class RubriqueCotisationSQLElement extends ConfSQLElement {
         l.add("TX_SAL");
         l.add("BRUT");
         l.add("PART_CSG");
+        l.add("PART_CSG_SANS_ABATTEMENT");
         l.add("IMPOSABLE");
-
+        l.add("PART_PAT_IMPOSABLE");
         return l;
     }
 
@@ -231,10 +233,24 @@ public class RubriqueCotisationSQLElement extends ConfSQLElement {
                 JCheckBox checkImpo = new JCheckBox(getLabelFor("IMPOSABLE"));
                 panelProp.add(checkImpo, cPanel);
 
+                // Patronale imposable
+                cPanel.gridy++;
+                JCheckBox checkPartPatrImposable = new JCheckBox(getLabelFor("PART_PAT_IMPOSABLE"));
+                panelProp.add(checkPartPatrImposable, cPanel);
+
                 // Part csg
                 cPanel.gridy++;
                 JCheckBox checkPartPatr = new JCheckBox(getLabelFor("PART_CSG"));
                 panelProp.add(checkPartPatr, cPanel);
+
+                // Part csg
+                cPanel.gridy++;
+                JCheckBox checkPartPatrSansAbattement = new JCheckBox(getLabelFor("PART_CSG_SANS_ABATTEMENT"));
+                panelProp.add(checkPartPatrSansAbattement, cPanel);
+
+                NoneSelectedButtonGroup group = new NoneSelectedButtonGroup();
+                group.add(checkPartPatrSansAbattement);
+                group.add(checkPartPatr);
 
                 // Brut
                 cPanel.gridy++;
@@ -301,7 +317,9 @@ public class RubriqueCotisationSQLElement extends ConfSQLElement {
                 this.addSQLObject(this.formuleTxSal, "TX_SAL");
                 this.addSQLObject(checkBrut, "BRUT");
                 this.addSQLObject(checkPartPatr, "PART_CSG");
+                this.addSQLObject(checkPartPatrSansAbattement, "PART_CSG_SANS_ABATTEMENT");
                 this.addSQLObject(checkImpo, "IMPOSABLE");
+                this.addSQLObject(checkPartPatrImposable, "PART_PAT_IMPOSABLE");
                 this.addRequiredSQLObject(comboSelTypeImpression, "ID_IMPRESSION_RUBRIQUE");
 
                 selSalarie.addValueListener(new PropertyChangeListener() {

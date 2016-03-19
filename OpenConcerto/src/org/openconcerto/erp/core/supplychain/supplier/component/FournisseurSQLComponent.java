@@ -16,19 +16,6 @@
  */
 package org.openconcerto.erp.core.supplychain.supplier.component;
 
-import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.event.ActionListener;
-import java.sql.SQLException;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.ContactItemTable;
@@ -53,6 +40,20 @@ import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.component.InteractionMode;
+
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.event.ActionListener;
+import java.sql.SQLException;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 
 public class FournisseurSQLComponent extends BaseSQLComponent {
 
@@ -193,6 +194,37 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
             this.addView(devise, "ID_DEVISE");
         }
 
+        if (getTable().contains("ALG_REGISTRE")) {
+            c.gridy++;
+            c.gridx = 0;
+            c.weightx = 0;
+            this.add(new JLabel(getLabelFor("ALG_REGISTRE"), SwingConstants.RIGHT), c);
+            c.gridx++;
+            c.weightx = 1;
+            JTextField fieldRegistre = new JTextField(20);
+            this.add(fieldRegistre, c);
+            this.addView(fieldRegistre, "ALG_REGISTRE");
+
+            c.gridx++;
+            c.weightx = 0;
+            this.add(new JLabel(getLabelFor("ALG_MATRICULE"), SwingConstants.RIGHT), c);
+            c.gridx++;
+            c.weightx = 1;
+            JTextField fieldMatricule = new JTextField(20);
+            this.add(fieldMatricule, c);
+            this.addView(fieldMatricule, "ALG_MATRICULE");
+
+            c.gridy++;
+            c.gridx = 0;
+            c.weightx = 0;
+            this.add(new JLabel(getLabelFor("ALG_ARTICLE"), SwingConstants.RIGHT), c);
+            c.gridx++;
+            c.weightx = 1;
+            JTextField fieldArticle = new JTextField(20);
+            this.add(fieldArticle, c);
+            this.addView(fieldArticle, "ALG_ARTICLE");
+        }
+
         // Champ Module
         c.gridx = 0;
         c.gridy++;
@@ -200,6 +232,9 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
         final JPanel addP = ComptaSQLConfElement.createAdditionalPanel();
         this.setAdditionalFieldsPanel(new FormLayouter(addP, 2));
         this.add(addP, c);
+
+        // Tabbed
+        JTabbedPane tabbedPane = new JTabbedPane();
 
         JPanel panelAdresse = new JPanel(new GridBagLayout());
         GridBagConstraints cAdr = new DefaultGridBagConstraints();
@@ -216,6 +251,8 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
         this.addView("ID_ADRESSE", REQ + ";" + DEC + ";" + SEP);
 
         cAdr.gridy++;
+        cAdr.fill = GridBagConstraints.HORIZONTAL;
+        cAdr.weightx = 1;
         panelAdresse.add((ElementSQLObject) this.getView("ID_ADRESSE"), cAdr);
 
         // Selection de 2eme adresse
@@ -225,22 +262,13 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
         this.comp2.setCreated(true);
         panelAdresse.add(this.comp2, cAdr);
 
-        c.gridx = 0;
-        c.gridy++;
-        c.gridwidth = GridBagConstraints.REMAINDER;
-        c.weightx = 1;
-        c.fill = GridBagConstraints.NONE;
-        this.add(panelAdresse, c);
-
-        c.gridx = 0;
-        c.gridy++;
-        c.weightx = 0;
-        c.gridwidth = GridBagConstraints.REMAINDER;
-        c.fill = GridBagConstraints.NONE;
         this.checkEnlevement = new JCheckBox("Adresse d'enlèvement identique");
+        cAdr.gridx = 0;
+        cAdr.gridy++;
+        cAdr.gridwidth = GridBagConstraints.REMAINDER;
+        panelAdresse.add(this.checkEnlevement, cAdr);
+        tabbedPane.add("Adresses", panelAdresse);
 
-        this.add(this.checkEnlevement, c);
-        c.fill = GridBagConstraints.HORIZONTAL;
         this.checkEnlevement.setSelected(true);
         this.sep2.setVisible(false);
         this.checkEnlevement.addActionListener(new ActionListener() {
@@ -262,21 +290,22 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
         });
 
         // Contact
-        final TitledSeparator sepContact = new TitledSeparator("Contacts fournisseurs");
-        c.weightx = 1;
-        c.gridwidth = GridBagConstraints.REMAINDER;
-        c.gridx = 0;
-        c.gridy++;
-        this.add(sepContact, c);
+        JPanel panelContact = new JPanel(new GridBagLayout());
+
         this.table = new ContactItemTable(this.defaultContactRowVals);
         this.table.setPreferredSize(new Dimension(this.table.getSize().width, 150));
-
+        GridBagConstraints cContact = new DefaultGridBagConstraints();
+        cContact.fill = GridBagConstraints.BOTH;
+        cContact.weightx = 1;
+        cContact.weighty = 1;
+        panelContact.add(this.table, cContact);
+        tabbedPane.add("Contacts", panelContact);
         c.gridx = 0;
         c.gridy++;
         c.anchor = GridBagConstraints.WEST;
         c.fill = GridBagConstraints.BOTH;
         c.gridwidth = GridBagConstraints.REMAINDER;
-        this.add(this.table, c);
+        this.add(tabbedPane, c);
 
         // Mode de régelement
         TitledSeparator reglSep = new TitledSeparator(getLabelFor("ID_MODE_REGLEMENT"));

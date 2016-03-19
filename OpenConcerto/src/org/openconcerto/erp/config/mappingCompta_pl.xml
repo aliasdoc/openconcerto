@@ -21,12 +21,12 @@
 		<FIELD name="TYPE" label="Typ" />
 		<FIELD name="EMAIL_CONTACT" label="Kontakt e-mail" />
 	</TABLE>
+
 	<TABLE name="AFFACTURAGE">
 		<FIELD name="NB_FACT" label="Numer faktury" />
 		<FIELD name="MONTANT_FACT" label="Suma" />
 		<FIELD name="DATE" label="Data" />
 	</TABLE>
-
 
 	<TABLE name="ARTICLE">
 		<FIELD name="ID_UNITE_VENTE" label="Cena" titlelabel="Cena" />
@@ -743,12 +743,13 @@
 		<FIELD name="T_SERVICE" label="Serwis" />
 		<FIELD name="T_POIDS" label="Waga (kg)" />
 		<FIELD name="ID_ETAT_DEVIS" label="Województwo" />
-		<FIELD name="INFOS" label="Informacje ogólne" titlelabel="Informacje ogólne" />
+		<FIELD name="INFOS" label="Informacje ogólne" />
 		<FIELD name="DATE_ENVOI" label="Data wysłania" />
 		<FIELD name="ID_ADRESSE" label="Adres" />
 		<FIELD name="ID_CONTACT" label="Kontakt" />
 		<FIELD name="ADRESSE_IDENTIQUE" label="Adres" />
-		<FIELD name="T_DEVISE" label="Suma-waluta" titlelabel="Suma-waluta" />
+		<FIELD name="T_DEVISE" label="Suma-waluta" />
+		<FIELD name="ID_TARIF" label="Lista produktów" />
 	</TABLE>
 	<TABLE name="DEVIS_ELEMENT">
 		<FIELD name="QTE_UNITAIRE" label="Ilość" titlelabel="Ilość" />
@@ -1123,6 +1124,7 @@
 		<FIELD name="NOM" label="Etykieta" />
 		<FIELD name="DATE" label="Data" />
 		<FIELD name="ID_ARTICLE" label="Produkt" />
+		<FIELD name="REEL" label="Real" />
 	</TABLE>
 
 	<TABLE name="NATURE_COMPTE">
@@ -1359,7 +1361,7 @@
 		<FIELD name="ID_TAXE_PORT" label="Koszt transportru" titlelabel="Koszt transportu" />
 		<FIELD name="ID_MOUVEMENT" label="Numer operacji" titlelabel="Numer operacji" />
 		<FIELD name="INFOS" label="Informacje" titlelabel="Informacje" />
-		<FIELD name="ID_MODE_REGLEMENT" label=Sposób płatności " />
+		<FIELD name="ID_MODE_REGLEMENT" label="Sposób płatności" />
 		<FIELD name="PORT_HT" label="Transport netto" titlelabel="Transport netto" />
 		<FIELD name="REMISE_HT" label="Rabat" />
 		<FIELD name="T_SERVICE" label="Opłata za usługi" titlelabel="Opłata za usługi" />
@@ -1386,8 +1388,8 @@
 		<FIELD name="DESCRIPTIF" label="Opis" titlelabel="Opis" />
 		<FIELD name="ID_PAYS" label="Kraj pochodzenia" titlelabel="Kraj pochodzenia" />
 		<FIELD name="CODE_DOUANIER" label="Kod celny" titlelabel="Kod celny" />
-		<FIELD name="ID_DEVISE" label="Waluta />
-		<FIELD name=" PV_U_DEVISE " label="Cena waluty" titlelabel="Cena waluty" />
+		<FIELD name="ID_DEVISE" label="Waluta" />
+		<FIELD name="PV_U_DEVISE" label="Cena waluty" titlelabel="Cena waluty" />
 		<FIELD name="PV_T_DEVISE" label="Cena waluty-suma" titlelabel="Cena waluty-suma" />
 		<FIELD name="ECOTAXE" label="Ecotax" />
 		<FIELD name="PRIX_FINAL_TTC" label="Cena brutto" titlelabel="Cena brutto" />

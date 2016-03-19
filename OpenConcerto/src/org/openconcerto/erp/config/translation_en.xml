@@ -407,6 +407,7 @@
 
 	<item id="product.bom.expand" label="Expand BOM" />
 	<item id="product.bom.expose" label="Expose BOM" />
+	<item id="product.bom.flat" label="Flat BOM" />
 
 
 </translation>

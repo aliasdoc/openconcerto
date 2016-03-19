@@ -74,13 +74,21 @@ public class KeyTableCellRenderer extends DefaultTableCellRenderer {
                 newValue = ((SQLRowValues) value).getString("CODE");
             } else {
 
-                int id = Integer.parseInt(value.toString());
-
-                if (id > 1) {
+                final int id = Integer.parseInt(value.toString());
+                Number undefID = this.el.getTable().getUndefinedIDNumber();
+                if (undefID == null || id > undefID.intValue()) {
                     IComboSelectionItem item = cacheMap.get(this.el).get(id);
                     if (item != null) {
                         newValue = item.getLabel();
                     }
+
+                    // else {
+
+                    // TODO créer une liste des ids à reloader
+                    // this.toSelect = value;
+                    // setText("Chargement ...");
+                    // loadCacheAsynchronous();
+                    // }
                 } else {
                     newValue = SQLTableElement.UNDEFINED_STRING;
                 }

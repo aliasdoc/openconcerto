@@ -14,6 +14,7 @@
  package org.openconcerto.sql.view;
 
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.utils.cc.IClosure;
 
 import java.awt.event.ActionEvent;
@@ -193,7 +194,7 @@ public class SQLMenuItemHelper {
 
         @Override
         public void actionPerformed(ActionEvent e) {
-            this.getFrame().setVisible(true);
+            FrameUtil.show(this.getFrame());
         }
     }
 

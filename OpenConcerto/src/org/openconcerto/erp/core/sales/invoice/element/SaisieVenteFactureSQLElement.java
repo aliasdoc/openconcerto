@@ -17,6 +17,7 @@ import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.config.Gestion;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.PanelFrame;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
@@ -53,6 +54,7 @@ import org.openconcerto.sql.preferences.SQLPreferences;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.users.UserManager;
+import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.EditPanel;
 import org.openconcerto.sql.view.EditPanel.EditMode;
@@ -228,8 +230,9 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
             l.add("ID_CLIENT");
                 l.add("ID_MODE_REGLEMENT");
             l.add("ID_COMMERCIAL");
-
-            l.add("T_HA");
+            if (!UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
+                l.add("T_HA");
+            }
             l.add("T_HT");
             l.add("T_TTC");
             l.add("INFOS");

@@ -15,7 +15,6 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.image.ImageIconWarning;
-import org.openconcerto.erp.core.customerrelationship.customer.element.ClientNormalSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.CourrierClientSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.CustomerSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.element.RelanceSQLElement;
@@ -89,15 +88,13 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
 
     protected List<String> getListFields() {
         final List<String> list = new ArrayList<String>(2);
-        list.add("DEVIS_FORMAT");
-        list.add("DEVIS_START");
+        list.add("NOM");
         return list;
     }
 
     protected List<String> getComboFields() {
         final List<String> list = new ArrayList<String>(2);
-        list.add("DEVIS_FORMAT");
-        list.add("DEVIS_START");
+        list.add("NOM");
         return list;
     }
 
@@ -384,9 +381,8 @@ public class NumerotationAutoSQLElement extends ComptaSQLConfElement {
 
                 SQLElement elt = Configuration.getInstance().getDirectory().getElement(e);
 
-                if (elt != null) {
+                if (elt != null && elt.getTable().getFieldsName().contains("NUMERO")) {
                     sel.addSelect(elt.getTable().getKey());
-
                     sel.setWhere(new Where(elt.getTable().getField("NUMERO"), "LIKE", getPattern(elt, num)));
                     System.err.println("NumerotationAutoSQLElement.isNumeroExist() " + sel.asString());
                     List<SQLRow> liste = (List<SQLRow>) Configuration.getInstance().getBase().getDataSource().execute(sel.asString(), new SQLRowListRSH(elt.getTable(), true));

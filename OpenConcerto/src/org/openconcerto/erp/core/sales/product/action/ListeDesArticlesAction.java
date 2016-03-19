@@ -13,31 +13,6 @@
  
  package org.openconcerto.erp.core.sales.product.action;
 
-import org.openconcerto.erp.action.CreateFrameAbstractAction;
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.erp.core.common.ui.IListTotalPanel;
-import org.openconcerto.erp.core.sales.product.ui.FamilleArticlePanel;
-import org.openconcerto.erp.panel.ITreeSelection;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.FieldPath;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.Where;
-import org.openconcerto.sql.model.graph.Path;
-import org.openconcerto.sql.view.ListeAddPanel;
-import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
-import org.openconcerto.sql.view.list.IListe;
-import org.openconcerto.sql.view.list.SQLTableModelColumn;
-import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.ui.PanelFrame;
-import org.openconcerto.utils.CollectionUtils;
-import org.openconcerto.utils.DecimalUtils;
-import org.openconcerto.utils.Tuple2;
-
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -51,12 +26,43 @@ import java.util.List;
 import java.util.Set;
 
 import javax.swing.Action;
+import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
+
+import org.openconcerto.erp.action.CreateFrameAbstractAction;
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.ui.IListTotalPanel;
+import org.openconcerto.erp.core.sales.product.ui.FamilleArticlePanel;
+import org.openconcerto.erp.panel.ITreeSelection;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.FieldPath;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.request.ListSQLRequest;
+import org.openconcerto.sql.request.UpdateBuilder;
+import org.openconcerto.sql.view.ListeAddPanel;
+import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
+import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.sql.view.list.SQLTableModelColumn;
+import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.PanelFrame;
+import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.DecimalUtils;
+import org.openconcerto.utils.Tuple2;
+import org.openconcerto.utils.cc.ITransformer;
 
 public class ListeDesArticlesAction extends CreateFrameAbstractAction {
 
@@ -74,14 +80,12 @@ public class ListeDesArticlesAction extends CreateFrameAbstractAction {
         final SQLElement elt = Configuration.getInstance().getDirectory().getElement(this.sqlTableArticle);
         final FamilleArticlePanel panelFam = new FamilleArticlePanel(elt.getForeignElement("ID_FAMILLE_ARTICLE"));
 
-        // Renderer pour les devises
-        // frame.getPanel().getListe().getJTable().setDefaultRenderer(Long.class, new
-        // DeviseNiceTableCellRenderer());
-        final SQLTableModelSourceOnline createTableSource = elt.createTableSource(getWhere(panelFam));
+        final SQLTableModelSourceOnline createTableSource = elt.initTableSource(elt.getTableSource(true));
         createTableSource.init();
+
         SQLTableModelColumn colStock;
         if (elt.getTable().getDBRoot().contains("ARTICLE_PRIX_REVIENT")) {
-            colStock = createTableSource.getColumn(createTableSource.getColumns().size() - 1);
+            colStock = createTableSource.getColumn(createTableSource.getColumns().size() - 2);
         } else {
 
             colStock = new BaseSQLTableModelColumn("Valeur HT du stock", BigDecimal.class) {
@@ -113,22 +117,105 @@ public class ListeDesArticlesAction extends CreateFrameAbstractAction {
                     return CollectionUtils.createSet(new FieldPath(p, "PA_HT"), new FieldPath(p2, "QTE_REEL"));
                 }
             };
-            colStock.setRenderer(ComptaSQLConfElement.CURRENCY_RENDERER);
-            createTableSource.getColumns().add(colStock);
         }
+        // colStock.setRenderer(ComptaSQLConfElement.CURRENCY_RENDERER);
+        // createTableSource.getColumns().add(colStock);
         IListe liste = new IListe(createTableSource);
-        final ListeAddPanel panel = new ListeAddPanel(elt, liste);
 
+        final ListeAddPanel panel = new ListeAddPanel(elt, liste) {
+            @Override
+            protected void handleAction(final JButton source, final ActionEvent evt) {
+                if (source == this.buttonEffacer && getListe().fetchSelectedRow() != null) {
+                    JPanel panel = new JPanel();
+                    GridBagConstraints c = new DefaultGridBagConstraints();
+                    c.gridwidth = 2;
+                    panel.add(new JLabel("Voulez vous supprimer ou rendre obsoléte?"), c);
+                    JButton buttonObs = new JButton("Obsoléte");
+                    JButton buttonSuppr = new JButton("Supprimer");
+                    c.gridy++;
+                    panel.add(buttonObs, c);
+                    c.gridx++;
+                    panel.add(buttonSuppr, c);
+
+                    final JFrame frame = new PanelFrame(panel, "Suppression d'ecritures");
+                    buttonObs.addActionListener(new ActionListener() {
+
+                        @Override
+                        public void actionPerformed(ActionEvent e) {
+                            List<SQLRowValues> rowVals = IListe.get(evt).getSelectedRows();
+                            UpdateBuilder build = new UpdateBuilder(sqlTableArticle);
+                            build.setObject("OBSOLETE", Boolean.TRUE);
+                            List<Integer> ids = new ArrayList<Integer>();
+                            for (SQLRowValues sqlRowValues : rowVals) {
+                                ids.add(sqlRowValues.getID());
+                            }
+                            build.setWhere(new Where(sqlTableArticle.getKey(), ids));
+                            sqlTableArticle.getDBSystemRoot().getDataSource().execute(build.asString());
+                            frame.dispose();
+                        }
+                    });
+                    buttonSuppr.addActionListener(new ActionListener() {
+
+                        @Override
+                        public void actionPerformed(ActionEvent e) {
+                            frame.dispose();
+                            SuperHandleAction(source, evt);
+                        }
+                    });
+                    frame.pack();
+                    frame.setResizable(false);
+                    frame.setLocationRelativeTo(null);
+                    frame.setVisible(true);
+                } else {
+                    super.handleAction(source, evt);
+                }
+            }
+
+            public void SuperHandleAction(final JButton source, final ActionEvent evt) {
+                super.handleAction(source, evt);
+            }
+        };
+
+        panel.getListe().getRequest().setSelectTransf(new ITransformer<SQLSelect, SQLSelect>() {
+            @Override
+            public SQLSelect transformChecked(SQLSelect input) {
+                input.setWhere(getWhere(panelFam, input));
+                return input;
+            }
+        });
+
+        // if (elt.getTable().getDBRoot().contains("TARIF_AGENCE")) {
+        // if (!UserRightsManager.getCurrentUserRights().haveRight("MODIF_PRODUCT_KIT")) {
+        // liste.addSelectionDataListener(new PropertyChangeListener() {
+        //
+        // @Override
+        // public void propertyChange(PropertyChangeEvent evt) {
+        // SQLRowValues rowVals = IListe.get(evt).getSelectedRow();
+        // if (rowVals != null) {
+        // int nbComp =
+        // rowVals.getReferentRows(rowVals.getTable().getTable("ARTICLE_ELEMENT").getField("ID_ARTICLE_PARENT")).size();
+        //
+        // panel.setModifyVisible(nbComp == 0 || (rowVals != null &&
+        // rowVals.getForeignID("ID_USER_COMMON_CREATE") == UserManager.getUserID()));
+        // panel.setDeleteVisible(nbComp == 0 || (rowVals != null &&
+        // rowVals.getForeignID("ID_USER_COMMON_CREATE") == UserManager.getUserID()));
+        // }
+        // }
+        // });
+        // }
+        // }
         List<Tuple2<? extends SQLTableModelColumn, IListTotalPanel.Type>> fields = new ArrayList<Tuple2<? extends SQLTableModelColumn, IListTotalPanel.Type>>(1);
-        fields.add(Tuple2.create(colStock, IListTotalPanel.Type.SOMME));
+        if (elt.getTable().getDBRoot().contains("ARTICLE_PRIX_REVIENT")) {
+            fields.add(Tuple2.create(colStock, IListTotalPanel.Type.SOMME));
 
-        IListTotalPanel total = new IListTotalPanel(liste, fields, null, "Total");
-        GridBagConstraints c2 = new DefaultGridBagConstraints();
-        c2.gridy = 4;
-        c2.anchor = GridBagConstraints.EAST;
-        c2.weightx = 0;
-        c2.fill = GridBagConstraints.NONE;
-        panel.add(total, c2);
+            IListTotalPanel total = new IListTotalPanel(liste, fields, null, "Total");
+            GridBagConstraints c2 = new DefaultGridBagConstraints();
+            c2.gridy = 4;
+            c2.anchor = GridBagConstraints.EAST;
+            c2.weightx = 0;
+            c2.fill = GridBagConstraints.NONE;
+            panel.add(total, c2);
+        }
 
         JSplitPane pane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(panelFam), panel);
         JPanel panelAll = new JPanel(new GridBagLayout());
@@ -144,7 +231,13 @@ public class ListeDesArticlesAction extends CreateFrameAbstractAction {
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
 
-                panel.getListe().getRequest().setWhere(getWhere(panelFam));
+                panel.getListe().getRequest().setSelectTransf(new ITransformer<SQLSelect, SQLSelect>() {
+                    @Override
+                    public SQLSelect transformChecked(SQLSelect input) {
+                        input.setWhere(getWhere(panelFam, input));
+                        return input;
+                    }
+                });
 
             }
         });
@@ -167,7 +260,15 @@ public class ListeDesArticlesAction extends CreateFrameAbstractAction {
             @Override
             public void actionPerformed(ActionEvent e) {
 
-                panel.getListe().getRequest().setWhere(getWhere(panelFam));
+                final ListSQLRequest request = panel.getListe().getRequest();
+                request.setSelectTransf(new ITransformer<SQLSelect, SQLSelect>() {
+
+                    @Override
+                    public SQLSelect transformChecked(SQLSelect input) {
+                        input.setWhere(getWhere(panelFam, input));
+                        return input;
+                    }
+                });
             }
         });
 
@@ -192,13 +293,15 @@ public class ListeDesArticlesAction extends CreateFrameAbstractAction {
      * @param panel
      * @return le where approprié
      */
-    public Where getWhere(FamilleArticlePanel panel) {
+    public Where getWhere(FamilleArticlePanel panel, SQLSelect request) {
         int id = panel.getFamilleTree().getSelectedID();
 
         Where w = null;
 
         if (panel.getCheckObsolete().isSelected()) {
             w = new Where(this.sqlTableArticle.getField("OBSOLETE"), "=", Boolean.FALSE);
+
+            w = w.or(new Where(request.getAlias(this.sqlTableArticle.getForeignTable("ID_STOCK").getField("QTE_REEL")), ">", 0));
         }
 
         if (id > 1) {

@@ -33,7 +33,6 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
     private final SQLRow saisieRow;
     private static final String source = "SAISIE_ACHAT";
     private static final Integer journal = new Integer(JournalSQLElement.ACHATS);
-    private static final SQLTable tableSaisieAchat = base.getTable("SAISIE_ACHAT");
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
     private static final SQLTable tableFournisseur = base.getTable("FOURNISSEUR");
     private static final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
@@ -42,11 +41,9 @@ public class GenerationMvtSaisieAchat extends GenerationEcritures implements Run
         setRowAnalytiqueSource(row);
         this.saisieRow = row;
         this.idMvt = idMvt;
-        (new Thread(GenerationMvtSaisieAchat.this)).start();
     }
 
     public GenerationMvtSaisieAchat(SQLRow row) {
-
         this(row, 1);
     }
 

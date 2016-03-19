@@ -14,33 +14,34 @@
  package org.openconcerto.ui.table;
 
 import org.openconcerto.ui.FormatEditor;
-import org.openconcerto.ui.PopupUtils;
 import org.openconcerto.ui.TimestampEditorPanel;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Point;
-import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.EventObject;
 
-import javax.swing.BorderFactory;
+import javax.swing.JPopupMenu;
 import javax.swing.JTable;
-import javax.swing.Popup;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 public class TimestampTableCellEditor extends FormatEditor implements ActionListener {
 
     private Calendar calendar;
     private Date currentvalue, initialvalue;
-    private Popup aPopup;
+    private JPopupMenu aPopup;
     private boolean popupOpen = false;
-    private TimestampEditorPanel content = new TimestampEditorPanel();
+    private final TimestampEditorPanel content = new TimestampEditorPanel();
     private boolean allowNull = true;
 
     public TimestampTableCellEditor(boolean showHour) {
@@ -51,7 +52,7 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
     public TimestampTableCellEditor() {
         super(DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT));
         this.calendar = Calendar.getInstance();
-        this.content.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+        this.content.setBorder(null);
     }
 
     public void setAllowNull(boolean b) {
@@ -59,7 +60,7 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
     }
 
     public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
-        Component c = super.getTableCellEditorComponent(table, value, isSelected, row, column);
+        final Component c = super.getTableCellEditorComponent(table, value, isSelected, row, column);
         Date time = (Date) value;
         if (time == null) {
             time = new Timestamp(System.currentTimeMillis());
@@ -68,17 +69,59 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
         this.calendar.setTime(time);
         this.currentvalue = time;
         this.initialvalue = time;
-        Rectangle rect = table.getCellRect(row, column, true);
-        Point p = new Point(rect.x, rect.y + table.getRowHeight(row));
-        SwingUtilities.convertPointToScreen(p, table);
+
+        final Point p = new Point(0, 0 + table.getRowHeight(row));
+
         if (this.aPopup != null) {
             this.content.removeActionListener(this);
             this.aPopup.hide();
             this.aPopup = null;
         }
 
-        this.aPopup = PopupUtils.createPopup(c, this.content, p.x, p.y);
-        showPopup();
+        JTextField t = (JTextField) c;
+
+        this.aPopup = new JPopupMenu();
+        this.aPopup.add(this.content);
+
+        t.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                // Invoke later to avoid paint issue
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        showPopup(c, p);
+                    }
+                });
+            }
+        });
+        t.addKeyListener(new KeyListener() {
+
+            @Override
+            public void keyTyped(KeyEvent e) {
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+            }
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+
+                if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+                    // Invoke later to avoid paint issue
+                    SwingUtilities.invokeLater(new Runnable() {
+
+                        @Override
+                        public void run() {
+                            showPopup(c, p);
+                        }
+                    });
+                }
+
+            }
+        });
+
         this.content.setCellEditor(this);
         this.content.addActionListener(this);
         return c;
@@ -90,23 +133,30 @@ public class TimestampTableCellEditor extends FormatEditor implements ActionList
         super.cancelCellEditing();
     }
 
-    public boolean stopCellEditing() {
-        hidePopup();
-        return super.stopCellEditing();
-    }
-
     public void hidePopup() {
         this.popupOpen = false;
         this.content.removeActionListener(this);
         if (this.aPopup != null) {
-            this.aPopup.hide();
-            this.aPopup = null;
+            this.aPopup.setVisible(false);
+
         }
     }
 
-    public void showPopup() {
+    public void showPopup(Component c, Point p) {
         this.popupOpen = true;
-        this.aPopup.show();
+        this.aPopup.show(c, p.x, p.y);
+        SwingUtilities.invokeLater(new Runnable() {
+
+            @Override
+            public void run() {
+                content.requestFocus();
+
+            }
+        });
+    }
+
+    public boolean isPopupOpen() {
+        return popupOpen;
     }
 
     public Object getCellEditorValue() {

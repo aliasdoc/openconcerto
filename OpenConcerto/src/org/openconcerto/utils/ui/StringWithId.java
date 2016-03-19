@@ -11,22 +11,27 @@
  * When distributing the software, include this License Header Notice in each file.
  */
  
- package org.openconcerto.sql.ui;
+ package org.openconcerto.utils.ui;
 
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-import org.openconcerto.utils.io.JSONconverter;
+import org.openconcerto.utils.io.JSONConverter;
 import org.openconcerto.utils.io.Transferable;
+import net.minidev.json.JSONObject;
 
-public class StringWithId implements Externalizable, Transferable {
+public class StringWithId implements Transferable, Externalizable {
     private long id;
     // value is always trimed
     private String value;
 
     public StringWithId() {
+    }
+
+    public StringWithId(final JSONObject json) {
+        this.fromJSON(json);
     }
 
     public StringWithId(long id, String value) {
@@ -39,28 +44,28 @@ public class StringWithId implements Externalizable, Transferable {
         if (index <= 0) {
             throw new IllegalArgumentException("invalid condensed value " + condensedValue);
         }
-        id = Long.parseLong(condensedValue.substring(0, index));
-        value = condensedValue.substring(index + 1).trim();
+        this.id = Long.parseLong(condensedValue.substring(0, index));
+        this.value = condensedValue.substring(index + 1).trim();
     }
 
     public long getId() {
-        return id;
+        return this.id;
     }
 
     public String getValue() {
-        return value;
+        return this.value;
     }
 
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
-        out.writeLong(id);
-        out.writeUTF(value);
+        out.writeLong(this.id);
+        out.writeUTF(this.value);
     }
 
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        id = in.readLong();
-        value = in.readUTF().trim();
+        this.id = in.readLong();
+        this.value = in.readUTF().trim();
     }
 
     @Override
@@ -76,15 +81,25 @@ public class StringWithId implements Externalizable, Transferable {
 
     @Override
     public int hashCode() {
-        return (int) id + value.hashCode();
+        return (int) this.id + this.value.hashCode();
     }
 
     public String toCondensedString() {
-        return id + "," + value;
+        return this.id + "," + this.value;
     }
 
     @Override
-    public String toJSON() {
-        return "{\"StringWithId\":" + JSONconverter.getJSON(this.id + "," + this.value) + "}";
+    public JSONObject toJSON() {
+        final JSONObject result = new JSONObject();
+        result.put("class", "StringWithId");
+        result.put("id", this.id);
+        result.put("value", this.value);
+        return result;
+    }
+
+    @Override
+    public void fromJSON(JSONObject json) {
+        this.id = (Integer) JSONConverter.getParameterFromJSON(json, "id", Integer.class);
+        this.value = (String) JSONConverter.getParameterFromJSON(json, "value", String.class);
     }
 }

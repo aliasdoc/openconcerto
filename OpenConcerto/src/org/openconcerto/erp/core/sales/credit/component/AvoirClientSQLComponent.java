@@ -60,6 +60,7 @@ import org.openconcerto.erp.model.ISQLCompteSelector;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
+import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.ElementSQLObject;
 import org.openconcerto.sql.element.SQLElement;
@@ -115,6 +116,9 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
             int idCli = AvoirClientSQLComponent.this.comboClient.getWantedID();
             if (idCli > 1) {
                 SQLRow rowCli = AvoirClientSQLComponent.this.tableClient.getRow(idCli);
+                if (!rowCli.isForeignEmpty("ID_COMMERCIAL")) {
+                    comboCommercial.setValue(rowCli.getForeignID("ID_COMMERCIAL"));
+                }
                 SQLElement sqleltModeRegl = Configuration.getInstance().getDirectory().getElement("MODE_REGLEMENT");
                 int idModeRegl = rowCli.getInt("ID_MODE_REGLEMENT");
                 if (!isFilling() && idModeRegl > 1 && AvoirClientSQLComponent.this.eltModeRegl.isCreated()) {
@@ -299,6 +303,25 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
         JTextField textMotif = new JTextField();
         this.add(textMotif, c);
 
+        if (getTable().contains("DATE_LIVRAISON")) {
+            JLabel labelDateLiv = new JLabel("Livraison le");
+            c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            labelDateLiv.setHorizontalAlignment(SwingConstants.RIGHT);
+            this.add(labelDateLiv, c);
+
+            c.gridx++;
+            c.gridwidth = 1;
+            c.weightx = 0;
+            c.fill = GridBagConstraints.NONE;
+            JDate dateLiv = new JDate();
+            this.add(dateLiv, c);
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.addSQLObject(dateLiv, "DATE_LIVRAISON");
+        }
+
         // Client
         c.gridx = 0;
         c.gridy++;
@@ -349,28 +372,40 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
 
         }
 
-            // Adresse spe
-            final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
-            final AddressChoiceUI addressUI = new AddressChoiceUI();
-            addressUI.addToUI(this, c);
-            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+            SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+            if (prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.ADDRESS_SPEC, true)) {
 
-                @Override
-                public void propertyChange(PropertyChangeEvent evt) {
-                    int wantedID = comboClient.getWantedID();
-                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
-                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                // Adresse spe
+                final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+                final AddressChoiceUI addressUI = new AddressChoiceUI();
+                addressUI.addToUI(this, c);
+                comboClient.addModelListener("wantedID", new PropertyChangeListener() {
 
-                        addressUI.getComboAdrF().getRequest().setWhere(
-                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
-                        addressUI.getComboAdrL().getRequest().setWhere(
-                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
-                    } else {
-                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
-                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                    @Override
+                    public void propertyChange(PropertyChangeEvent evt) {
+                        int wantedID = comboClient.getWantedID();
+                        System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                        if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                            addressUI
+                                    .getComboAdrF()
+                                    .getRequest()
+                                    .setWhere(
+                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice
+                                                    .getId())));
+                            addressUI
+                                    .getComboAdrL()
+                                    .getRequest()
+                                    .setWhere(
+                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery
+                                                    .getId())));
+                        } else {
+                            addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                            addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                        }
                     }
-                }
-            });
+                });
+            }
 
         final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
 

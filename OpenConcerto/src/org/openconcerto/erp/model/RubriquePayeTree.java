@@ -70,7 +70,7 @@ public class RubriquePayeTree extends JTree {
     }
 
     @Override
-    public Dimension getPreferredSize() {
+    public Dimension getMinimumSize() {
         return new Dimension(200, 400);
     }
 

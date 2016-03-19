@@ -14,6 +14,7 @@
  package org.openconcerto.erp.core.sales.invoice.report;
 
 import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLTable;
 
 public class VenteFactureElementXmlSheet extends VenteFactureXmlSheet {
@@ -21,6 +22,10 @@ public class VenteFactureElementXmlSheet extends VenteFactureXmlSheet {
 
     public VenteFactureElementXmlSheet(Integer id) {
         this(id.intValue());
+    }
+
+    public VenteFactureElementXmlSheet(SQLRow row) {
+        super(row.getForeignRow("ID_SAISIE_VENTE_FACTURE"));
     }
 
     public VenteFactureElementXmlSheet(int id) {

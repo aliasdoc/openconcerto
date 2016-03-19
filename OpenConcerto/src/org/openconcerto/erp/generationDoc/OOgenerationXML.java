@@ -132,6 +132,7 @@ public class OOgenerationXML {
                 InputStream annexeStream = TemplateManager.getInstance().getTemplate(annexeTemplateId, langage, typeTemplate);
                 if (annexeStream != null) {
                     templateId = annexeTemplateId;
+                    annexeStream.close();
                     System.err.println("modele With annexe " + templateId);
                 }
             }
@@ -140,6 +141,7 @@ public class OOgenerationXML {
             final InputStream xmlConfiguration = TemplateManager.getInstance().getTemplateConfiguration(templateId, langage, typeTemplate);
 
             Document doc = builder.build(xmlConfiguration);
+            xmlConfiguration.close();
 
             // On initialise un nouvel élément racine avec l'élément racine du document.
             Element racine = doc.getRootElement();
@@ -156,7 +158,7 @@ public class OOgenerationXML {
             final SpreadSheet spreadSheet;
             try {
                 spreadSheet = new ODPackage(templateStream).getSpreadSheet();
-
+                templateStream.close();
                 // On remplit les cellules de la feuille
                 parseElementsXML(listElts, row, spreadSheet);
 
@@ -385,23 +387,24 @@ public class OOgenerationXML {
         for (SQLRowAccessor rowElt : rowsEltCache.get(ref)) {
 
             if (!cache && rowElt.getTable().getFieldRaw("ID_TAXE") != null) {
-                SQLRowAccessor rowTaxe = getForeignRow(rowElt, rowElt.getTable().getField("ID_TAXE"));
-                BigDecimal ht = BigDecimal.ZERO;
-                if (rowElt.getTable().getFieldRaw("T_PV_HT") != null) {
-                    ht = (BigDecimal) rowElt.getObject("T_PV_HT");
+                if (!rowElt.getTable().contains("NIVEAU") || rowElt.getInt("NIVEAU") == 1) {
+                    SQLRowAccessor rowTaxe = getForeignRow(rowElt, rowElt.getTable().getField("ID_TAXE"));
+                    BigDecimal ht = BigDecimal.ZERO;
+                    if (rowElt.getTable().getFieldRaw("T_PV_HT") != null) {
+                        ht = (BigDecimal) rowElt.getObject("T_PV_HT");
+                    }
+
+                    if (taxe.get(rowTaxe) != null) {
+
+                        final Object object = taxe.get(rowTaxe).get("MONTANT_HT");
+                        BigDecimal montant = (object == null) ? BigDecimal.ZERO : (BigDecimal) object;
+                        taxe.get(rowTaxe).put("MONTANT_HT", montant.add(ht));
+                    } else {
+                        Map<String, Object> m = new HashMap<String, Object>();
+                        m.put("MONTANT_HT", ht);
+                        taxe.put(rowTaxe, m);
+                    }
                 }
-
-                if (taxe.get(rowTaxe) != null) {
-
-                    final Object object = taxe.get(rowTaxe).get("MONTANT_HT");
-                    BigDecimal montant = (object == null) ? BigDecimal.ZERO : (BigDecimal) object;
-                    taxe.get(rowTaxe).put("MONTANT_HT", montant.add(ht));
-                } else {
-                    Map<String, Object> m = new HashMap<String, Object>();
-                    m.put("MONTANT_HT", ht);
-                    taxe.put(rowTaxe, m);
-                }
-
             }
 
             final boolean included = isIncluded(tableElement.getFilterId(), tableElement.getForeignTableWhere(), tableElement.getFilterId(), tableElement.getFieldWhere(), rowElt);
@@ -821,9 +824,10 @@ public class OOgenerationXML {
             final InputStream odspIn = TemplateManager.getInstance().getTemplatePrintConfiguration(templateId, langage, null);
             if (odspIn != null) {
                 StreamUtils.copy(odspIn, odspOut);
+                odspIn.close();
             }
         } catch (FileNotFoundException e) {
-            System.err.println("Le fichier odsp n'existe pas.");
+            System.err.println("OOgenerationXML.saveSpreadSheet() : Le fichier odsp n'existe pas.");
         }
         return fDest;
     }
@@ -896,9 +900,10 @@ public class OOgenerationXML {
         try {
             final InputStream xmlConfiguration = TemplateManager.getInstance().getTemplateConfiguration(templateId, langage, typeTemplate);
             final Document doc = builder.build(xmlConfiguration);
+            xmlConfiguration.close();
             final InputStream template = TemplateManager.getInstance().getTemplate(templateId, langage, typeTemplate);
-
             final SpreadSheet spreadSheet = new ODPackage(template).getSpreadSheet();
+            template.close();
 
             // On initialise un nouvel élément racine avec l'élément racine du document.
             Element racine = doc.getRootElement();

@@ -14,6 +14,7 @@
  package org.openconcerto.erp.core.sales.quote.ui;
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.IListFilterDatePanel;
 import org.openconcerto.erp.core.common.ui.IListTotalPanel;
 import org.openconcerto.erp.core.sales.invoice.ui.DateEnvoiRenderer;
@@ -29,6 +30,7 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.model.graph.PathBuilder;
+import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
 import org.openconcerto.sql.view.list.IListe;
@@ -380,7 +382,8 @@ public class ListeDesDevisPanel extends JPanel {
                 }
             }, IListTotalPanel.Type.MOYENNE_MARGE));
             total = new IListTotalPanel(pane.getListe(), fields, null, "Total Global");
-        } else if (this.eltDevis.getTable().getFieldsName().contains("T_HA") && pane.getListe().getSource().getColumns(this.eltDevis.getTable().getField("T_HA")) != null) {
+        } else if (this.eltDevis.getTable().getFieldsName().contains("T_HA") && pane.getListe().getSource().getColumns(this.eltDevis.getTable().getField("T_HA")) != null
+                && UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
             total = new IListTotalPanel(pane.getListe(), Arrays.asList(this.eltDevis.getTable().getField("T_HA"), this.eltDevis.getTable().getField("T_HT")));
         } else {
             total = new IListTotalPanel(pane.getListe(), Arrays.asList(this.eltDevis.getTable().getField("T_HT")));

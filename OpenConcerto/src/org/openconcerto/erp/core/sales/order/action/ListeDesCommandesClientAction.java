@@ -119,98 +119,6 @@ public class ListeDesCommandesClientAction extends CreateFrameAbstractAction {
                 }
             });
         }
-        final List<RowAction> allowedActions = new ArrayList<RowAction>();
-        // Transfert vers facture
-        PredicateRowAction bonAction = new PredicateRowAction(new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                transfertBonLivraisonClient(IListe.get(e).getSelectedRows());
-            }
-        }, false, "sales.order.create.deliverynote");
-
-        // Transfert vers facture
-        RowAction factureAction = new RowAction(new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                transfertFactureClient(IListe.get(e).getSelectedRows());
-            }
-        }, false, "sales.order.create.invoice") {
-
-            @Override
-            public boolean enabledFor(List<SQLRowValues> selection) {
-                if (selection.isEmpty()) {
-                    return false;
-                } else if (selection.size() > 1) {
-                    return true;
-                } else {
-                    BigDecimal d = getAvancement(selection.get(0));
-                    return d.signum() == 0;
-                }
-            }
-        };
-
-        // Transfert vers facture intermédiaire
-        RowAction acompteAction = new RowAction(new AbstractAction("Créer une facture intermédiaire") {
-            public void actionPerformed(ActionEvent e) {
-                transfertAcompteClient(IListe.get(e).getSelectedRows());
-            }
-        }, false, "sales.order.create.account") {
-            BigDecimal cent = BigDecimal.ONE.movePointRight(2);
-
-            @Override
-            public boolean enabledFor(List<SQLRowValues> selection) {
-                if (selection.isEmpty() || selection.size() > 1) {
-                    return false;
-                } else {
-                    BigDecimal d = getAvancement(selection.get(0));
-                    return NumberUtils.compare(d, cent) != 0;
-                }
-            }
-        };
-
-        // Transfert vers facture solde
-        RowAction soldeAction = new RowAction(new AbstractAction("Facturer le solde") {
-            public void actionPerformed(ActionEvent e) {
-                transfertSoldeClient(IListe.get(e).getSelectedRows());
-            }
-        }, false, "sales.order.create.account.solde") {
-            BigDecimal cent = BigDecimal.ONE.movePointRight(2);
-
-            @Override
-            public boolean enabledFor(List<SQLRowValues> selection) {
-                if (selection.isEmpty() || selection.size() > 1) {
-                    return false;
-                } else {
-                    BigDecimal d = getAvancement(selection.get(0));
-                    return NumberUtils.compare(d, cent) != 0 && NumberUtils.compare(d, BigDecimal.ZERO) != 0;
-                }
-            }
-        };
-
-        // Transfert vers commande
-        PredicateRowAction cmdAction = new PredicateRowAction(new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                final int selectedId = IListe.get(e).getSelectedId();
-                ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        final CommandeClientSQLElement elt = (CommandeClientSQLElement) Configuration.getInstance().getDirectory().getElement("COMMANDE_CLIENT");
-                        elt.transfertCommande(selectedId);
-
-                    }
-                });
-
-            }
-
-        }, false, "sales.order.create.supplier.order");
-
-        cmdAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
-
-        bonAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
-        allowedActions.add(bonAction);
-        allowedActions.add(factureAction);
-        allowedActions.add(acompteAction);
-        allowedActions.add(soldeAction);
-        allowedActions.add(cmdAction);
 
         this.colAvancement = new BaseSQLTableModelColumn("Avancement facturation", BigDecimal.class) {
 
@@ -228,7 +136,7 @@ public class ListeDesCommandesClientAction extends CreateFrameAbstractAction {
         };
         tableSource.getColumns().add(this.colAvancement);
         this.colAvancement.setRenderer(new PercentTableCellRenderer());
-        final ListeAddPanel panel = getPanel(eltCmd, tableSource, allowedActions);
+        final ListeAddPanel panel = getPanel(eltCmd, tableSource);
         return panel;
     }
 
@@ -250,7 +158,7 @@ public class ListeDesCommandesClientAction extends CreateFrameAbstractAction {
         }
     }
 
-    private ListeAddPanel getPanel(final SQLElement eltCmd, final SQLTableModelSourceOnline tableSource, final List<RowAction> allowedActions) {
+    private ListeAddPanel getPanel(final SQLElement eltCmd, final SQLTableModelSourceOnline tableSource) {
         final ListeAddPanel panel = new ListeAddPanel(eltCmd, new IListe(tableSource)) {
             @Override
             protected void createUI() {
@@ -303,13 +211,6 @@ public class ListeDesCommandesClientAction extends CreateFrameAbstractAction {
         // Date panel
         final IListFilterDatePanel datePanel = new IListFilterDatePanel(panel.getListe(), eltCmd.getTable().getField("DATE"), IListFilterDatePanel.getDefaultMap());
 
-        panel.getListe().addIListeActions(new MouseSheetXmlListeListener(CommandeClientXmlSheet.class) {
-            @Override
-            public List<RowAction> addToMenu() {
-                return allowedActions;
-            }
-        }.getRowActions());
-
         datePanel.setFilterOnDefault();
 
         final JPanel bottomPanel = new JPanel();
@@ -329,40 +230,4 @@ public class ListeDesCommandesClientAction extends CreateFrameAbstractAction {
         return panel;
     }
 
-    /**
-     * Transfert en BL
-     * 
-     * @param row
-     */
-    private void transfertBonLivraisonClient(List<SQLRowValues> rows) {
-        TransfertBaseSQLComponent.openTransfertFrame(rows, "BON_DE_LIVRAISON");
-    }
-
-    /**
-     * Transfert en Facture
-     * 
-     * @param row
-     */
-    private void transfertFactureClient(List<SQLRowValues> rows) {
-        TransfertBaseSQLComponent.openTransfertFrame(rows, "SAISIE_VENTE_FACTURE");
-
-    }
-
-    /**
-     * Transfert en Facture
-     * 
-     * @param row
-     */
-    private void transfertAcompteClient(List<SQLRowValues> rows) {
-        TransfertGroupSQLComponent.openTransfertFrame(rows, "SAISIE_VENTE_FACTURE", VenteFactureSituationSQLComponent.ID);
-    }
-
-    /**
-     * Transfert en Facture
-     * 
-     * @param row
-     */
-    private void transfertSoldeClient(List<SQLRowValues> rows) {
-        TransfertGroupSQLComponent.openTransfertFrame(rows, "SAISIE_VENTE_FACTURE", VenteFactureSoldeSQLComponent.ID);
-    }
 }

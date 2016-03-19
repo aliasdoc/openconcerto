@@ -30,6 +30,7 @@ public class Currency {
     static {
         mapSymbol = new HashMap<String, String>();
         mapSymbol.put("ALL", "Lek");
+        mapSymbol.put("AED", "Dhs");
         mapSymbol.put("AFN", "؋");
         mapSymbol.put("ARS", "$");
         mapSymbol.put("AWG", "ƒ");
@@ -56,6 +57,7 @@ public class Currency {
         mapSymbol.put("HRK", "kn");
         mapSymbol.put("CUP", "₱");
         mapSymbol.put("CZK", "Kč");
+        mapSymbol.put("DZD", "D.A.");
         mapSymbol.put("DKK", "kr");
         mapSymbol.put("DOP", "RD$");
         mapSymbol.put("XCD", "$");
@@ -91,6 +93,7 @@ public class Currency {
         mapSymbol.put("LBP", "£");
         mapSymbol.put("LRD", "$");
         mapSymbol.put("LTL", "Lt");
+        mapSymbol.put("MAD", "MAD");
         mapSymbol.put("MKD", "ден");
         mapSymbol.put("MYR", "RM");
         mapSymbol.put("MUR", "₨");

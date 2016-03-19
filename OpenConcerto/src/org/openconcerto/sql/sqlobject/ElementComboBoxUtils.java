@@ -27,11 +27,11 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.request.BaseFillSQLRequest;
-import org.openconcerto.sql.ui.StringWithId;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.Tuple2;
 import org.openconcerto.utils.cc.IPredicate;
 import org.openconcerto.utils.cc.ITransformer;
+import org.openconcerto.utils.ui.StringWithId;
 
 import java.util.ArrayList;
 import java.util.Collections;

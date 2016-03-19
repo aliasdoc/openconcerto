@@ -323,7 +323,7 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         if (this.isCacheEnabled() && this.tables.size() > 0)
             // the general cache should wait for transactions to end, but the cache of transactions
             // must not.
-            res = new SQLCache<List<?>, Object>(30, 30, "results of " + o.getClass().getSimpleName(), o == this);
+            res = new SQLCache<List<?>, Object>(30, 120, "results of " + o.getClass().getSimpleName(), o == this);
         else
             res = null;
         return res;

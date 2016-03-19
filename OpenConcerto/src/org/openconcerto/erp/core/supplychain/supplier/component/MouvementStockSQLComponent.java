@@ -17,6 +17,7 @@ import org.openconcerto.erp.core.supplychain.stock.element.MouvementStockSQLElem
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.sqlobject.SQLTextCombo;
 import org.openconcerto.ui.DefaultGridBagConstraints;
@@ -110,6 +111,13 @@ public class MouvementStockSQLComponent extends BaseSQLComponent {
         this.addSQLObject(this.textLib, "NOM");
         this.addRequiredSQLObject(articleSelect, "ID_ARTICLE");
         this.addRequiredSQLObject(this.date, "DATE");
+    }
+
+    @Override
+    protected SQLRowValues createDefaults() {
+        SQLRowValues rowVals = new SQLRowValues(getTable());
+        rowVals.put("REEL", Boolean.TRUE);
+        return rowVals;
     }
 
     @Override

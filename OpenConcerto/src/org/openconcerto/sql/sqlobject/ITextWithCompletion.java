@@ -361,12 +361,8 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
 
     private void updateAutoCompletion(boolean autoselectIfMatch) {
 
-        System.err.println("---ITextWithCompletion.updateAutoCompletion() autoselectIfMatch:" + autoselectIfMatch);
-
         assert SwingUtilities.isEventDispatchThread();
         if (!this.isCompletionEnabled() || this.isLoading) {
-            System.err.println("ITextWithCompletion.updateAutoCompletion() autoselectIfMatch:" + autoselectIfMatch + " quick exit : is loading: " + this.isLoading + " completion enabled: "
-                    + this.isCompletionEnabled());
             return;
         }
         String t = this.text.getText().trim();
@@ -381,7 +377,6 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
         this.model.removeAllElements();
         this.model.addAll(l);
 
-        System.err.println("ITextWithCompletion.updateAutoCompletion() text:" + t + " : " + l.size() + " values found, this.selectAuto : " + this.selectAuto);
         if (l.size() > 0) {
             showPopup();
         } else {
@@ -400,7 +395,6 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
                     break;
                 }
             }
-            System.err.println("ITextWithCompletion.updateAutoCompletion() text:" + t + " : " + l.size() + " values found, " + t + " found:" + found);
 
         }
 

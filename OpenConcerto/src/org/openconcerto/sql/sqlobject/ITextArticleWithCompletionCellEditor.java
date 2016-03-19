@@ -13,22 +13,78 @@
  
  package org.openconcerto.sql.sqlobject;
 
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLTable;
-
 import java.awt.Component;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 
 import javax.swing.AbstractCellEditor;
+import javax.swing.BorderFactory;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import javax.swing.table.TableCellEditor;
 
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
+
 public class ITextArticleWithCompletionCellEditor extends AbstractCellEditor implements TableCellEditor {
 
     private final ITextArticleWithCompletion text;
+    private boolean listenersInited = false;
 
     public ITextArticleWithCompletionCellEditor(SQLTable tableArticle, SQLTable tableARticleFournisseur) {
         this.text = new ITextArticleWithCompletion(tableArticle, tableARticleFournisseur);
+        this.text.setBorder(BorderFactory.createEmptyBorder());
+    }
+
+    private void initListener(final JTable t) {
+        if (!this.listenersInited) {
+            this.listenersInited = true;
+            this.text.getTextComp().addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    if (e.getKeyCode() == KeyEvent.VK_TAB) {
+                        final int column;
+                        final int row = t.getEditingRow();
+
+                        // gestion tab ou shift+tab
+                        if (e.getModifiers() == KeyEvent.SHIFT_MASK) {
+                            column = t.getEditingColumn() - 1;
+                        } else {
+                            column = t.getEditingColumn() + 1;
+                        }
+
+                        SwingUtilities.invokeLater(new Runnable() {
+
+                            public void run() {
+                                if (t.getCellEditor() != null && t.getCellEditor().stopCellEditing()) {
+                                    if (column >= 0 && column < t.getColumnCount()) {
+                                        t.setColumnSelectionInterval(column, column);
+                                        t.setRowSelectionInterval(row, row);
+                                        // Need to postpone editCell because selection with
+                                        // cancel
+                                        // selection
+                                        SwingUtilities.invokeLater(new Runnable() {
+
+                                            public void run() {
+                                                if (t.editCellAt(row, column)) {
+                                                    t.getEditorComponent().requestFocusInWindow();
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                    } else {
+                        if (e.getKeyCode() == KeyEvent.VK_SPACE && e.getModifiers() == KeyEvent.SHIFT_MASK) {
+                            e.setModifiers(0);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     @Override
@@ -39,6 +95,7 @@ public class ITextArticleWithCompletionCellEditor extends AbstractCellEditor imp
     @Override
     public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
 
+        initListener(table);
         if (value != null) {
             this.text.setText((String) value);
         } else {
@@ -62,5 +119,9 @@ public class ITextArticleWithCompletionCellEditor extends AbstractCellEditor imp
 
     public SQLRowAccessor getComboSelectedRow() {
         return this.text.getSelectedRow();
+    }
+
+    public void setWhere(Where w) {
+        this.text.setWhere(w);
     }
 }

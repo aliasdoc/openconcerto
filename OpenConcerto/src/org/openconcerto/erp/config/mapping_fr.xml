@@ -201,6 +201,8 @@
 		<FIELD name="IMPOSABLE" label="Imposable" />
 		<FIELD name="ID_IMPRESSION_RUBRIQUE" label="Impression" />
 		<FIELD name="ID_PERIODE_VALIDITE" label="Période de validité" />
+		<FIELD name="PART_CSG_SANS_ABATTEMENT" label="Part CSG CRDS sans abattement" />
+		<FIELD name="PART_PAT_IMPOSABLE" label="Montant patronale imposable" />
 	</TABLE>
 	<TABLE name="SOCIETE_COMMON">
 		<FIELD name="DATABASE_NAME" label="Nom" />

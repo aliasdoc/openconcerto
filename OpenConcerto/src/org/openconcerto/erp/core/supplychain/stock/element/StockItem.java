@@ -90,8 +90,9 @@ public class StockItem {
                             / (stockItemComponent.getQty() * stockItemComponent.getQtyUnit().doubleValue())));
 
         }
-        this.realQty = real;
-        this.virtualQty = virtual;
+        // La quantité du kit ne peut être négative
+        this.realQty = Math.max(0, real);
+        this.virtualQty = Math.max(0, virtual);
     }
 
     public void fillCommandeFournisseur(ListMap<SQLRow, SQLRowValues> cmd) {

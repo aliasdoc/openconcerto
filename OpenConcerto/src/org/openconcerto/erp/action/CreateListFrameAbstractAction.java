@@ -13,9 +13,19 @@
  
  package org.openconcerto.erp.action;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+
+import org.jdom.Document;
+import org.jdom.input.DOMBuilder;
+
+import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.PropsConfiguration;
 import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.ui.light.LightUIDescriptorProvider;
+import org.openconcerto.sql.ui.light.LightUIFrameProvider;
+import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.view.list.IListeAction;
 import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
@@ -24,35 +34,46 @@ import org.openconcerto.ui.light.ActivationOnSelectionControler;
 import org.openconcerto.ui.light.ColumnSpec;
 import org.openconcerto.ui.light.ColumnsSpec;
 import org.openconcerto.ui.light.CustomEditorProvider;
-import org.openconcerto.ui.light.LightUIDescriptor;
 import org.openconcerto.ui.light.LightUIElement;
+import org.openconcerto.ui.light.LightUIFrame;
 import org.openconcerto.ui.light.LightUILine;
+import org.openconcerto.ui.light.LightUIPanel;
+import org.openconcerto.ui.light.LightUITable;
 import org.openconcerto.ui.light.ListToolbarLine;
+import org.openconcerto.ui.light.RowSelectionSpec;
 import org.openconcerto.ui.light.TableSpec;
 import org.openconcerto.utils.i18n.TranslationManager;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-
-public abstract class CreateListFrameAbstractAction extends CreateFrameAbstractAction implements LightUIDescriptorProvider {
+public abstract class CreateListFrameAbstractAction extends CreateFrameAbstractAction implements LightUIFrameProvider {
     abstract public String getTableName();
 
     @Override
-    public LightUIDescriptor getUIDescriptor(PropsConfiguration configuration) {
+    public LightUIFrame getUIFrame(PropsConfiguration configuration) {
+        // Get SQLElement
         SQLElement element = configuration.getDirectory().getElement(getTableName());
-        String descriptorId = element.getCode() + ".element";
-        final LightUIDescriptor desc = new LightUIDescriptor(descriptorId);
+        final String elementCode = element.getCode(); 
+        
+        // Title of frame should be the element code with .title
+        final String frameTitle = TranslationManager.getInstance().getTranslationForItem(elementCode + ".title");
+        
+        // Create frame
+        final LightUIFrame frame = new LightUIFrame(elementCode);
+        frame.setTitle(frameTitle);
+        
+        // Create main frame panel
+        final String panelId = element.getCode() + ".panel"; 
+        final LightUIPanel panel = new LightUIPanel(panelId);
 
-        String listId = element.getCode() + ".list";
-        LightUIElement list = getListCustomEditorProvider(element).createUIElement(listId);
-        list.setFillWidth(true);
-        // UI
+        // Create table
+        String tableId = element.getCode() + ".table";
+        LightUIElement table = getTableCustomEditorProvider(element).createUIElement(tableId);
+        table.setFillWidth(true);
+        
+        // Get actions associate to the SQLElement and create buttons for them
         Collection<IListeAction> actions = element.getRowActions();
         LightUILine l0 = new LightUILine();
         l0.setGridAlignment(LightUILine.ALIGN_LEFT);
-        for (Iterator iterator = actions.iterator(); iterator.hasNext();) {
+        for (Iterator<IListeAction> iterator = actions.iterator(); iterator.hasNext();) {
             RowAction iListeAction = (RowAction) iterator.next();
             if (iListeAction.inHeader()) {
                 LightUIElement element2 = new LightUIElement();
@@ -66,56 +87,75 @@ public abstract class CreateListFrameAbstractAction extends CreateFrameAbstractA
 
                 l0.add(element2);
 
-                desc.addControler(new ActivationOnSelectionControler(listId, element2.getId()));
+                panel.addControler(new ActivationOnSelectionControler(tableId, element2.getId()));
 
             }
         }
-        desc.addLine(l0);
+        panel.addLine(l0);
 
         LightUILine l1 = new LightUILine();
         l1.setFillHeight(true);
         l1.setWeightY(1);
-        l1.add(list);
-        desc.addLine(l1);
+        l1.add(table);
+        panel.addLine(l1);
 
-        desc.addLine(new ListToolbarLine());
-        desc.dump(System.out);
-        return desc;
+        panel.addLine(new ListToolbarLine());
+        panel.dump(System.out);
+        
+        return frame;
     }
 
-    public static CustomEditorProvider getListCustomEditorProvider(final SQLElement element) {
+    public static CustomEditorProvider getTableCustomEditorProvider(final SQLElement element) {
         // generic list of elements
         return new CustomEditorProvider() {
 
             @Override
             public LightUIElement createUIElement(String id) {
-                LightUIElement e = new LightUIElement();
-                e.setId(id);
-                e.setType(LightUIElement.TYPE_LIST);
-                List<String> visibleIds = new ArrayList<String>();
-                List<String> sortedIds = new ArrayList<String>();
+                final List<String> possibleColumnIds = new ArrayList<String>();
+                final List<String> sortedIds = new ArrayList<String>();
 
-                SQLTableModelSourceOnline source = element.getTableSource();
-                List<SQLTableModelColumn> columns = source.getColumns();
+                final SQLTableModelSourceOnline source = element.getTableSource();
+                final List<SQLTableModelColumn> columns = source.getColumns();
+                final List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>(columns.size());
 
-                List<ColumnSpec> cols = new ArrayList<ColumnSpec>(columns.size());
-                for (SQLTableModelColumn column : columns) {
-
-                    // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
-                    int width = column.getName().length() * 20 + 20;
-
-                    ColumnSpec col = new ColumnSpec(column.getIdentifier(), column.getValueClass(), column.getName(), null, width, false, null);
-                    cols.add(col);
-                    visibleIds.add(column.getIdentifier());
+                // Get user preferences for this table 
+                final long userId = UserManager.getUserID();
+                Document columnsPrefs = null;
+                try {
+                    final DOMBuilder in = new DOMBuilder();
+                    final org.w3c.dom.Document w3cDoc = Configuration.getInstance().getXMLConf(userId, id);
+                    if (w3cDoc != null) {
+                        columnsPrefs = in.build(w3cDoc);
+                    }
+                } catch (Exception ex) {
+                    throw new IllegalArgumentException("Failed to get ColumnPrefs for table " + id + " and for user " + userId + "\n" + ex.getMessage());
                 }
 
+                // Create ColumnSpec from the SQLTableModelColumn
+                final int sqlColumnsCount = columns.size();
+                for(int i = 0; i < sqlColumnsCount; i++) {
+                    final SQLTableModelColumn sqlColumn = columns.get(i);
+                    // TODO : creer la notion d'ID un peu plus dans le l'esprit sales.invoice.amount
+                    final String columnId = sqlColumn.getIdentifier();
+                    possibleColumnIds.add(columnId);
+                    columnsSpec.add(new ColumnSpec(columnId, sqlColumn.getValueClass(), sqlColumn.getName(), null, false, null));
+                }
+                
                 // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
-                sortedIds.add(visibleIds.get(0));
+                sortedIds.add(columnsSpec.get(0).getId());
 
-                ColumnsSpec columnsSpec = new ColumnsSpec(element.getCode(), cols, visibleIds, sortedIds);
-                TableSpec tSpec = new TableSpec();
-                tSpec.setColumns(columnsSpec);
-                e.setRawContent(tSpec);
+                // Create TableSpec
+                final ColumnsSpec cSpec = new ColumnsSpec(element.getCode(), columnsSpec, possibleColumnIds, sortedIds);
+                cSpec.setAllowMove(true);
+                cSpec.setAllowResize(true);
+                cSpec.setUserPrefs(columnsPrefs);
+                
+                final RowSelectionSpec selectionSpec = new RowSelectionSpec(id);
+                final TableSpec tSpec = new TableSpec(id, selectionSpec, cSpec);
+                
+                // Create table
+                final LightUITable e = new LightUITable(id);
+                e.setTableSpec(tSpec);
 
                 return e;
             }

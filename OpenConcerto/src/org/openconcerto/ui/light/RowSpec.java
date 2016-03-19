@@ -13,13 +13,16 @@
  
  package org.openconcerto.ui.light;
 
-import org.openconcerto.utils.io.JSONAble;
-import org.openconcerto.utils.io.JSONconverter;
-
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.List;
+
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONConverter;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
 
 public class RowSpec implements Externalizable, JSONAble {
     private String tableId;
@@ -27,6 +30,10 @@ public class RowSpec implements Externalizable, JSONAble {
 
     public RowSpec() {
         // Serialization
+    }
+
+    public RowSpec(final JSONObject json) {
+        this.fromJSON(json);
     }
 
     public RowSpec(String tableId, String[] columnIds) {
@@ -79,18 +86,47 @@ public class RowSpec implements Externalizable, JSONAble {
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         this.tableId = in.readUTF();
         this.columnIds = (String[]) in.readObject();
-
     }
 
     @Override
-    public String toJSON() {
-        final StringBuilder result = new StringBuilder("{");
-        
-        result.append("\"tableId\":" + JSONconverter.getJSON(this.tableId) + ",");
-        result.append("\"columnIds\":" + JSONconverter.getJSON(this.columnIds));
-
-        result.append("}");
-        return result.toString();
+    public JSONObject toJSON() {
+        final JSONObject result = new JSONObject();
+        result.put("class", "RowSpec");
+        result.put("table-id", this.tableId);
+        result.put("column-ids", this.columnIds);
+        return result;
     }
 
+    @Override
+    public void fromJSON(final JSONObject json) {
+        this.tableId = (String) JSONConverter.getParameterFromJSON(json, "table-id", String.class);
+
+        final JSONArray jsonColumnIds = (JSONArray) json.get("column-ids");
+        if (jsonColumnIds != null) {
+            try {
+                this.columnIds = new String[jsonColumnIds.size()];
+                this.columnIds = ((List<String>) (List<?>) jsonColumnIds).toArray(this.columnIds);
+            } catch (final Exception ex) {
+                throw new IllegalArgumentException("invalid value for 'possible-column-ids', List<String> expected");
+            }
+        }
+
+        if (!json.containsKey("table-id") || (json.get("table-id") instanceof String)) {
+            throw new IllegalArgumentException("value for 'value-type' not found or invalid");
+        }
+        if (!json.containsKey("column-ids") || (json.get("column-ids") instanceof JSONArray)) {
+            throw new IllegalArgumentException("value for 'value-type' not found or invalid");
+        }
+        this.tableId = (String) json.get("table-id");
+
+        final int columnCount = jsonColumnIds.size();
+        this.columnIds = new String[columnCount];
+        for (int i = 0; i < columnCount; i++) {
+            final Object jsonColumnId = jsonColumnIds.get(i);
+            if (!(jsonColumnId instanceof String)) {
+                throw new IllegalArgumentException("one or more column Ids are invalid in 'column-ids'");
+            }
+            this.columnIds[i] = (String) jsonColumnId;
+        }
+    }
 }

@@ -18,6 +18,8 @@ import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 
 import javax.swing.JLabel;
@@ -27,13 +29,24 @@ import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 
+import org.jdom.Document;
+import org.jdom.Element;
+import org.jdom.input.DOMBuilder;
+
 import org.openconcerto.erp.config.Gestion;
 import org.openconcerto.erp.config.Log;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.PropsConfiguration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.sql.model.FieldPath;
+import org.openconcerto.sql.model.SQLField;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.request.SQLFieldTranslator;
 import org.openconcerto.sql.ui.light.GroupToLightUIConvertor;
+import org.openconcerto.sql.users.UserManager;
+import org.openconcerto.sql.view.list.IListeAction;
+import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.task.config.ComptaBasePropsConfiguration;
@@ -41,13 +54,20 @@ import org.openconcerto.ui.AutoHideListener;
 import org.openconcerto.ui.group.Group;
 import org.openconcerto.ui.light.ColumnSpec;
 import org.openconcerto.ui.light.ColumnsSpec;
-import org.openconcerto.ui.light.LightUIDescriptor;
+import org.openconcerto.ui.light.InformationLine;
+import org.openconcerto.ui.light.LightUIButtonWithSelectionContext;
 import org.openconcerto.ui.light.LightUIElement;
+import org.openconcerto.ui.light.LightUIFrame;
 import org.openconcerto.ui.light.LightUILine;
+import org.openconcerto.ui.light.LightUIPanel;
+import org.openconcerto.ui.light.LightUITable;
+import org.openconcerto.ui.light.RowSelectionSpec;
+import org.openconcerto.ui.light.SimpleTextLine;
 import org.openconcerto.ui.light.TableSpec;
 import org.openconcerto.ui.table.TableCellRendererUtils;
 import org.openconcerto.utils.GestionDevise;
 import org.openconcerto.utils.convertor.ValueConvertor;
+import org.openconcerto.utils.i18n.TranslationManager;
 
 /**
  * SQLElement de la base société
@@ -58,6 +78,7 @@ import org.openconcerto.utils.convertor.ValueConvertor;
 public abstract class ComptaSQLConfElement extends SQLElement {
 
     private static DBRoot baseSociete;
+    
     public static final TableCellRenderer CURRENCY_RENDERER = new DefaultTableCellRenderer() {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
@@ -178,118 +199,239 @@ public abstract class ComptaSQLConfElement extends SQLElement {
         }
     }
 
-    public LightUIDescriptor getUIDescriptorForList(final int counterId) {
-        LightUIElement e = new LightUIElement();
-        e.setId("list_" + this.getCode());
-        e.setType(LightUIElement.TYPE_LIST);
-        List<String> columnsIds = new ArrayList<String>();
+    /**
+     * Create a new panel which contains the table
+     * @return The LightUIPanel which contains the LightUITable
+     * @throws IllegalArgumentException
+     */
+    public LightUIPanel createUIPanelForTable() throws IllegalArgumentException {
+        final LightUILine listLine = new LightUILine();
+        listLine.add(createUIElementForTable());
 
-        List<String> visibleIds = new ArrayList<String>();
-        List<String> sortedIds = new ArrayList<String>();
-
-        SQLTableModelSourceOnline source = this.getTableSource();
-        List<SQLTableModelColumn> columns = source.getColumns();
-
-        List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
-
-        for (SQLTableModelColumn column : columns) {
-            // TODO : creer la notion d'ID un peu plus dans le l'esprit sales.invoice.amount
-            String columnId = column.getIdentifier();
-            columnsIds.add(columnId);
-
-            visibleIds.add(columnId);
-            // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
-            int width = column.getName().length() * 20 + 20;
-
-            ColumnSpec spec = new ColumnSpec(columnId, column.getValueClass(), column.getName(), null, width, false, null);
-            columnsSpec.add(spec);
+        final LightUIPanel panel = new LightUIPanel(this.getCode());
+        panel.addLine(listLine);
+        return panel;
+    }
+    
+    /**
+     * Get columns user preferences for a specific table
+     * @param userId - Id of the user who want view the table
+     * @param tableId - Id of table to show
+     * @param sqlColumns - List of columns to be displayed
+     * @return the XML which contains user preferences
+     */
+    protected Document getColumnsUserPerfs(final int userId, final String tableId, final List<SQLTableModelColumn> sqlColumns) {
+        Document columnsPrefs = null;
+        try {
+            final DOMBuilder in = new DOMBuilder();
+            final org.w3c.dom.Document w3cDoc = Configuration.getInstance().getXMLConf(userId, tableId);
+            if (w3cDoc != null) {
+                columnsPrefs = in.build(w3cDoc);
+            }
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Failed to get ColumnPrefs for table " + tableId + " and for user " + userId + "\n" + ex.getMessage());
         }
+        
+        if (columnsPrefs != null) {
+            final Element rootElement = columnsPrefs.getRootElement();
+            if (!rootElement.getName().equals("list")) {
+                throw new IllegalArgumentException("invalid xml, roots node list expected but " + rootElement.getName() + " found");
+            }
 
+            final int columnsCount = sqlColumns.size();
+            final List<Element> xmlColumns = rootElement.getChildren();
+            if (xmlColumns.size() != columnsCount) {
+                columnsPrefs = null;
+            }
+        }
+        
+        return columnsPrefs;
+    }
+    
+    /**
+     * Create ColumnsSpec from list of SQLTableModelColumn and apply user preferences
+     * @param columns - list of SQLTableModelColumn (columns to be displayed)
+     * @param columnsPrefs - user preferences for table columns 
+     * @return New ColumnsSpec with user preferences application
+     */
+    protected ColumnsSpec createColumnsSpec(final List<SQLTableModelColumn> columns, final Document columnsPrefs) {
+        final List<String> possibleColumnIds = new ArrayList<String>();
+        final List<String> sortedIds = new ArrayList<String>();
+        final List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
+        
+        final int columnsCount = columns.size(); 
+        
+        for(int i = 0; i < columnsCount; i++) {
+            final SQLTableModelColumn sqlColumn = columns.get(i);
+            // TODO : creer la notion d'ID un peu plus dans le l'esprit sales.invoice.amount
+            final String columnId = sqlColumn.getIdentifier();
+            
+            possibleColumnIds.add(columnId);
+            columnsSpec.add(new ColumnSpec(columnId, sqlColumn.getValueClass(), sqlColumn.getName(), null, false, null));
+        }
         // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
-        sortedIds.add(columnsIds.get(0));
-        String lid = this.getCode();
-
-        ColumnsSpec cSpec = new ColumnsSpec(lid, columnsSpec, visibleIds, sortedIds);
-        TableSpec tSpec = new TableSpec();
-        tSpec.setColumns(cSpec);
-        e.setRawContent(tSpec);
-
-        final LightUIDescriptor desc = new LightUIDescriptor(this.getCode(), counterId);
-        LightUILine listLine = new LightUILine();
-        listLine.add(e);
-        desc.addLine(listLine);
-        return desc;
+        sortedIds.add(columnsSpec.get(0).getId());
+        
+        final ColumnsSpec cSpec = new ColumnsSpec(this.getCode(), columnsSpec, possibleColumnIds, sortedIds);
+        cSpec.setAllowMove(true);
+        cSpec.setAllowResize(true);
+        cSpec.setUserPrefs(columnsPrefs);
+        
+        return cSpec; 
     }
 
-    public LightUIElement getUIElementForList() {
-        final LightUIElement element = new LightUIElement();
-        element.setId("list_" + this.getCode());
-        element.setType(LightUIElement.TYPE_LIST);
-        final List<String> columnsIds = new ArrayList<String>();
-        final List<String> visibleIds = new ArrayList<String>();
-        final List<String> sortedIds = new ArrayList<String>();
-
+    /**
+     * Create the LightUITable associated to this ComptaSQLConfElement 
+     * @return The LightUITable associated to this ComptaSQLConfElement
+     * @throws IllegalArgumentException
+     */
+    public LightUITable createUIElementForTable() throws IllegalArgumentException {
+        final String tableId = this.getCode() + ".table";
+        
         final SQLTableModelSourceOnline source = this.getTableSource();
         final List<SQLTableModelColumn> columns = source.getColumns();
-        final List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
+        
+        Document columnsPrefs = this.getColumnsUserPerfs(UserManager.getUserID(), tableId, columns);
+        final RowSelectionSpec selection = new RowSelectionSpec(tableId);
+        final ColumnsSpec columnsSpec = this.createColumnsSpec(columns, columnsPrefs);
+        final TableSpec tSpec = new TableSpec(tableId, selection, columnsSpec);
+        
+        final LightUITable table = new LightUITable(tableId);
+        table.setVerticallyScrollable(true);
+        
+        table.setTableSpec(tSpec);
+        table.addAction(LightUIElement.ACTION_TYPE_SELECTION, "table.infos");
 
-        for (SQLTableModelColumn column : columns) {
-            // TODO : creer la notion d'ID un peu plus dans le l'esprit sales.invoice.amount
-            final String columnId = column.getIdentifier();
-            columnsIds.add(columnId);
-
-            visibleIds.add(columnId);
-            // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
-            final int width = column.getName().length() * 20 + 20;
-
-            final ColumnSpec spec = new ColumnSpec(columnId, column.getValueClass(), column.getName(), null, width, false, null);
-            columnsSpec.add(spec);
-        }
-
-        // FIXME : recuperer l'info sauvegardée sur le serveur par user (à coder)
-        sortedIds.add(columnsIds.get(0));
-        final String lid = this.getCode();
-
-        final ColumnsSpec cSpec = new ColumnsSpec(lid, columnsSpec, visibleIds, sortedIds);
-        final TableSpec tSpec = new TableSpec();
-        tSpec.setColumns(cSpec);
-        element.setRawContent(tSpec);
-
-        return element;
+        return table;
     }
 
-    public LightUIDescriptor getUIDescriptorForCreation(PropsConfiguration configuration) {
+    /**
+     * Create buttons from SQLElement row actions
+     * @param selection - user selection
+     * @return ui line with all available buttons
+     */
+    public LightUILine createRowAction(final RowSelectionSpec selection) {
+        final LightUILine actionLine = new LightUILine();
+        final Collection<IListeAction> actions = this.getRowActions();
+
+        actionLine.setGridAlignment(LightUILine.ALIGN_LEFT);
+        for (final Iterator<?> iterator = actions.iterator(); iterator.hasNext();) {
+            final RowAction iListeAction = (RowAction) iterator.next();
+            if (iListeAction.inHeader()) {
+
+                final LightUIElement button = new LightUIButtonWithSelectionContext(iListeAction.getID(), iListeAction.getID(), selection.getTableId());
+                button.setType(LightUIElement.TYPE_BUTTON_WITH_SELECTION_CONTEXT);
+
+                final String label = TranslationManager.getInstance().getTranslationForAction(iListeAction.getID());
+                button.setLabel(label);
+
+                actionLine.add(button);
+                // TODO: implement
+                // desc.addControler(new ActivationOnSelectionControler("sales.quote.list",
+                // element2.getId()));
+            }
+        }
+        return actionLine;
+    }
+
+    /**
+     * Create information ui line for selected lines. By default, all fields in SQLRowValues are displayed 
+     * @param selection - SQLRowValues attach to selected lines
+     * @return ui 
+     */
+    public LightUILine createDataLine(final List<SQLRowValues> selection) {
+        if (selection == null) {
+            return null;
+        }
+        final LightUILine dataLine = new LightUILine();
+        final LightUIPanel panel = new LightUIPanel(this.getCode() + ".data.panel");
+        final SQLFieldTranslator translator = Configuration.getTranslator(this.getTable());
+
+        for (final SQLRowValues row : selection) {
+            final int rowId = row.getID();
+            final LightUILine mainLine = new LightUILine();
+            final LightUIPanel mainLinePanel = new LightUIPanel(panel.getId() + ".main.line." + rowId);
+            mainLinePanel.addLine(new SimpleTextLine(mainLinePanel.getId() + ".title", "Information sur l'élément n°" + rowId, true, LightUIElement.HALIGN_CENTER));
+            final LightUILine lineData = new LightUILine();
+            final LightUIPanel dataPanel = new LightUIPanel(this.getCode() + ".data.panel." + rowId);
+            dataPanel.setPanelType(LightUIPanel.TYPE_TABLE);
+            for (String fieldName : row.getFields()) {
+                this.addFieldToPanel(fieldName, dataPanel, row, translator);
+            }
+            lineData.add(dataPanel);
+            mainLinePanel.addLine(lineData);
+            mainLine.add(mainLinePanel);
+            panel.addLine(mainLine);
+        }
+        dataLine.add(panel);
+        return dataLine;
+    }
+
+    /**
+     * Add the field name translation and it's value to the infomation panel
+     * @param fieldName - Field to be translate
+     * @param dataPanel - Information panel
+     * @param row - Row which contains data
+     * @param translator - Field translator 
+     */
+    public void addFieldToPanel(final String fieldName, final LightUIPanel dataPanel, final SQLRowValues row, final SQLFieldTranslator translator) {
+        if (!fieldName.equals("ID") && !fieldName.equals("ARCHIVE") && !fieldName.equals("ORDRE")) {
+            final SQLField field = this.getTable().getField(fieldName);
+            final String key = translator.getLabelFor(field);
+            if (key != null) {
+                String value = "";
+                if (field.isKey()) {
+                    final List<FieldPath> fieldsPath = Configuration.getInstance().getShowAs().expand(field);
+                    for (FieldPath fieldPath : fieldsPath) {
+                        final SQLRowValues foreignRow = row.followPath(fieldPath.getPath());
+                        if (foreignRow != null) {
+                            value += foreignRow.getString(fieldPath.getField().getName()) + " ";
+                        }
+                    }
+                } else {
+                    value = row.getString(fieldName);
+                }
+
+                if (value != null && !value.equals("")) {
+                    dataPanel.addLine(new InformationLine(dataPanel.getId(), key, value));
+                }
+            }
+        }
+    }
+
+    
+    public LightUIFrame createUIFrameForCreation(final PropsConfiguration configuration, final long userId) {
         final GroupToLightUIConvertor convertor = new GroupToLightUIConvertor(configuration);
         final Group group = getGroupForCreation();
         if (group == null) {
             Log.get().severe("The group for creation is null for this element : " + this);
             return null;
         }
-        final LightUIDescriptor desc = convertor.convert(group);
-        return desc;
+        final LightUIFrame frame = convertor.convert(group); 
+        return frame;
     }
 
-    public LightUIDescriptor getUIDescriptorForModification(PropsConfiguration configuration, long id) {
+    public LightUIFrame createUIFrameForModification(final PropsConfiguration configuration, long id, final long userId) {
         final GroupToLightUIConvertor convertor = new GroupToLightUIConvertor(configuration);
         final Group group = getGroupForModification();
         if (group == null) {
             Log.get().severe("The group for modification is null for this element : " + this);
             return null;
         }
-        final LightUIDescriptor desc = convertor.convert(getGroupForModification());
-        return desc;
+        final LightUIFrame frame = convertor.convert(getGroupForModification());
+        return frame;
     }
 
     public Group getGroupForCreation() {
-        if (groupForCreation != null) {
-            return groupForCreation;
+        if (this.groupForCreation != null) {
+            return this.groupForCreation;
         }
         return getDefaultGroup();
     }
 
     public Group getGroupForModification() {
-        if (groupForModification != null) {
-            return groupForModification;
+        if (this.groupForModification != null) {
+            return this.groupForModification;
         }
         return getDefaultGroup();
     }

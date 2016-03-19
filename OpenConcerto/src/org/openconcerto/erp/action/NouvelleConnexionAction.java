@@ -29,6 +29,7 @@ import org.openconcerto.erp.element.objet.ClasseCompte;
 import org.openconcerto.erp.modules.ModuleFrame;
 import org.openconcerto.erp.modules.ModuleManager;
 import org.openconcerto.erp.panel.ComptaTipsFrame;
+import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
 import org.openconcerto.erp.rights.GroupUIComboRightEditor;
 import org.openconcerto.erp.rights.MenuComboRightEditor;
 import org.openconcerto.erp.utils.NXDatabaseAccessor;
@@ -97,6 +98,7 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
     public JFrame createFrame() {
         // needed as done() must come after us
         assert SwingUtilities.isEventDispatchThread();
+
         final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
 
         Runnable r = new Runnable() {
@@ -299,7 +301,10 @@ public class NouvelleConnexionAction extends CreateFrameAbstractAction {
                 ClasseCompte.loadClasseCompte();
                 CaisseCotisationSQLElement.getCaisseCotisation();
 
-                Ville.init(new NXDatabaseAccessor());
+                SQLPreferences prefs = SQLPreferences.getMemCached(comptaConf.getRootSociete());
+
+                Ville.init(new NXDatabaseAccessor(comptaConf), prefs.getBoolean(GestionClientPreferencePanel.LOAD_CITIES, true));
+
                 SQLBackgroundTableCache.getInstance().add(baseSociete.getTable("TAXE"), 600);
                 SQLBackgroundTableCache.getInstance().add(baseSociete.getTable("PREFS_COMPTE"), 600);
                 SQLBackgroundTableCache.getInstance().add(baseSociete.getTable("COMPTE_PCE"), 600);

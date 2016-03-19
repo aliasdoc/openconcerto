@@ -142,6 +142,7 @@ abstract public class IListPanel extends JPanel implements ActionListener {
 
     protected EditFrame createFrame;
     private boolean selectRowOnAdd = true;
+    private boolean showReadOnlyFrameOnDoubleClick = true;
     private boolean deaf = Boolean.getBoolean("org.openconcerto.sql.listPanel.deafEditPanel");
 
     protected SearchListComponent searchComponent;
@@ -239,7 +240,7 @@ abstract public class IListPanel extends JPanel implements ActionListener {
 
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
+                if (IListPanel.this.showReadOnlyFrameOnDoubleClick && e.getClickCount() == 2) {
                     final EditFrame frame;
                     if ((e.getModifiersEx() & InputEvent.ALT_DOWN_MASK) != 0) {
                         if (this.listeningFrame == null)
@@ -779,6 +780,10 @@ abstract public class IListPanel extends JPanel implements ActionListener {
         this.buttonMoins.setVisible(b);
         // also disable move by drag and drop
         this.getListe().getJTable().setDragEnabled(b);
+    }
+
+    public void setShowReadOnlyFrameOnDoubleClick(boolean showReadOnlyFrameOnDoubleClick) {
+        this.showReadOnlyFrameOnDoubleClick = showReadOnlyFrameOnDoubleClick;
     }
 
     public void setAddVisible(boolean b) {

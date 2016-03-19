@@ -1,0 +1,45 @@
+/*
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ * 
+ * Copyright 2011 OpenConcerto, by ILM Informatique. All rights reserved.
+ * 
+ * The contents of this file are subject to the terms of the GNU General Public License Version 3
+ * only ("GPL"). You may not use this file except in compliance with the License. You can obtain a
+ * copy of the License at http://www.gnu.org/licenses/gpl-3.0.html See the License for the specific
+ * language governing permissions and limitations under the License.
+ * 
+ * When distributing the software, include this License Header Notice in each file.
+ */
+ 
+ package org.openconcerto.ui.light;
+
+import net.minidev.json.JSONObject;
+
+public class LightUICheckBox extends LightUIElement {
+
+    public LightUICheckBox(final JSONObject json) {
+        this.fromJSON(json);
+    }
+
+    public LightUICheckBox(final String id, final String label) {
+        this.setType(TYPE_CHECKBOX);
+        this.setId(id);
+        this.setLabel(label);
+        this.setValueType(LightUIElement.VALUE_TYPE_BOOLEAN);
+    }
+
+    public void setChecked(boolean checked) {
+        if (checked) {
+            this.setValue("true");
+        } else {
+            this.setValue("false");
+        }
+    }
+
+    public boolean isChecked() {
+        if (this.getValue() == null) {
+            return false;
+        }
+        return this.getValue().equals("true");
+    }
+}

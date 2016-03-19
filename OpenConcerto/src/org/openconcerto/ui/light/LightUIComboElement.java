@@ -13,7 +13,13 @@
  
  package org.openconcerto.ui.light;
 
+import net.minidev.json.JSONObject;
+
 public class LightUIComboElement extends LightUIElement {
+    public LightUIComboElement(final JSONObject json) {
+        this.fromJSON(json);
+    }
+    
     public LightUIComboElement(String id) {
         this.setId(id);
         this.setType(TYPE_COMBOBOX_ELEMENT);

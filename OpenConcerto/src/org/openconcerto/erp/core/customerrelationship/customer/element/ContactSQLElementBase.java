@@ -13,6 +13,12 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.element;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
@@ -23,12 +29,6 @@ import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.ui.EmailComposer;
 import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.ExceptionHandler;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 public abstract class ContactSQLElementBase extends ConfSQLElement {
 
@@ -159,6 +159,14 @@ public abstract class ContactSQLElementBase extends ConfSQLElement {
 
             if (getTable().contains("SERVICE"))
                 this.addView("SERVICE");
+
+            if (getTable().contains("TYPE")) {
+                this.addView("TYPE");
+            }
+
+            if (getTable().contains("PAYS")) {
+                this.addView("PAYS");
+            }
 
             if (getTable().contains("NOM_ASSISTANTE"))
                 this.addView("NOM_ASSISTANTE");

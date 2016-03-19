@@ -124,7 +124,11 @@ import org.openconcerto.erp.core.sales.product.element.ArticleTarifSQLElement;
 import org.openconcerto.erp.core.sales.product.element.FamilleArticleSQLElement;
 import org.openconcerto.erp.core.sales.product.element.MetriqueSQLElement;
 import org.openconcerto.erp.core.sales.product.element.ModeVenteArticleSQLElement;
+import org.openconcerto.erp.core.sales.product.element.ProductItemSQLElement;
+import org.openconcerto.erp.core.sales.product.element.ProductQtyPriceSQLElement;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
+import org.openconcerto.erp.core.sales.product.element.ReliquatSQLElement;
+import org.openconcerto.erp.core.sales.product.element.ReliquatSQLElement.ReliquatBRSQLElement;
 import org.openconcerto.erp.core.sales.product.element.UniteVenteArticleSQLElement;
 import org.openconcerto.erp.core.sales.quote.element.DevisItemSQLElement;
 import org.openconcerto.erp.core.sales.quote.element.DevisSQLElement;
@@ -182,6 +186,7 @@ import org.openconcerto.erp.generationEcritures.provider.SupplyOrderAccountingRe
 import org.openconcerto.erp.injector.AchatAvoirSQLInjector;
 import org.openconcerto.erp.injector.ArticleCommandeEltSQLInjector;
 import org.openconcerto.erp.injector.BonFactureSQLInjector;
+import org.openconcerto.erp.injector.BonReceptionFactureFournisseurSQLInjector;
 import org.openconcerto.erp.injector.BrFactureAchatSQLInjector;
 import org.openconcerto.erp.injector.CommandeBlEltSQLInjector;
 import org.openconcerto.erp.injector.CommandeBlSQLInjector;
@@ -208,6 +213,7 @@ import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.SQLElementDirectory;
 import org.openconcerto.sql.element.SharedSQLElement;
 import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.sql.model.DBStructureItemNotFound;
 import org.openconcerto.sql.model.DBSystemRoot;
 import org.openconcerto.sql.model.FieldMapper;
 import org.openconcerto.sql.model.LoadingListener;
@@ -218,6 +224,8 @@ import org.openconcerto.sql.model.SQLSystem;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.task.TacheActionManager;
 import org.openconcerto.task.config.ComptaBasePropsConfiguration;
+import org.openconcerto.task.element.FWKListPrefs;
+import org.openconcerto.task.element.FWKSessionState;
 import org.openconcerto.utils.DesktopEnvironment;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.NetUtils;
@@ -331,7 +339,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
 
     public static ComptaPropsConfiguration create(final boolean nullAllowed, final File confFile) {
         // Log pour debug demarrage
-        System.out.println("Loading configuration from:" + (confFile == null ? "null" : confFile.getAbsolutePath()));
+        System.out.println("Loading configuration from: " + (confFile == null ? "null" : confFile.getAbsolutePath()));
         final boolean inWebStart = Gestion.inWebStart();
         final Properties defaults = createDefaults();
         // Ordre de recherche:
@@ -371,13 +379,41 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
     private final boolean inWebstart;
     private final boolean isServerless;
     private boolean isOnCloud;
+    private boolean isPortable;
+    private File portableDir = null;
 
     // isMain=true also set up some VM wide settings
     ComptaPropsConfiguration(Properties props, final boolean inWebstart, final boolean main) {
         super(props, productInfo);
         this.isMain = main;
         this.inWebstart = inWebstart;
-        this.setProperty("wd", DesktopEnvironment.getDE().getDocumentsFolder().getAbsolutePath() + File.separator + this.getAppName());
+        this.isPortable = Boolean.parseBoolean(this.getProperty("portable", "false"));
+        String pDir = this.getProperty("portableDir", null);
+        if (isPortable) {
+            if (pDir == null) {
+                System.out.println("Portable mode, using current directory");
+                portableDir = new File(".");
+            } else {
+                System.out.println("Portable mode, using provided directory : " + pDir);
+                portableDir = new File(pDir);
+            }
+            if (!portableDir.exists()) {
+                System.out.println("Error: portable dir missing : " + portableDir);
+                portableDir = new File(".");
+            }
+            System.out.println("Portable mode in : " + portableDir.getAbsolutePath());
+            if (this.getProperty("portableDirMessage", "true").equalsIgnoreCase("true")) {
+                if (!GraphicsEnvironment.isHeadless()) {
+                    System.out.println("Add portableDirMessage=false in your " + PROPERTIES + " to prevent the popup message.");
+                    JOptionPane.showMessageDialog(null, "Portable version :\n" + portableDir.getAbsolutePath());
+                }
+            }
+        }
+        if (isPortable) {
+            this.setProperty("wd", new File(portableDir, "UserData").getAbsolutePath());
+        } else {
+            this.setProperty("wd", DesktopEnvironment.getDE().getDocumentsFolder().getAbsolutePath() + File.separator + this.getAppName());
+        }
         if (this.getProperty("version.date") != null) {
             this.version = this.getProperty("version.date");
         }
@@ -485,8 +521,8 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
     protected void initSystemRoot(DBSystemRoot input) {
         super.initSystemRoot(input);
         if (!GraphicsEnvironment.isHeadless()) {
-            final JDialog f = new JOptionPane("Mise à jour des caches en cours...\nCette opération prend généralement moins d'une minute.", JOptionPane.INFORMATION_MESSAGE,
-                    JOptionPane.DEFAULT_OPTION, null, new Object[] {}).createDialog("Veuillez patienter");
+            final JDialog f = new JOptionPane("Mise à jour des caches en cours...\nCette opération prend généralement moins d'une minute.", JOptionPane.INFORMATION_MESSAGE, JOptionPane.DEFAULT_OPTION,
+                    null, new Object[] {}).createDialog("Veuillez patienter");
             input.addLoadingListener(new LoadingListener() {
 
                 private int loadingCount = 0;
@@ -577,7 +613,19 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
 
     @Override
     public File getConfDir() {
-        return Gestion.MAC_OS_X ? new File(System.getProperty("user.home") + "/Library/Application Support/" + getAppID()) : super.getConfDir();
+        if (isPortable) {
+            return getWD();
+        } else {
+            return Gestion.MAC_OS_X ? new File(System.getProperty("user.home") + "/Library/Application Support/" + getAppID()) : super.getConfDir();
+        }
+    }
+
+    public boolean isPortable() {
+        return isPortable;
+    }
+
+    public File getPortableDir() {
+        return portableDir;
     }
 
     private boolean inWebstart() {
@@ -674,202 +722,220 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
     }
 
     private void setSocieteDirectory() {
-        SQLElementDirectory dir = this.getDirectory();
+        try {
+            SQLElementDirectory dir = this.getDirectory();
 
-        dir.addSQLElement(ArticleTarifSQLElement.class);
-        dir.addSQLElement(ArticleDesignationSQLElement.class);
-        dir.addSQLElement(BanqueSQLElement.class);
-        dir.addSQLElement(ClientDepartementSQLElement.class);
-        dir.addSQLElement(ContactFournisseurSQLElement.class);
-        dir.addSQLElement(ContactAdministratifSQLElement.class);
-        dir.addSQLElement(new TitrePersonnelSQLElement());
-        dir.addSQLElement(new ContactSQLElement());
-        dir.addSQLElement(new SaisieKmItemSQLElement());
-        dir.addSQLElement(new EcritureSQLElement());
+            dir.addSQLElement(ArticleTarifSQLElement.class);
+            dir.addSQLElement(ReliquatBRSQLElement.class);
+            dir.addSQLElement(ReliquatSQLElement.class);
+            dir.addSQLElement(ProductQtyPriceSQLElement.class);
+            dir.addSQLElement(ProductItemSQLElement.class);
+            dir.addSQLElement(ArticleDesignationSQLElement.class);
+            dir.addSQLElement(BanqueSQLElement.class);
+            dir.addSQLElement(ClientDepartementSQLElement.class);
+            dir.addSQLElement(ContactFournisseurSQLElement.class);
+            dir.addSQLElement(ContactAdministratifSQLElement.class);
+            dir.addSQLElement(new TitrePersonnelSQLElement());
+            dir.addSQLElement(new ContactSQLElement());
+            dir.addSQLElement(new SaisieKmItemSQLElement());
+            dir.addSQLElement(new EcritureSQLElement());
 
-        dir.addSQLElement(new SharedSQLElement("EMPLOYEUR_MULTIPLE"));
-        dir.addSQLElement(PosteAnalytiqueSQLElement.class);
-        dir.addSQLElement(new SharedSQLElement("CLASSE_COMPTE"));
+            dir.addSQLElement(new SharedSQLElement("EMPLOYEUR_MULTIPLE"));
+            dir.addSQLElement(PosteAnalytiqueSQLElement.class);
+            dir.addSQLElement(new SharedSQLElement("CLASSE_COMPTE"));
 
-        dir.addSQLElement(new CaisseCotisationSQLElement());
-        dir.addSQLElement(CaisseTicketSQLElement.class);
+            dir.addSQLElement(new CaisseCotisationSQLElement());
+            dir.addSQLElement(CaisseTicketSQLElement.class);
 
-        dir.addSQLElement(new ImpressionRubriqueSQLElement());
+            dir.addSQLElement(new ImpressionRubriqueSQLElement());
 
-        dir.addSQLElement(ModeleSQLElement.class);
+            dir.addSQLElement(ModeleSQLElement.class);
 
-        dir.addSQLElement(new ProfilPayeSQLElement());
-        dir.addSQLElement(new ProfilPayeElementSQLElement());
-        dir.addSQLElement(new PeriodeValiditeSQLElement());
+            dir.addSQLElement(new ProfilPayeSQLElement());
+            dir.addSQLElement(new ProfilPayeElementSQLElement());
+            dir.addSQLElement(new PeriodeValiditeSQLElement());
 
-        dir.addSQLElement(new RubriqueCotisationSQLElement());
-        dir.addSQLElement(new RubriqueCommSQLElement());
-        dir.addSQLElement(new RubriqueNetSQLElement());
-        dir.addSQLElement(new RubriqueBrutSQLElement());
+            dir.addSQLElement(new RubriqueCotisationSQLElement());
+            dir.addSQLElement(new RubriqueCommSQLElement());
+            dir.addSQLElement(new RubriqueNetSQLElement());
+            dir.addSQLElement(new RubriqueBrutSQLElement());
 
-        dir.addSQLElement(new TypeRubriqueBrutSQLElement());
-        dir.addSQLElement(new TypeRubriqueNetSQLElement());
+            dir.addSQLElement(new TypeRubriqueBrutSQLElement());
+            dir.addSQLElement(new TypeRubriqueNetSQLElement());
 
-        dir.addSQLElement(new VariablePayeSQLElement());
+            dir.addSQLElement(new VariablePayeSQLElement());
 
-        dir.addSQLElement(new AdresseSQLElement());
+            dir.addSQLElement(new AdresseSQLElement());
 
-        dir.addSQLElement(ReferenceArticleSQLElement.class);
-        dir.addSQLElement(ArticleFournisseurSQLElement.class);
-        dir.addSQLElement(FamilleArticleFounisseurSQLElement.class);
+            dir.addSQLElement(ReferenceArticleSQLElement.class);
+            dir.addSQLElement(ArticleFournisseurSQLElement.class);
+            dir.addSQLElement(FamilleArticleFounisseurSQLElement.class);
 
-        dir.addSQLElement(new AssociationCompteAnalytiqueSQLElement());
-        dir.addSQLElement(new AvoirClientSQLElement());
-        dir.addSQLElement(new AvoirClientElementSQLElement());
-        dir.addSQLElement(AvoirFournisseurSQLElement.class);
-        dir.addSQLElement(new AcompteSQLElement());
+            dir.addSQLElement(new AssociationCompteAnalytiqueSQLElement());
+            dir.addSQLElement(new AvoirClientSQLElement());
+            dir.addSQLElement(new AvoirClientElementSQLElement());
+            dir.addSQLElement(AvoirFournisseurSQLElement.class);
+            dir.addSQLElement(new AcompteSQLElement());
 
-        dir.addSQLElement(new AxeAnalytiqueSQLElement());
+            dir.addSQLElement(new AxeAnalytiqueSQLElement());
 
-        dir.addSQLElement(new BonDeLivraisonItemSQLElement());
-        dir.addSQLElement(new BonDeLivraisonSQLElement());
-        dir.addSQLElement(new TransferShipmentSQLElement());
+            dir.addSQLElement(new BonDeLivraisonItemSQLElement());
+            dir.addSQLElement(new BonDeLivraisonSQLElement());
+            dir.addSQLElement(new TransferShipmentSQLElement());
 
-        dir.addSQLElement(new BonReceptionElementSQLElement());
-        dir.addSQLElement(new BonReceptionSQLElement());
-        dir.addSQLElement(new TransferReceiptSQLElement());
-        dir.addSQLElement(new ChequeAEncaisserSQLElement());
-        dir.addSQLElement(new ChequeAvoirClientSQLElement());
-        dir.addSQLElement(new ChequeFournisseurSQLElement());
-            dir.addSQLElement(new CustomerCategorySQLElement());
-            dir.addSQLElement(new CustomerSQLElement());
-        dir.addSQLElement(new CourrierClientSQLElement());
+            dir.addSQLElement(new BonReceptionElementSQLElement());
+            dir.addSQLElement(new BonReceptionSQLElement());
+            dir.addSQLElement(new TransferReceiptSQLElement());
+            dir.addSQLElement(new ChequeAEncaisserSQLElement());
+            dir.addSQLElement(new ChequeAvoirClientSQLElement());
+            dir.addSQLElement(new ChequeFournisseurSQLElement());
+                dir.addSQLElement(new CustomerCategorySQLElement());
+                dir.addSQLElement(new CustomerSQLElement());
+            dir.addSQLElement(new CourrierClientSQLElement());
 
-        dir.addSQLElement(new ClassementConventionnelSQLElement());
-        dir.addSQLElement(CodeFournisseurSQLElement.class);
-        dir.addSQLElement(new CommandeSQLElement());
-        dir.addSQLElement(new TransferSupplierOrderSQLElement());
-        dir.addSQLElement(new CommandeElementSQLElement());
-        dir.addSQLElement(new TransferCustomerOrderSQLElement());
-        dir.addSQLElement(new CommandeClientSQLElement());
-        dir.addSQLElement(new CommandeClientElementSQLElement());
+            dir.addSQLElement(new ClassementConventionnelSQLElement());
+            dir.addSQLElement(CodeFournisseurSQLElement.class);
+            dir.addSQLElement(new CommandeSQLElement());
+            dir.addSQLElement(new TransferSupplierOrderSQLElement());
+            dir.addSQLElement(new CommandeElementSQLElement());
+            dir.addSQLElement(new TransferCustomerOrderSQLElement());
+            dir.addSQLElement(new CommandeClientSQLElement());
+            dir.addSQLElement(new CommandeClientElementSQLElement());
 
-            dir.addSQLElement(new CommercialSQLElement());
-        dir.addSQLElement(ObjectifSQLElement.class);
-        dir.addSQLElement(new ComptePCESQLElement());
-        dir.addSQLElement(new ComptePCGSQLElement());
+                dir.addSQLElement(new CommercialSQLElement());
+            dir.addSQLElement(ObjectifSQLElement.class);
+            dir.addSQLElement(new ComptePCESQLElement());
+            dir.addSQLElement(new ComptePCGSQLElement());
 
-        dir.addSQLElement(new ContratSalarieSQLElement());
+            dir.addSQLElement(new ContratSalarieSQLElement());
 
-        dir.addSQLElement(new CodeRegimeSQLElement());
-        dir.addSQLElement(new CodeEmploiSQLElement());
-        dir.addSQLElement(new CodeContratTravailSQLElement());
-        dir.addSQLElement(new CodeDroitContratSQLElement());
-        dir.addSQLElement(new CodeCaractActiviteSQLElement());
+            dir.addSQLElement(new CodeRegimeSQLElement());
+            dir.addSQLElement(new CodeEmploiSQLElement());
+            dir.addSQLElement(new CodeContratTravailSQLElement());
+            dir.addSQLElement(new CodeDroitContratSQLElement());
+            dir.addSQLElement(new CodeCaractActiviteSQLElement());
 
-        dir.addSQLElement(new CodeStatutCategorielSQLElement());
-        dir.addSQLElement(CodeStatutCategorielConventionnelSQLElement.class);
-        dir.addSQLElement(new CodeStatutProfSQLElement());
-        dir.addSQLElement(new CumulsCongesSQLElement());
-        dir.addSQLElement(new CumulsPayeSQLElement());
+            dir.addSQLElement(new CodeStatutCategorielSQLElement());
+            dir.addSQLElement(CodeStatutCategorielConventionnelSQLElement.class);
+            dir.addSQLElement(new CodeStatutProfSQLElement());
+            dir.addSQLElement(new CumulsCongesSQLElement());
+            dir.addSQLElement(new CumulsPayeSQLElement());
 
-        dir.addSQLElement(new DepartementSQLElement());
-            dir.addSQLElement(new DevisSQLElement());
-        dir.addSQLElement(new TransferQuoteSQLElement());
-        dir.addSQLElement(new DevisItemSQLElement());
+            dir.addSQLElement(new DepartementSQLElement());
+                dir.addSQLElement(new DevisSQLElement());
+            dir.addSQLElement(new TransferQuoteSQLElement());
+            dir.addSQLElement(new DevisItemSQLElement());
 
-        dir.addSQLElement(new EcheanceClientSQLElement());
-        dir.addSQLElement(new EcheanceFournisseurSQLElement());
-        dir.addSQLElement(EncaisserMontantSQLElement.class);
-        dir.addSQLElement(EncaisserMontantElementSQLElement.class);
-        dir.addSQLElement(EcoTaxeSQLElement.class);
+            dir.addSQLElement(new EcheanceClientSQLElement());
+            dir.addSQLElement(new EcheanceFournisseurSQLElement());
+            dir.addSQLElement(EncaisserMontantSQLElement.class);
+            dir.addSQLElement(EncaisserMontantElementSQLElement.class);
+            dir.addSQLElement(EcoTaxeSQLElement.class);
 
-        dir.addSQLElement(new EtatCivilSQLElement());
-        dir.addSQLElement(new EtatDevisSQLElement());
+            dir.addSQLElement(new EtatCivilSQLElement());
+            dir.addSQLElement(new EtatDevisSQLElement());
 
-        dir.addSQLElement(new FamilleArticleSQLElement());
-        dir.addSQLElement(new FichePayeSQLElement());
-        dir.addSQLElement(new FichePayeElementSQLElement());
+            dir.addSQLElement(new FamilleArticleSQLElement());
+            dir.addSQLElement(new FichePayeSQLElement());
+            dir.addSQLElement(new FichePayeElementSQLElement());
 
-        dir.addSQLElement(new FournisseurSQLElement());
+            dir.addSQLElement(new FournisseurSQLElement());
 
-        dir.addSQLElement(new CodeIdccSQLElement());
+            dir.addSQLElement(new CodeIdccSQLElement());
 
-        dir.addSQLElement(new InfosSalariePayeSQLElement());
+            dir.addSQLElement(new InfosSalariePayeSQLElement());
 
-        dir.addSQLElement(new JournalSQLElement());
+            dir.addSQLElement(new JournalSQLElement());
 
-        dir.addSQLElement(LangueSQLElement.class);
+            dir.addSQLElement(LangueSQLElement.class);
 
-        dir.addSQLElement(new MetriqueSQLElement());
-        dir.addSQLElement(new ModeleCourrierClientSQLElement());
-        dir.addSQLElement(new ModeVenteArticleSQLElement());
-        dir.addSQLElement(new ModeDeReglementSQLElement());
-        dir.addSQLElement(new ModeReglementPayeSQLElement());
-        dir.addSQLElement(new MoisSQLElement());
-        dir.addSQLElement(new MouvementSQLElement());
-        dir.addSQLElement(new MouvementStockSQLElement());
+            dir.addSQLElement(new MetriqueSQLElement());
+            dir.addSQLElement(new ModeleCourrierClientSQLElement());
+            dir.addSQLElement(new ModeVenteArticleSQLElement());
+            dir.addSQLElement(new ModeDeReglementSQLElement());
+            dir.addSQLElement(new ModeReglementPayeSQLElement());
+            dir.addSQLElement(new MoisSQLElement());
+            dir.addSQLElement(new MouvementSQLElement());
+            dir.addSQLElement(new MouvementStockSQLElement());
 
-        dir.addSQLElement(new NatureCompteSQLElement());
+            dir.addSQLElement(new NatureCompteSQLElement());
 
-        dir.addSQLElement(new NumerotationAutoSQLElement());
+            dir.addSQLElement(new NumerotationAutoSQLElement());
 
-        dir.addSQLElement(new PaysSQLElement());
+            dir.addSQLElement(new PaysSQLElement());
 
-        dir.addSQLElement(new PieceSQLElement());
+            dir.addSQLElement(new PieceSQLElement());
 
-        dir.addSQLElement(new ProfilPayeElementSQLElement());
+            dir.addSQLElement(new ProfilPayeElementSQLElement());
 
-        dir.addSQLElement(ReferenceClientSQLElement.class);
-        dir.addSQLElement(new RegimeBaseSQLElement());
-        dir.addSQLElement(new RelanceSQLElement());
-        dir.addSQLElement(new ReglementPayeSQLElement());
-        dir.addSQLElement(new ReglerMontantSQLElement());
-        dir.addSQLElement(ReglerMontantElementSQLElement.class);
-        dir.addSQLElement(RepartitionAnalytiqueSQLElement.class);
+            dir.addSQLElement(ReferenceClientSQLElement.class);
+            dir.addSQLElement(new RegimeBaseSQLElement());
+            dir.addSQLElement(new RelanceSQLElement());
+            dir.addSQLElement(new ReglementPayeSQLElement());
+            dir.addSQLElement(new ReglerMontantSQLElement());
+            dir.addSQLElement(ReglerMontantElementSQLElement.class);
+            dir.addSQLElement(RepartitionAnalytiqueSQLElement.class);
 
-        dir.addSQLElement(new SaisieAchatSQLElement());
-        dir.addSQLElement(new FactureFournisseurSQLElement());
-        dir.addSQLElement(new FactureFournisseurElementSQLElement());
-        dir.addSQLElement(new TransferPurchaseSQLElement());
-        dir.addSQLElement(new SaisieKmSQLElement());
-        dir.addSQLElement(new SaisieVenteComptoirSQLElement());
-        dir.addSQLElement(new SaisieVenteFactureSQLElement());
-        dir.addSQLElement(new TransferInvoiceSQLElement());
-        // at the end since it specifies action which initialize foreign keys
-        dir.addSQLElement(AssociationAnalytiqueSQLElement.class);
-            dir.addSQLElement(new SaisieVenteFactureItemSQLElement());
+            dir.addSQLElement(new SaisieAchatSQLElement());
+            dir.addSQLElement(new FactureFournisseurSQLElement());
+            dir.addSQLElement(new FactureFournisseurElementSQLElement());
+            dir.addSQLElement(new TransferPurchaseSQLElement());
+            dir.addSQLElement(new SaisieKmSQLElement());
+            dir.addSQLElement(new SaisieVenteComptoirSQLElement());
+            dir.addSQLElement(new SaisieVenteFactureSQLElement());
+            dir.addSQLElement(new TransferInvoiceSQLElement());
+            // at the end since it specifies action which initialize foreign keys
+            dir.addSQLElement(AssociationAnalytiqueSQLElement.class);
+                dir.addSQLElement(new SaisieVenteFactureItemSQLElement());
 
-        dir.addSQLElement(SituationFamilialeSQLElement.class);
-        dir.addSQLElement(new StockSQLElement());
-        dir.addSQLElement(new StyleSQLElement());
+            dir.addSQLElement(SituationFamilialeSQLElement.class);
+            dir.addSQLElement(new StockSQLElement());
+            dir.addSQLElement(new StyleSQLElement());
 
-        dir.addSQLElement(new SalarieSQLElement());
+            dir.addSQLElement(new SalarieSQLElement());
 
-        dir.addSQLElement(TarifSQLElement.class);
-        dir.addSQLElement(new TaxeSQLElement());
-        dir.addSQLElement(TicketCaisseSQLElement.class);
+            dir.addSQLElement(TarifSQLElement.class);
+            dir.addSQLElement(new TaxeSQLElement());
+            dir.addSQLElement(TicketCaisseSQLElement.class);
 
-        dir.addSQLElement(new TypeComptePCGSQLElement());
-        dir.addSQLElement(new TypeLettreRelanceSQLElement());
-        dir.addSQLElement(new TypeReglementSQLElement());
+            dir.addSQLElement(new TypeComptePCGSQLElement());
+            dir.addSQLElement(new TypeLettreRelanceSQLElement());
+            dir.addSQLElement(new TypeReglementSQLElement());
 
-        dir.addSQLElement(new VariableSalarieSQLElement());
-        dir.addSQLElement(UniteVenteArticleSQLElement.class);
+            dir.addSQLElement(new VariableSalarieSQLElement());
+            dir.addSQLElement(UniteVenteArticleSQLElement.class);
 
-        dir.addSQLElement(CalendarItemSQLElement.class);
-        dir.addSQLElement(CalendarItemGroupSQLElement.class);
-        dir.addSQLElement(DeviseHistoriqueSQLElement.class);
-        // check that all codes are unique
-        Collection<SQLElement> elements = dir.getElements();
-        String s = "";
-        for (SQLElement sqlElement : elements) {
-            try {
-                SQLElement e = dir.getElementForCode(sqlElement.getCode());
-                if (e != sqlElement) {
-                    s += "Error while retrieving element from code " + sqlElement.getCode() + "\n";
-                }
-            } catch (Throwable e) {
-                s += "Error while retrieving element from code " + sqlElement.getCode() + " :\n " + e.getMessage() + "\n";
+            dir.addSQLElement(CalendarItemSQLElement.class);
+            dir.addSQLElement(CalendarItemGroupSQLElement.class);
+            dir.addSQLElement(DeviseHistoriqueSQLElement.class);
+
+            if (getRootSociete().contains("FWK_LIST_PREFS")) {
+                dir.addSQLElement(new FWKListPrefs(getRootSociete()));
             }
-        }
-        if (!s.trim().isEmpty()) {
-            ExceptionHandler.handle(s);
+            if (getRootSociete().contains("FWK_SESSION_STATE")) {
+                dir.addSQLElement(new FWKSessionState(getRootSociete()));
+            }
+
+            // check that all codes are unique
+            Collection<SQLElement> elements = dir.getElements();
+            String s = "";
+            for (SQLElement sqlElement : elements) {
+                try {
+                    SQLElement e = dir.getElementForCode(sqlElement.getCode());
+                    if (e != sqlElement) {
+                        s += "Error while retrieving element from code " + sqlElement.getCode() + "\n";
+                    }
+                } catch (Throwable e) {
+                    s += "Error while retrieving element from code " + sqlElement.getCode() + " :\n " + e.getMessage() + "\n";
+                }
+            }
+            if (!s.trim().isEmpty()) {
+                ExceptionHandler.handle(s);
+            }
+        } catch (DBStructureItemNotFound e) {
+            JOptionPane.showMessageDialog(null,
+                    "Une table ou un champ est manquant dans la base de données. Mettez à jour votre base de données via l'outil de configuration si vous venez de changer de version d'Openconcerto.");
+            throw e;
         }
     }
 
@@ -894,6 +960,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         new BonFactureSQLInjector(rootSociete);
         new CommandeFactureClientSQLInjector(rootSociete);
         new CommandeBrSQLInjector(rootSociete);
+        new BonReceptionFactureFournisseurSQLInjector(rootSociete);
         new CommandeFactureAchatSQLInjector(rootSociete);
         new EcheanceEncaisseSQLInjector(rootSociete);
         new EcheanceRegleSQLInjector(rootSociete);
@@ -904,10 +971,14 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
 
     private void setSocieteShowAs() {
         final ShowAs showAs = this.getShowAs();
+        final DBRoot root = this.getRootSociete();
         showAs.setRoot(getRootSociete());
 
-        showAs.show("ADRESSE", SQLRow.toList("RUE,CODE_POSTAL,VILLE"));
-        final DBRoot root = this.getRootSociete();
+        List<String> listAdrShowAs = SQLRow.toList("RUE,CODE_POSTAL,VILLE");
+        if (root.contains("ADRESSE") && root.getTable("ADRESSE").contains("DISTRICT")) {
+            listAdrShowAs = SQLRow.toList("RUE,DISTRICT,DEPARTEMENT,CODE_POSTAL,VILLE");
+        }
+        showAs.show("ADRESSE", listAdrShowAs);
 
         showAs.show("AXE_ANALYTIQUE", "NOM");
 

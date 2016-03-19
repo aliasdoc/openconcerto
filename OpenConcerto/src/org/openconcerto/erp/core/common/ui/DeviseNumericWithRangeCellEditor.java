@@ -21,28 +21,35 @@ import java.math.BigDecimal;
 
 import javax.swing.border.LineBorder;
 
-public class DeviseNumericWithMinCellEditor extends DeviseNumericCellEditor {
+public class DeviseNumericWithRangeCellEditor extends DeviseNumericCellEditor {
 
-    private BigDecimal min;
+    private BigDecimal min, max;
 
-    public DeviseNumericWithMinCellEditor(SQLField field) {
+    public DeviseNumericWithRangeCellEditor(SQLField field) {
         super(field);
-        this.min = BigDecimal.ZERO;
+        this.min = null;
+        this.max = null;
     }
 
     public void setMin(BigDecimal min) {
         this.min = min;
     }
 
+    public void setMax(BigDecimal max) {
+        this.max = max;
+    }
+
     @Override
     public boolean stopCellEditing() {
-        boolean b = super.stopCellEditing();
-        if (b && CompareUtils.compare(min, getCellEditorValue()) < 0) {
+        if (min != null && CompareUtils.compare(min, getCellEditorValue()) > 0) {
             this.textField.setBorder(new LineBorder(Color.RED));
-            b = false;
+            return false;
         }
-        return b;
-
+        if (max != null && CompareUtils.compare(max, getCellEditorValue()) < 0) {
+            this.textField.setBorder(new LineBorder(Color.RED));
+            return false;
+        }
+        return super.stopCellEditing();
     }
 
 }

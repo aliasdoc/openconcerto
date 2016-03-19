@@ -26,6 +26,7 @@ import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.ListSQLRequest;
+import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -73,6 +74,13 @@ public class AvoirClientSQLElement extends ComptaSQLConfElement {
         List<String> l = new ArrayList<String>();
         l.add("ID_MODE_REGLEMENT");
         return l;
+    }
+
+    @Override
+    protected SQLTableModelSourceOnline createTableSource() {
+
+        SQLTableModelSourceOnline table = super.createTableSource();
+        return table;
     }
 
     /*

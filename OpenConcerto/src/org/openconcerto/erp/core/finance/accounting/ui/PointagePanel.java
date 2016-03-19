@@ -259,6 +259,7 @@ public class PointagePanel extends JPanel {
         // Liste des ecritures
         final EcritureSQLElement ecritureElem = Configuration.getInstance().getDirectory().getElement(EcritureSQLElement.class);
         this.ecriturePanel = new ListPanelEcritures(ecritureElem, new IListe(ecritureElem.createPointageTableSource()));
+        this.ecriturePanel.setShowReadOnlyFrameOnDoubleClick(false);
         c.gridx = 0;
         c.gridy++;
         c.weighty = 1;

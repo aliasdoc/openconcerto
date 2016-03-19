@@ -27,6 +27,7 @@ import java.util.List;
 import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 
 public class PosteAnalytiqueSQLElement extends ComptaSQLConfElement {
 
@@ -54,7 +55,7 @@ public class PosteAnalytiqueSQLElement extends ComptaSQLConfElement {
             public void addViews() {
                 this.setLayout(new GridBagLayout());
                 GridBagConstraints c = new DefaultGridBagConstraints();
-                final JLabel labelNom = new JLabel(getLabelFor("NOM"));
+                final JLabel labelNom = new JLabel(getLabelFor("NOM"), SwingConstants.RIGHT);
                 this.add(labelNom, c);
                 c.gridx++;
 
@@ -63,23 +64,25 @@ public class PosteAnalytiqueSQLElement extends ComptaSQLConfElement {
                 this.add(obj, c);
                 this.addRequiredSQLObject(obj, "NOM");
 
-                c.gridx++;
-                c.weightx = 0;
-                this.add(new JLabel(getLabelFor("DEFAULT")), c);
-                c.gridx++;
-
-                JCheckBox box = new JCheckBox("DEFAULT");
-                c.weightx = 1;
-                this.add(box, c);
-                this.addRequiredSQLObject(box, "DEFAULT");
-
                 c.gridx = 0;
                 c.gridy++;
-                this.add(new JLabel(getLabelFor("ID_AXE_ANALYTIQUE")), c);
+                this.add(new JLabel(getLabelFor("ID_AXE_ANALYTIQUE"), SwingConstants.RIGHT), c);
                 c.gridx++;
                 ElementComboBox boxAxe = new ElementComboBox();
                 this.add(boxAxe, c);
                 this.addView(boxAxe, "ID_AXE_ANALYTIQUE", REQ);
+
+                c.gridy++;
+                c.gridx = 0;
+                c.weightx = 0;
+                // this.add(new JLabel(getLabelFor("DEFAULT")), c);
+                c.gridx++;
+
+                JCheckBox box = new JCheckBox(getLabelFor("DEFAULT"));
+                c.weightx = 1;
+                this.add(box, c);
+                this.addRequiredSQLObject(box, "DEFAULT");
+
             }
         };
     }

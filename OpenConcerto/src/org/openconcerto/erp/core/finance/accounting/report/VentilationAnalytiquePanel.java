@@ -68,12 +68,17 @@ public class VentilationAnalytiquePanel extends JPanel {
         GridBagConstraints c = new DefaultGridBagConstraints();
         this.add(labelPoste, c);
         c.gridx++;
+        c.gridwidth = GridBagConstraints.REMAINDER;
         this.add(box, c);
 
-        c.gridx++;
+        c.gridx = 0;
+        c.gridy++;
+        c.gridwidth = 1;
+        c.fill = GridBagConstraints.NONE;
+        c.weightx = 0;
         this.add(new JLabel("Période du", SwingConstants.RIGHT), c);
         c.gridx++;
-        c.weightx = 1;
+        c.weightx = 0;
         this.add(this.dateDeb, c);
         // Chargement des valeurs par défaut
         // String valueDateDeb = DefaultNXProps.getInstance().getStringProperty("JournauxDateDeb");
@@ -86,10 +91,16 @@ public class VentilationAnalytiquePanel extends JPanel {
 
         c.gridx++;
         c.weightx = 0;
+
         this.add(new JLabel("Au"), c);
         c.gridx++;
-        c.weightx = 1;
+        c.weightx = 0;
         this.add(this.dateEnd, c);
+
+        c.gridx++;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        this.add(new JLabel(), c);
 
         final JButton buttonValid = new JButton(new AbstractAction("Valider") {
 
@@ -115,7 +126,11 @@ public class VentilationAnalytiquePanel extends JPanel {
 
             }
         });
-        c.gridx++;
+        c.gridx = 0;
+        c.gridy++;
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.anchor = GridBagConstraints.EAST;
+        c.fill = GridBagConstraints.NONE;
         this.add(buttonValid, c);
 
         // Check validity

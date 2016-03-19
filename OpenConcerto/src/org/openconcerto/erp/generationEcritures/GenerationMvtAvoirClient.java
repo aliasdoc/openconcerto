@@ -98,7 +98,12 @@ public class GenerationMvtAvoirClient extends GenerationEcritures {
         }
         BigDecimal portHT = BigDecimal.valueOf(avoirRow.getLong("PORT_HT")).movePointLeft(2);
 
-        TotalCalculator calc = getValuesFromElement(avoirRow, avoirRow.getTable().getTable("AVOIR_CLIENT_ELEMENT"), portHT, null, null);
+        TotalCalculator calc;
+        if (rowClient.getTable().contains("ID_COMPTE_PCE_PRODUIT") && !rowClient.isForeignEmpty("ID_COMPTE_PCE_PRODUIT")) {
+            calc = getValuesFromElement(false, "T_PV_HT", avoirRow, avoirRow.getTable().getTable("AVOIR_CLIENT_ELEMENT"), portHT, null, null, rowClient.getForeign("ID_COMPTE_PCE_PRODUIT"));
+        } else {
+            calc = getValuesFromElement(avoirRow, avoirRow.getTable().getTable("AVOIR_CLIENT_ELEMENT"), portHT, null, null);
+        }
 
         for (SQLRowAccessor row : calc.getMapHt().keySet()) {
             long b = calc.getMapHt().get(row).setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValue();

@@ -23,6 +23,9 @@ import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElemen
 import org.openconcerto.erp.core.sales.product.element.UniteVenteArticleSQLElement;
 import org.openconcerto.erp.core.sales.product.ui.ArticleDesignationTable;
 import org.openconcerto.erp.core.sales.product.ui.ArticleTarifTable;
+import org.openconcerto.erp.core.sales.product.ui.ProductItemListTable;
+import org.openconcerto.erp.core.sales.product.ui.ProductQtyPriceListTable;
+import org.openconcerto.erp.core.sales.product.ui.RowValuesTableEditionPanel;
 import org.openconcerto.erp.model.ISQLCompteSelector;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
@@ -91,6 +94,8 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
 
     private ArticleDesignationTable tableDes = new ArticleDesignationTable();
     private ArticleTarifTable tableTarifVente = new ArticleTarifTable(this);
+    private ProductQtyPriceListTable tableTarifQteVente = new ProductQtyPriceListTable(this);
+    private ProductItemListTable tableBom;
     private final JTextField textMarge = new JTextField(15);
 
     private DocumentListener pieceHAArticle = new SimpleDocumentListener() {
@@ -194,6 +199,9 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
 
     public ReferenceArticleSQLComponent(SQLElement elt) {
         super(elt);
+        if (elt.getTable().getDBRoot().contains("ARTICLE_ELEMENT")) {
+            this.tableBom = new ProductItemListTable();
+        }
     }
 
     @Override
@@ -203,6 +211,10 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
             this.checkObs.setVisible(true);
             this.tableTarifVente.setArticleValues(r);
             this.tableTarifVente.insertFrom("ID_ARTICLE", r.getID());
+            this.tableTarifQteVente.insertFrom("ID_ARTICLE", r.getID());
+            if (this.tableBom != null) {
+                this.tableBom.insertFrom("ID_ARTICLE_PARENT", r.getID());
+            }
             this.tableDes.insertFrom("ID_ARTICLE", r.getID());
             if (this.codeFournisseurTable != null) {
                 this.codeFournisseurTable.insertFrom("ID_ARTICLE", r.getID());
@@ -339,7 +351,11 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
         c.weightx = 1;
         c.weighty = 1;
 
-        pane.add("Tarifs de vente", createTarifPanel());
+        pane.add("Tarifs de vente spéciaux", createTarifPanel());
+        pane.add("Tarifs de vente par quantité", createTarifQtePanel());
+        if (this.tableBom != null) {
+            pane.add("Nomenclature", createBOMpanel());
+        }
         pane.add("Exportation", createExportationPanel());
         pane.add("Achat", createAchatPanel());
         pane.add("Stock", createStockPanel());
@@ -751,16 +767,18 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
                 if (rowTarif == null || rowTarif.isUndefined()) {
                     return;
                 }
-                int nbRows = tableTarifVente.getModel().getRowCount();
+                // int nbRows = tableTarifVente.getModel().getRowCount();
 
-                for (int i = 0; i < nbRows; i++) {
-                    SQLRowValues rowVals = tableTarifVente.getModel().getRowValuesAt(i);
-                    int idTarif = Integer.parseInt(rowVals.getObject("ID_TARIF").toString());
-                    if (idTarif == rowTarif.getID()) {
-                        JOptionPane.showMessageDialog(null, "Impossible d'ajouter.\nLe tarif est déjà présent dans la liste!");
-                        return;
-                    }
-                }
+                // FIXME Check with qty
+                // for (int i = 0; i < nbRows; i++) {
+                // SQLRowValues rowVals = tableTarifVente.getModel().getRowValuesAt(i);
+                // int idTarif = Integer.parseInt(rowVals.getObject("ID_TARIF").toString());
+                // if (idTarif == rowTarif.getID()) {
+                // JOptionPane.showMessageDialog(null,
+                // "Impossible d'ajouter.\nLe tarif est déjà présent dans la liste!");
+                // return;
+                // }
+                // }
 
                 SQLRowValues rowVals = new SQLRowValues(Configuration.getInstance().getBase().getTable("ARTICLE_TARIF"));
                 if (getSelectedID() > 1) {
@@ -782,6 +800,38 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
                 tableTarifVente.removeSelectedRow();
             }
         });
+        return panel;
+    }
+
+    private JPanel createBOMpanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(false);
+        GridBagConstraints c = new DefaultGridBagConstraints();
+
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.fill = GridBagConstraints.BOTH;
+        c.weightx = 1;
+        c.weighty = 1;
+        c.gridx = 0;
+        c.fill = GridBagConstraints.BOTH;
+        this.tableBom.setOpaque(false);
+        panel.add(new RowValuesTableEditionPanel(this.tableBom), c);
+        return panel;
+    }
+
+    private JPanel createTarifQtePanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(false);
+        GridBagConstraints c = new DefaultGridBagConstraints();
+
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.fill = GridBagConstraints.BOTH;
+        c.weightx = 1;
+        c.weighty = 1;
+        c.gridx = 0;
+        c.fill = GridBagConstraints.BOTH;
+        this.tableTarifQteVente.setOpaque(false);
+        panel.add(new RowValuesTableEditionPanel(this.tableTarifQteVente), c);
         return panel;
     }
 
@@ -1126,6 +1176,11 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
     public void update() {
             super.update();
         this.tableTarifVente.updateField("ID_ARTICLE", getSelectedID());
+        this.tableTarifQteVente.updateField("ID_ARTICLE", getSelectedID());
+        if (this.tableBom != null) {
+            this.tableBom.updateField("ID_ARTICLE_PARENT", getSelectedID());
+        }
+
         this.tableDes.updateField("ID_ARTICLE", getSelectedID());
         if (this.codeFournisseurTable != null) {
             this.codeFournisseurTable.updateField("ID_ARTICLE", getSelectedID());
@@ -1184,6 +1239,10 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
     public int insert(SQLRow order) {
         int id = super.insert(order);
         this.tableTarifVente.updateField("ID_ARTICLE", id);
+        this.tableTarifQteVente.updateField("ID_ARTICLE", id);
+        if (this.tableBom != null) {
+            this.tableBom.updateField("ID_ARTICLE_PARENT", id);
+        }
         this.tableDes.updateField("ID_ARTICLE", id);
         if (this.codeFournisseurTable != null) {
             this.codeFournisseurTable.updateField("ID_ARTICLE", id);
@@ -1195,9 +1254,7 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
     protected SQLRowValues createDefaults() {
         SQLRowValues rowVals = new SQLRowValues(getTable());
 
-        SQLRow row = getTable().getRow(getTable().getUndefinedID());
-
-        rowVals.put("ID_TAXE", row.getInt("ID_TAXE"));
+        rowVals.put("ID_TAXE", TaxeCache.getCache().getFirstTaxe().getID());
         rowVals.put("ID_UNITE_VENTE", UniteVenteArticleSQLElement.A_LA_PIECE);
         rowVals.put("ID_MODE_VENTE_ARTICLE", ReferenceArticleSQLElement.A_LA_PIECE);
         selectModeVente(ReferenceArticleSQLElement.A_LA_PIECE);

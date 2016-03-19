@@ -22,11 +22,16 @@ import org.openconcerto.erp.core.sales.shipment.report.BonLivraisonXmlSheet;
 import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLInjector;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.model.graph.PathBuilder;
 import org.openconcerto.sql.view.IListFrame;
 import org.openconcerto.sql.view.ListeAddPanel;
+import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction;
@@ -35,13 +40,20 @@ import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.ui.state.WindowStateManager;
+import org.openconcerto.ui.table.PercentTableCellRenderer;
+import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.DecimalUtils;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -67,9 +79,9 @@ public class ListeDesBonsDeLivraisonAction extends CreateFrameAbstractAction {
 
         // Tabs
         final JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Toutes les livraisons", createAllDeliveryPanel(toInvoiceAction));
         tabs.addTab("Livraisons non facturées", createDeliveryWithoutInvoicePanel(toInvoiceAction));
         tabs.addTab("Livraisons facturées", createDeliveryWithInvoicePanel());
-        tabs.addTab("Toutes les livraisons", createAllDeliveryPanel(toInvoiceAction));
         frame.setContentPane(tabs);
 
         final SQLElement eltCmd = Configuration.getInstance().getDirectory().getElement("BON_DE_LIVRAISON");
@@ -128,8 +140,42 @@ public class ListeDesBonsDeLivraisonAction extends CreateFrameAbstractAction {
         final SQLTableModelSourceOnline tableSource = eltCmd.getTableSource(true);
         final List<RowAction> allowedActions = new ArrayList<RowAction>();
         allowedActions.add(toInvoiceAction);
+        BaseSQLTableModelColumn colAvancement = new BaseSQLTableModelColumn("Avancement facturation", BigDecimal.class) {
+
+            @Override
+            protected Object show_(SQLRowAccessor r) {
+
+                return getAvancement(r);
+            }
+
+            @Override
+            public Set<FieldPath> getPaths() {
+                final Path p = new PathBuilder(eltCmd.getTable()).addTable("TR_BON_DE_LIVRAISON").addTable("SAISIE_VENTE_FACTURE").build();
+                return CollectionUtils.createSet(new FieldPath(p, "T_HT"));
+            }
+        };
+        tableSource.getColumns().add(colAvancement);
+        colAvancement.setRenderer(new PercentTableCellRenderer());
         final ListeAddPanel panel = getPanel(eltCmd, tableSource, allowedActions);
         return panel;
+    }
+
+    private BigDecimal getAvancement(SQLRowAccessor r) {
+        Collection<? extends SQLRowAccessor> rows = r.getReferentRows(r.getTable().getTable("TR_BON_DE_LIVRAISON"));
+        long totalFact = 0;
+        long total = r.getLong("TOTAL_HT");
+        for (SQLRowAccessor row : rows) {
+            if (!row.isForeignEmpty("ID_SAISIE_VENTE_FACTURE")) {
+                SQLRowAccessor rowFact = row.getForeign("ID_SAISIE_VENTE_FACTURE");
+                Long l = rowFact.getLong("T_HT");
+                totalFact += l;
+            }
+        }
+        if (total > 0) {
+            return new BigDecimal(totalFact).divide(new BigDecimal(total), DecimalUtils.HIGH_PRECISION).movePointRight(2).setScale(2, RoundingMode.HALF_UP);
+        } else {
+            return BigDecimal.ONE.movePointRight(2);
+        }
     }
 
     JPanel createDeliveryWithInvoicePanel() {

@@ -22,6 +22,7 @@ import org.openconcerto.erp.core.sales.quote.report.DevisXmlSheet;
 import org.openconcerto.erp.core.sales.shipment.report.BonLivraisonXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.AvoirClientXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.AvoirFournisseurXmlSheet;
+import org.openconcerto.erp.generationDoc.gestcomm.BonReceptionXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.CourrierClientSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.RelanceSheet;
@@ -39,6 +40,7 @@ public class GenerationDocumentGestCommPreferencePanel extends AbstractGeneratio
         this.mapKeyLabel.put(Tuple2.create(BonLivraisonXmlSheet.TEMPLATE_ID, BonLivraisonXmlSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("BON_DE_LIVRAISON"));
         this.mapKeyLabel.put(Tuple2.create(VenteFactureXmlSheet.TEMPLATE_ID, VenteFactureXmlSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("SAISIE_VENTE_FACTURE"));
         this.mapKeyLabel.put(Tuple2.create(RelanceSheet.TEMPLATE_ID, RelanceSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("RELANCE"));
+        this.mapKeyLabel.put(Tuple2.create(BonReceptionXmlSheet.TEMPLATE_ID, BonReceptionXmlSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("BON_RECEPTION"));
         this.mapKeyLabel.put(Tuple2.create(CommandeXmlSheet.TEMPLATE_ID, CommandeXmlSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("COMMANDE"));
         this.mapKeyLabel.put(Tuple2.create(CommandeClientXmlSheet.TEMPLATE_ID, CommandeClientXmlSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("COMMANDE_CLIENT"));
         this.mapKeyLabel.put(Tuple2.create(AvoirFournisseurXmlSheet.TEMPLATE_ID, AvoirFournisseurXmlSheet.TEMPLATE_PROPERTY_NAME), getLabelFromTable("AVOIR_FOURNISSEUR"));

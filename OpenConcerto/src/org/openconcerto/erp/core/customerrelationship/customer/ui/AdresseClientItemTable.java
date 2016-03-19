@@ -110,6 +110,18 @@ public class AdresseClientItemTable extends JPanel {
         this.province = new SQLTableElement(e.getTable().getField("PROVINCE"));
         list.add(this.province);
 
+        if (e.getTable().contains("DEPARTEMENT")) {
+            // DEPARTEMENT
+            SQLTableElement dpt = new SQLTableElement(e.getTable().getField("DEPARTEMENT"));
+            list.add(dpt);
+        }
+
+        if (e.getTable().contains("DISTRICT")) {
+            // DISTRICT
+            SQLTableElement district = new SQLTableElement(e.getTable().getField("DISTRICT"));
+            list.add(district);
+        }
+
         // Pays
         this.pays = new SQLTableElement(e.getTable().getField("PAYS"));
         list.add(this.pays);

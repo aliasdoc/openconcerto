@@ -420,9 +420,7 @@ public class SaisieAchatSQLComponent extends BaseSQLComponent {
                 e.printStackTrace();
             }
         }
-
-        new GenerationMvtSaisieAchat(getTable().getRow(id));
-
+        new Thread(new GenerationMvtSaisieAchat(getTable().getRow(id))).start();
         return id;
     }
 
@@ -530,7 +528,7 @@ public class SaisieAchatSQLComponent extends BaseSQLComponent {
             eltEcr.archiveMouvementProfondeur(idMvt, false);
 
             // regenere les ecritures
-            new GenerationMvtSaisieAchat(row, idMvt);
+            new Thread(new GenerationMvtSaisieAchat(row, idMvt)).start();
         }
     }
 

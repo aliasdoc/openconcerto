@@ -340,6 +340,11 @@ public class SQLTableElement {
         Object result;
         if (this.getModifier() != null) {
             result = this.getModifier().getValueFrom(row, this);
+            // Test pour corriger les incohérences de BD (ex: PRIX_METRIQUE_VT_1 = 30 et PV_HT=0)
+            if (this.getElementClass() != null && Number.class.isAssignableFrom(this.getElementClass()) && !CompareUtils.equals(result, row.getObject(this.rowField))) {
+                row.put(this.rowField, result);
+                fireModification(row);
+            }
         } else {
             result = row.getObject(this.getRowField());
         }

@@ -49,15 +49,18 @@ public class Ville {
     private static boolean loaded = false;
     private int nbMatch = 0;
 
-    public synchronized static void init(final DatabaseAccessor d) {
+    public synchronized static void init(final DatabaseAccessor d, final boolean loadFromFile) {
 
         await();
+
         accessor = d;
         init = new Thread(new Runnable() {
             @Override
             public void run() {
                 synchronized (Ville.class) {
-                    parseFile();
+                    if (loadFromFile) {
+                        parseFile();
+                    }
                     final List<Ville> l = d.read();
                     for (final Ville ville : l) {
                         addVilleSilently(ville);

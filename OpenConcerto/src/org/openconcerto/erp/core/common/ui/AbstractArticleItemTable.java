@@ -302,6 +302,9 @@ public abstract class AbstractArticleItemTable extends JPanel {
 
     public void setTarif(SQLRowAccessor idTarif, boolean ask) {
         this.tarif = idTarif;
+        if (!this.tarif.isForeignEmpty("ID_DEVISE") && this.defaultRowVals != null) {
+            this.defaultRowVals.put("ID_DEVISE", this.tarif.getForeignID("ID_DEVISE"));
+        }
     }
 
     protected void setColumnVisible(int col, boolean visible) {
@@ -354,14 +357,11 @@ public abstract class AbstractArticleItemTable extends JPanel {
                         if (columnForFieldHA >= 0) {
                             this.model.setValueAt(prixUnitHA, indexToUpdate, columnForFieldHA);
                         }
-                        // On met la devise de la société, pour le cas ou les articles sont achetés
-                        // dans
-                        // différentes devises
-                        final int columnForDeviseField = this.model.getColumnForField("ID_DEVISE");
-                        if (columnForDeviseField >= 0) {
-                            this.model.setValueAt(ComptaPropsConfiguration.getInstanceCompta().getRowSociete().getForeignID("ID_DEVISE"), indexToUpdate, columnForDeviseField);
+
+                        final int columnForFieldPVht1 = this.model.getColumnForField("PRIX_METRIQUE_VT_1");
+                        if (columnForFieldPVht1 >= 0) {
+                            this.model.setValueAt(prixUnitHT, indexToUpdate, columnForFieldPVht1);
                         }
-                        this.model.setValueAt(prixUnitHT, indexToUpdate, this.model.getColumnForField("PRIX_METRIQUE_VT_1"));
                     }
                     index = indexToUpdate - 1;
                 }
@@ -374,14 +374,19 @@ public abstract class AbstractArticleItemTable extends JPanel {
         int n = this.model.getRowCount();
         final int columnForField = this.model.getColumnForField("NIVEAU");
         if (n > 0 && columnForField >= 0) {
-            SQLRowValues rowValsFirst = this.model.getRowValuesAt(0);
-            if (rowValsFirst.getObject("NIVEAU") == null || rowValsFirst.getInt("NIVEAU") != 1) {
-                this.model.setValueAt(1, 0, columnForField);
+            int start = 0;
+            for (int i = 0; i < n; i++) {
+                start = i;
+                SQLRowValues rowVals = this.model.getRowValuesAt(i);
+                if (rowVals.getObject("NIVEAU") == null || rowVals.getInt("NIVEAU") >= 1) {
+                    this.model.setValueAt(1, i, columnForField);
+                    break;
+                }
             }
 
             // Dernier niveau correct autre que -1
-            int lastGoodPrevious = this.model.getRowValuesAt(0).getInt("NIVEAU");
-            for (int i = 1; i < n; i++) {
+            int lastGoodPrevious = this.model.getRowValuesAt(start).getInt("NIVEAU");
+            for (int i = start + 1; i < n; i++) {
                 // SQLRowValues rowValsPrev = this.model.getRowValuesAt(i - 1);
                 SQLRowValues rowVals = this.model.getRowValuesAt(i);
                 if (rowVals.getObject("NIVEAU") == null) {
@@ -414,23 +419,33 @@ public abstract class AbstractArticleItemTable extends JPanel {
 
     private final Map<String, Integer> allStyleByName;
 
-    public void expandNomenclature(int index, AutoCompletionManager m, final boolean viewOnly) {
+    public static enum EXPAND_TYPE {
+        VIEW_ONLY, EXPAND, FLAT
+    };
+
+    public void expandNomenclature(int index, AutoCompletionManager m, final EXPAND_TYPE type) {
         SQLRowValues rowValsLineFather = this.model.getRowValuesAt(index);
         if (!rowValsLineFather.isForeignEmpty("ID_ARTICLE")) {
 
-            if (!viewOnly) {
+            if (type == EXPAND_TYPE.EXPAND) {
                 int a1 = JOptionPane.showConfirmDialog(this.table, TM.tr("product.bom.expand.warning"), "Warning", JOptionPane.OK_CANCEL_OPTION);
                 if (a1 != JOptionPane.YES_OPTION) {
                     return;
                 }
+            } else if (type == EXPAND_TYPE.FLAT) {
+                int a1 = JOptionPane.showConfirmDialog(this.table, TM.tr("product.bom.flatexpand.warning"), "Warning", JOptionPane.OK_CANCEL_OPTION);
+                if (a1 != JOptionPane.YES_OPTION) {
+                    return;
+                }
             }
+
             final int fatherLevel = rowValsLineFather.getInt("NIVEAU");
             // Test si il existe déjà des éléments d'un niveau inférieur dans le tableau
             if (index < table.getRowCount() - 1) {
                 SQLRowValues rowValsLineNext = this.model.getRowValuesAt(index + 1);
                 if (fatherLevel < rowValsLineNext.getInt("NIVEAU")) {
-                    int a = JOptionPane.showConfirmDialog(this.table, "Cette ligne contient déjà des éléments d'un niveau inférieur. Êtes vous sûr de vouloir éclater la nomenclature?",
-                            "Nomenclature", JOptionPane.YES_NO_OPTION);
+                    int a = JOptionPane.showConfirmDialog(this.table, "Cette ligne contient déjà des éléments d'un niveau inférieur. Êtes vous sûr de vouloir éclater la nomenclature?", "Nomenclature",
+                            JOptionPane.YES_NO_OPTION);
                     if (a == JOptionPane.NO_OPTION) {
                         return;
                     }
@@ -446,6 +461,11 @@ public abstract class AbstractArticleItemTable extends JPanel {
             }
 
             List<? extends SQLRowAccessor> eltsList = new ArrayList<SQLRowAccessor>(elts);
+            if (type == EXPAND_TYPE.FLAT) {
+                this.model.putValue(-1, index, "NIVEAU");
+                // this.model.putValue(allStyleByName.get("Composant"), index, "ID_STYLE");
+            }
+
             for (int i = eltsList.size() - 1; i >= 0; i--) {
                 SQLRowAccessor sqlRowArticleChildElement = eltsList.get(i);
                 final SQLRowAccessor foreignArticleChild = sqlRowArticleChildElement.getForeign("ID_ARTICLE");
@@ -458,30 +478,65 @@ public abstract class AbstractArticleItemTable extends JPanel {
 
                 row2Insert.put("CODE", foreignArticleChild.getObject("CODE"));
                 row2Insert.put("NOM", foreignArticleChild.getObject("NOM"));
-                row2Insert.put("QTE", rowValsLineFather.getInt("QTE") * sqlRowArticleChildElement.getInt("QTE"));
 
-                if (!viewOnly) {
-                    row2Insert.put("NIVEAU", fatherLevel + 1);
-
-                    row2Insert.put("PV_HT", row2Insert.getObject("PRIX_METRIQUE_VT_1"));
-
-                    final BigDecimal resultTotalHT = row2Insert.getBigDecimal("PV_HT").multiply(new BigDecimal(row2Insert.getInt("QTE")));
-                    row2Insert.put("T_PV_HT", resultTotalHT);
-
-                    Float resultTaux = TaxeCache.getCache().getTauxFromId(row2Insert.getForeignID("ID_TAXE"));
-
-                    if (resultTaux == null) {
-                        SQLRow rowTax = TaxeCache.getCache().getFirstTaxe();
-                        resultTaux = rowTax.getFloat("TAUX");
-                    }
-
-                    float taux = (resultTaux == null) ? 0.0F : resultTaux.floatValue();
-
-                    BigDecimal r = resultTotalHT.multiply(BigDecimal.valueOf(taux).movePointLeft(2).add(BigDecimal.ONE), DecimalUtils.HIGH_PRECISION);
-
-                    row2Insert.put("T_PV_TTC", r);
+                if (type == EXPAND_TYPE.FLAT) {
+                    row2Insert.put("QTE", sqlRowArticleChildElement.getInt("QTE") * rowValsLineFather.getInt("QTE"));
                 } else {
+                    row2Insert.put("QTE", sqlRowArticleChildElement.getInt("QTE"));
+                }
+                if (row2Insert.getTable().contains("POURCENT_REMISE")) {
+                    row2Insert.put("POURCENT_REMISE", BigDecimal.ZERO);
+                    row2Insert.put("MONTANT_REMISE", BigDecimal.ZERO);
+                }
+
+                if (type == EXPAND_TYPE.EXPAND) {
+                    row2Insert.put("NIVEAU", fatherLevel + 1);
+                } else if (type == EXPAND_TYPE.VIEW_ONLY) {
                     row2Insert.put("NIVEAU", -1);
+                } else if (type == EXPAND_TYPE.FLAT) {
+                    row2Insert.put("NIVEAU", 1);
+                }
+
+                if (type != EXPAND_TYPE.VIEW_ONLY) {
+
+                    if (row2Insert.getTable().contains("T_PA_TTC")) {
+                        row2Insert.put("PA_HT", row2Insert.getObject("PRIX_METRIQUE_HA_1"));
+
+                        final BigDecimal resultTotalHT = row2Insert.getBigDecimal("PA_HT").multiply(new BigDecimal(row2Insert.getInt("QTE")));
+                        row2Insert.put("T_PA_HT", resultTotalHT);
+
+                        Float resultTaux = TaxeCache.getCache().getTauxFromId(row2Insert.getForeignID("ID_TAXE"));
+
+                        if (resultTaux == null) {
+                            SQLRow rowTax = TaxeCache.getCache().getFirstTaxe();
+                            resultTaux = rowTax.getFloat("TAUX");
+                        }
+
+                        float taux = (resultTaux == null) ? 0.0F : resultTaux.floatValue();
+
+                        BigDecimal r = resultTotalHT.multiply(BigDecimal.valueOf(taux).movePointLeft(2).add(BigDecimal.ONE), DecimalUtils.HIGH_PRECISION);
+
+                        row2Insert.put("T_PA_TTC", r);
+                    } else {
+                        row2Insert.put("PV_HT", row2Insert.getObject("PRIX_METRIQUE_VT_1"));
+
+                        final BigDecimal resultTotalHT = row2Insert.getBigDecimal("PV_HT").multiply(new BigDecimal(row2Insert.getInt("QTE")));
+                        row2Insert.put("T_PV_HT", resultTotalHT);
+
+                        Float resultTaux = TaxeCache.getCache().getTauxFromId(row2Insert.getForeignID("ID_TAXE"));
+
+                        if (resultTaux == null) {
+                            SQLRow rowTax = TaxeCache.getCache().getFirstTaxe();
+                            resultTaux = rowTax.getFloat("TAUX");
+                        }
+
+                        float taux = (resultTaux == null) ? 0.0F : resultTaux.floatValue();
+
+                        BigDecimal r = resultTotalHT.multiply(BigDecimal.valueOf(taux).movePointLeft(2).add(BigDecimal.ONE), DecimalUtils.HIGH_PRECISION);
+
+                        row2Insert.put("T_PV_TTC", r);
+
+                    }
                 }
                 row2Insert.put("ID_STYLE", allStyleByName.get("Composant"));
                 this.model.addRowAt(index + 1, row2Insert);

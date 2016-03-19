@@ -13,22 +13,9 @@
  
  package org.openconcerto.ui.light;
 
-import org.openconcerto.utils.io.Transferable;
-
-public class LightUIScrollablePanel extends LightUIDescriptor implements Transferable {
-
-    public LightUIScrollablePanel(String id, int counterId) {
-        super(id, counterId);
-        this.setType(LightUIElement.TYPE_SCROLLABLE);
-    }
-
+public class LightUIScrollablePanel extends LightUIPanel {
     public LightUIScrollablePanel(String id) {
         super(id);
         this.setType(LightUIElement.TYPE_SCROLLABLE);
-    }
-
-    @Override
-    public String toJSON() {
-        return super.toJSON();
     }
 }

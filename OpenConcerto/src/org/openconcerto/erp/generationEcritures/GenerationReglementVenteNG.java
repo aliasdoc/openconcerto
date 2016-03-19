@@ -58,7 +58,7 @@ public class GenerationReglementVenteNG extends GenerationEcritures {
     public GenerationReglementVenteNG(String label, SQLRow rowClient, PrixTTC ttc, Date d, SQLRow modeReglement, SQLRow source, SQLRow mvtSource, boolean createEncaisse) throws Exception {
 
         SQLRow typeRegRow = modeReglement.getForeignRow("ID_TYPE_REGLEMENT");
-
+        setRowAnalytiqueSource(source);
         // iniatilisation des valeurs de la map
         this.date = d;
 

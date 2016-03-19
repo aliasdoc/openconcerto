@@ -14,12 +14,10 @@
  package org.openconcerto.ui.light;
 
 public class LightUIButtonUnmanaged extends LightUIElement {
-
     public LightUIButtonUnmanaged(String id, String label) {
         setType(LightUIElement.TYPE_BUTTON_UNMANAGED);
         setId(id);
         setGridWidth(1);
         setLabel(label);
     }
-
 }

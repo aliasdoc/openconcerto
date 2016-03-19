@@ -17,6 +17,7 @@ import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.config.Gestion;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.sales.invoice.component.SaisieVenteFactureSQLComponent;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.sales.quote.component.DevisSQLComponent;
@@ -45,8 +46,8 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.sqlobject.ElementComboBoxUtils;
-import org.openconcerto.sql.ui.StringWithId;
 import org.openconcerto.sql.ui.light.GroupToLightUIConvertor;
+import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.EditPanel;
@@ -64,11 +65,14 @@ import org.openconcerto.ui.light.ColumnsSpec;
 import org.openconcerto.ui.light.CustomEditorProvider;
 import org.openconcerto.ui.light.LightControler;
 import org.openconcerto.ui.light.LightUIComboElement;
-import org.openconcerto.ui.light.LightUIDescriptor;
 import org.openconcerto.ui.light.LightUIElement;
+import org.openconcerto.ui.light.LightUIFrame;
 import org.openconcerto.ui.light.LightUILine;
+import org.openconcerto.ui.light.LightUIPanel;
+import org.openconcerto.ui.light.LightUITable;
 import org.openconcerto.ui.light.LightUITextField;
 import org.openconcerto.ui.light.Row;
+import org.openconcerto.ui.light.RowSelectionSpec;
 import org.openconcerto.ui.light.TableContent;
 import org.openconcerto.ui.light.TableSpec;
 import org.openconcerto.ui.table.TimestampTableCellRenderer;
@@ -79,6 +83,7 @@ import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.FileUtils;
 import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.cc.ITransformer;
+import org.openconcerto.utils.ui.StringWithId;
 
 import java.awt.Desktop;
 import java.awt.event.ActionEvent;
@@ -100,6 +105,10 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.SwingWorker;
+
+import org.jdom.Document;
+import org.jdom.Element;
+import org.jdom.input.DOMBuilder;
 
 public class DevisSQLElement extends ComptaSQLConfElement {
 
@@ -162,11 +171,11 @@ public class DevisSQLElement extends ComptaSQLConfElement {
             private SQLElement eltClient = Configuration.getInstance().getDirectory().getElement(((ComptaPropsConfiguration) Configuration.getInstance()).getRootSociete().getTable("CLIENT"));
 
             public void actionPerformed(ActionEvent e) {
-                if (edit == null) {
-                    edit = new EditFrame(eltClient, EditMode.MODIFICATION);
+                if (this.edit == null) {
+                    this.edit = new EditFrame(this.eltClient, EditMode.MODIFICATION);
                 }
-                edit.selectionId(IListe.get(e).getSelectedRow().getForeignID("ID_CLIENT"));
-                edit.setVisible(true);
+                this.edit.selectionId(IListe.get(e).getSelectedRow().getForeignID("ID_CLIENT"));
+                this.edit.setVisible(true);
             }
         }, false);
         actionClient.setPredicate(IListeEvent.getSingleSelectionPredicate());
@@ -525,7 +534,9 @@ public class DevisSQLElement extends ComptaSQLConfElement {
         l.add("ID_CLIENT");
         l.add("OBJET");
         l.add("ID_COMMERCIAL");
-        l.add("T_HA");
+        if (UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
+            l.add("T_HA");
+        }
         l.add("T_HT");
         l.add("T_TTC");
         l.add("INFOS");
@@ -535,6 +546,52 @@ public class DevisSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    protected SQLTableModelSourceOnline createTableSource() {
+        SQLTableModelSourceOnline table = super.createTableSource();
+
+        final BaseSQLTableModelColumn colAdrLiv = new BaseSQLTableModelColumn("Adresse de livraison", String.class) {
+
+            @Override
+            protected Object show_(SQLRowAccessor r) {
+
+                SQLRowAccessor rowAd;
+                if (!r.isForeignEmpty("ID_ADRESSE_LIVRAISON")) {
+                    rowAd = r.getForeign("ID_ADRESSE_LIVRAISON");
+                } else if (!r.getForeign("ID_CLIENT").isForeignEmpty("ID_ADRESSE_L")) {
+                    rowAd = r.getForeign("ID_CLIENT").getForeign("ID_ADRESSE_L");
+                } else {
+                    rowAd = r.getForeign("ID_CLIENT").getForeign("ID_ADRESSE");
+                }
+
+                String lib = rowAd.getString("LIBELLE") + " " + rowAd.getString("VILLE");
+
+                return lib;
+            }
+
+            @Override
+            public Set<FieldPath> getPaths() {
+                SQLTable devisTable = getTable();
+                Path p = new Path(devisTable);
+                p = p.add(devisTable.getField("ID_CLIENT"));
+                p = p.add(p.getLast().getField("ID_ADRESSE_L"));
+
+                Path p2 = new Path(devisTable);
+                p2 = p2.add(devisTable.getField("ID_CLIENT"));
+                p2 = p2.add(p2.getLast().getField("ID_ADRESSE"));
+
+                Path p3 = new Path(devisTable);
+                p3 = p3.add(devisTable.getField("ID_ADRESSE_LIVRAISON"));
+
+                return CollectionUtils.createSet(new FieldPath(p, "LIBELLE"), new FieldPath(p, "VILLE"), new FieldPath(p2, "LIBELLE"), new FieldPath(p2, "VILLE"), new FieldPath(p3, "LIBELLE"),
+                        new FieldPath(p3, "VILLE"));
+            }
+        };
+        table.getColumns().add(3, colAdrLiv);
+
+
+        return table;
+    }
 
     @Override
     public CollectionMap<String, String> getShowAs() {
@@ -603,63 +660,123 @@ public class DevisSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public LightUIDescriptor getUIDescriptorForModification(PropsConfiguration configuration, long quoteId) {
+    public LightUIFrame createUIFrameForModification(PropsConfiguration configuration, long id, long userId) {
         final GroupToLightUIConvertor convertor = new GroupToLightUIConvertor(configuration);
-        convertor.setCustomEditorProvider("sales.quote.items.list", getItemsCustomEditorProvider(configuration, quoteId));
-        final LightUIDescriptor desc = convertor.convert(getGroupForModification());
-
+        convertor.setCustomEditorProvider("sales.quote.items.list", getItemsCustomEditorProvider(configuration, id));
+        final LightUIFrame desc = convertor.convert(getGroupForModification());
         return desc;
     }
 
-    public LightUIDescriptor getUIDescriptorForCreation(PropsConfiguration configuration) {
+    public LightUIFrame createUIFrameForCreation(final PropsConfiguration configuration, final long userId) {
         final GroupToLightUIConvertor convertor = new GroupToLightUIConvertor(configuration);
         convertor.setCustomEditorProvider("sales.quote.items.list", getItemsCustomEditorProvider(configuration, -1));
-        final LightUIDescriptor desc = convertor.convert(getGroupForCreation());
+        final LightUIFrame desc = convertor.convert(getGroupForCreation());
         return desc;
     }
 
-    CustomEditorProvider getItemsCustomEditorProvider(final PropsConfiguration configuration, final long quoteId) {
+    CustomEditorProvider getItemsCustomEditorProvider(final PropsConfiguration configuration, final long quoteId) throws IllegalArgumentException {
         return new CustomEditorProvider() {
 
             @Override
             public LightUIElement createUIElement(String id) {
-                LightUIElement eList = new LightUIElement();
-                eList.setId(id);
-                eList.setType(LightUIElement.TYPE_LIST);
-                eList.setFillWidth(true);
 
-                ColumnSpec c1 = new ColumnSpec("sales.quote.item.style", StringWithId.class, "Style", new StringWithId(2, "Normal"), 50, true, new LightUIComboElement("sales.quote.item.style"));
-                ColumnSpec c2 = new ColumnSpec("sales.quote.item.code", String.class, "Code", "", 50, true, new LightUITextField("sales.quote.item.code"));
-                ColumnSpec c3 = new ColumnSpec("sales.quote.item.label", String.class, "Nom", "", 50, true, new LightUITextField("sales.quote.item.name"));
-                ColumnSpec c4 = new ColumnSpec("sales.quote.item.description", String.class, "Descriptif", "", 50, true, new LightUITextField("sales.quote.item.description"));
-                ColumnSpec c5 = new ColumnSpec("sales.quote.item.purchase.unit.price", BigDecimal.class, "P.U. Achat HT", new BigDecimal(0), 50, true, new LightUITextField(
+                final ColumnSpec c1 = new ColumnSpec("sales.quote.item.style", StringWithId.class, "Style", new StringWithId(2, "Normal"), true, new LightUIComboElement("sales.quote.item.style"));
+                final ColumnSpec c2 = new ColumnSpec("sales.quote.item.code", String.class, "Code", "", true, new LightUITextField("sales.quote.item.code"));
+                final ColumnSpec c3 = new ColumnSpec("sales.quote.item.label", String.class, "Nom", "", true, new LightUITextField("sales.quote.item.name"));
+                final ColumnSpec c4 = new ColumnSpec("sales.quote.item.description", String.class, "Descriptif", "", true, new LightUITextField("sales.quote.item.description"));
+                final ColumnSpec c5 = new ColumnSpec("sales.quote.item.purchase.unit.price", BigDecimal.class, "P.U. Achat HT", new BigDecimal(0), true, new LightUITextField(
                         "sales.quote.item.purchase.unit.price"));
-                ColumnSpec c6 = new ColumnSpec("sales.quote.item.sales.unit.price", BigDecimal.class, "P.U. Vente HT", new BigDecimal(0), 50, true, new LightUITextField(
+                final ColumnSpec c6 = new ColumnSpec("sales.quote.item.sales.unit.price", BigDecimal.class, "P.U. Vente HT", new BigDecimal(0), true, new LightUITextField(
                         "sales.quote.item.sales.unit.price"));
-                ColumnSpec c7 = new ColumnSpec("sales.quote.item.quantity", Integer.class, "Quantité", new BigDecimal(1), 50, true, new LightUITextField("sales.quote.item.quantity"));
+                final ColumnSpec c7 = new ColumnSpec("sales.quote.item.quantity", Integer.class, "Quantité", new BigDecimal(1), true, new LightUITextField("sales.quote.item.quantity"));
 
-                List<ColumnSpec> cols = new ArrayList<ColumnSpec>();
-                cols.add(c1);
-                cols.add(c2);
-                cols.add(c3);
-                cols.add(c4);
-                cols.add(c5);
-                cols.add(c6);
-                cols.add(c7);
-                List<String> visibleIds = new ArrayList<String>();
-                for (ColumnSpec c : cols) {
-                    visibleIds.add(c.getId());
+                final List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
+                final List<String> possibleColumnIds = new ArrayList<String>();
+
+                columnsSpec.add(c1);
+                columnsSpec.add(c2);
+                columnsSpec.add(c3);
+                columnsSpec.add(c4);
+                columnsSpec.add(c5);
+                columnsSpec.add(c6);
+                columnsSpec.add(c7);
+
+                for (ColumnSpec c : columnsSpec) {
+                    possibleColumnIds.add(c.getId());
                 }
 
-                ColumnsSpec columsSpec = new ColumnsSpec("sales.quote.items", cols, visibleIds, null);
+                final String lId = "sales.quote.items";
+                final long userId = UserManager.getUserID();
+                Document columnsPrefs = null;
+                try {
+                    final DOMBuilder in = new DOMBuilder();
+                    final org.w3c.dom.Document w3cDoc = Configuration.getInstance().getXMLConf(userId, lId);
+                    if (w3cDoc != null) {
+                        columnsPrefs = in.build(w3cDoc);
+                    }
+                } catch (Exception ex) {
+                    throw new IllegalArgumentException("DevisSQLElement getItemsCustomEditorProvider - Failed to get ColumnPrefs for descriptor " + lId + " and for user " + userId + "\n"
+                            + ex.getMessage());
+                }
 
-                final TableSpec rawContent = new TableSpec();
-                rawContent.setColumns(columsSpec);
+                final Element rootElement = columnsPrefs.getRootElement();
+                if (!rootElement.getName().equals("list")) {
+                    throw new IllegalArgumentException("invalid xml, roots node list expected but " + rootElement.getName() + " found");
+                }
+                final List<Element> xmlColumns = rootElement.getChildren();
+                final int columnsCount = columnsSpec.size();
+                if (xmlColumns.size() != columnsCount) {
+                    throw new IllegalArgumentException("incorrect columns count in xml");
+                }
+
+                for (int i = 0; i < columnsCount; i++) {
+                    final ColumnSpec columnSpec = columnsSpec.get(i);
+                    final String columnId = columnSpec.getId();
+                    boolean find = false;
+
+                    for (int j = 0; j < columnsCount; j++) {
+                        final Element xmlColumn = xmlColumns.get(j);
+                        final String xmlColumnId = xmlColumn.getAttribute("id").getValue();
+
+                        if (xmlColumnId.equals(columnId)) {
+
+                            if (!xmlColumn.getName().equals("column")) {
+                                throw new IllegalArgumentException("ColumnSpec setPrefs - Invalid xml, element node column expected but " + xmlColumn.getName() + " found");
+                            }
+                            if (xmlColumn.getAttribute("width") == null || xmlColumn.getAttribute("min-width") == null || xmlColumn.getAttribute("max-width") == null) {
+                                throw new IllegalArgumentException("ColumnSpec setPrefs - Invalid column node for " + columnId + ", it must have attribute width, min-width, max-width");
+                            }
+
+                            final int width = Integer.parseInt(xmlColumn.getAttribute("width").getValue());
+                            final int maxWidth = Integer.parseInt(xmlColumn.getAttribute("max-width").getValue());
+                            final int minWidth = Integer.parseInt(xmlColumn.getAttribute("min-width").getValue());
+
+                            columnSpec.setPrefs(width, maxWidth, minWidth);
+                            if (i != j) {
+                                final ColumnSpec swap = columnsSpec.get(i);
+                                columnsSpec.set(i, columnsSpec.get(j));
+                                columnsSpec.set(j, swap);
+                            }
+                            find = true;
+                            break;
+                        }
+                    }
+                    if (!find) {
+                        throw new IllegalArgumentException("xml contain unknow column: " + columnId);
+                    }
+                }
+                final ColumnsSpec cSpec = new ColumnsSpec(lId, columnsSpec, possibleColumnIds, null);
+                cSpec.setAllowMove(true);
+                cSpec.setAllowResize(true);
+                final RowSelectionSpec selectionSpec = new RowSelectionSpec(id);
+                final TableSpec tSpec = new TableSpec(id, selectionSpec, cSpec);
+                tSpec.setColumns(cSpec);
+
                 if (quoteId > 0) {
                     // send: id,value
-                    SQLTable table = configuration.getDirectory().getElement("DEVIS_ELEMENT").getTable();
+                    final SQLTable table = configuration.getDirectory().getElement("DEVIS_ELEMENT").getTable();
                     final List<SQLField> fieldsToFetch = new ArrayList<SQLField>();
-                    for (ColumnSpec cs : cols) {
+                    for (ColumnSpec cs : columnsSpec) {
                         String colId = cs.getId();
                         SQLField f = configuration.getFieldMapper().getSQLFieldForItem(colId);
                         if (f != null) {
@@ -674,9 +791,9 @@ public class DevisSQLElement extends ComptaSQLConfElement {
 
                     List<Row> rows = new ArrayList<Row>();
                     for (final SQLRowValues vals : fetchedRows) {
-                        Row r = new Row(vals.getID(), cols.size());
+                        Row r = new Row(vals.getID(), columnsSpec.size());
                         List<Object> values = new ArrayList<Object>();
-                        for (ColumnSpec cs : cols) {
+                        for (ColumnSpec cs : columnsSpec) {
                             String colId = cs.getId();
                             SQLField f = configuration.getFieldMapper().getSQLFieldForItem(colId);
                             if (f != null) {
@@ -706,13 +823,14 @@ public class DevisSQLElement extends ComptaSQLConfElement {
                     TableContent tableContent = new TableContent();
                     tableContent.setRows(rows);
                     // tableContent.setSpec(new RowSpec());
-                    rawContent.setContent(tableContent);
+                    tSpec.setContent(tableContent);
 
                 }
 
-                eList.setRawContent(rawContent);
+                final LightUITable eList = new LightUITable(id);
+                eList.setTableSpec(tSpec);
 
-                LightUIDescriptor desc = new LightUIDescriptor("sales.quote.items.list");
+                LightUIPanel desc = new LightUIPanel("sales.quote.items.list");
                 desc.setGridWidth(1);
                 desc.setFillWidth(true);
 

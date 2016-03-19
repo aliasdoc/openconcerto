@@ -25,6 +25,7 @@ import org.openconcerto.ui.date.EventProviders.MonthlyDayOfWeek;
 import org.openconcerto.ui.date.EventProviders.Weekly;
 import org.openconcerto.ui.date.EventProviders.Yearly;
 import org.openconcerto.ui.date.EventProviders.YearlyDayOfWeekEventProvider;
+import org.openconcerto.utils.FileUtils;
 import org.openconcerto.utils.StringInputStream;
 import org.openconcerto.utils.TimeUtils;
 import org.openconcerto.utils.i18n.TM.MissingMode;
@@ -42,6 +43,8 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.File;
+import java.io.IOException;
 import java.text.DateFormat;
 import java.text.DateFormatSymbols;
 import java.util.ArrayList;
@@ -133,6 +136,10 @@ public class DateRangePlannerPanel extends JPanel {
     private JRadioButton radioPeriodRepeat;
     private JRadioButton radioPeriodNeverEnd;
 
+    protected boolean listenersEnabled = true;
+
+    private DayOfWeek[] week;
+
     public DateRangePlannerPanel() {
         this.weekDays = new HashSet<DayOfWeek>();
         this.setLayout(new GridBagLayout());
@@ -181,7 +188,8 @@ public class DateRangePlannerPanel extends JPanel {
         //
         long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
         if (delta < 60 * 1000) {
-            timeStart.setTimeInMillis(timeEnd.getTimeInMillis() - 60 * 1000);
+            delta = 60 * 1000;
+            timeStart.setTimeInMillis(timeEnd.getTimeInMillis() - delta);
         }
         duration.setValue(Integer.valueOf((int) (delta / (60 * 1000))));
 
@@ -189,13 +197,12 @@ public class DateRangePlannerPanel extends JPanel {
 
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
-                long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
-                if (delta < 60 * 1000) {
-                    delta = 60 * 1000;
+                if (listenersEnabled) {
+
+                    long ms = timeStart.getTimeInMillis() + getSpinnerValue(duration) * 60 * 1000;
+                    ms = ms % (24 * 3600 * 1000);
+                    setTimeEnd(ms);
                 }
-                long ms = timeStart.getTimeInMillis() + ((Integer) duration.getValue()).intValue() * 60 * 1000;
-                ms = ms % (24 * 3600 * 1000);
-                setTimeEnd(ms);
 
             }
         });
@@ -204,17 +211,19 @@ public class DateRangePlannerPanel extends JPanel {
 
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
-                long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
-                if (delta < 60 * 1000) {
-                    delta = 60 * 1000;
-                    long ms = timeEnd.getTimeInMillis() - ((Integer) duration.getValue()).intValue() * 60 * 1000;
-                    if (ms < 0) {
-                        ms += 24 * 3600 * 1000;
+                if (listenersEnabled) {
+                    long delta = timeEnd.getTimeInMillis() - timeStart.getTimeInMillis();
+                    if (delta < 0) {
+                        delta = 60 * 1000;
+                        long ms = timeEnd.getTimeInMillis() - getSpinnerValue(duration) * 60 * 1000;
+                        if (ms < 0) {
+                            ms += 24 * 3600 * 1000;
+                        }
+                        setTimeStart(ms);
+                    } else {
+                        final Integer min = Integer.valueOf((int) (delta / (60 * 1000)));
+                        setDuration(min);
                     }
-                    setTimeStart(ms);
-                } else {
-                    final Integer min = Integer.valueOf((int) (delta / (60 * 1000)));
-                    setDuration(min);
                 }
             }
 
@@ -223,17 +232,18 @@ public class DateRangePlannerPanel extends JPanel {
 
             @Override
             public void stateChanged(ChangeEvent e) {
-                try {
-                    int min = Integer.valueOf(duration.getValue().toString());
-                    if (min > 0) {
-                        long ms = timeStart.getTimeInMillis() + min * 60 * 1000;
-                        ms = ms % (24 * 3600 * 1000);
-                        setTimeEnd(ms);
+                if (listenersEnabled) {
+                    try {
+                        int min = getSpinnerValue(duration);
+                        if (min > 0) {
+                            long ms = timeStart.getTimeInMillis() + min * 60 * 1000;
+                            ms = ms % (24 * 3600 * 1000);
+                            setTimeEnd(ms);
+                        }
+                    } catch (Exception ex) {
+                        // Nothing
                     }
-                } catch (Exception ex) {
-                    // Nothing
                 }
-
             }
         });
 
@@ -378,7 +388,7 @@ public class DateRangePlannerPanel extends JPanel {
 
             @Override
             public void stateChanged(ChangeEvent e) {
-                if (dayEveryDay.getValue().toString().equals("1")) {
+                if (getSpinnerValue(dayEveryDay) == 1) {
                     labelEvery.setText("jour");
                 } else {
                     labelEvery.setText("jours");
@@ -446,7 +456,7 @@ public class DateRangePlannerPanel extends JPanel {
 
             @Override
             public void stateChanged(ChangeEvent e) {
-                if (weekIncrementSpinner.getValue().toString().equals("1")) {
+                if (getSpinnerValue(weekIncrementSpinner) == 1) {
                     labelEvery.setText("semaine, le :");
                 } else {
                     labelEvery.setText("semaines, le :");
@@ -464,7 +474,7 @@ public class DateRangePlannerPanel extends JPanel {
         c.gridwidth = 1;
 
         final String[] namesOfDays = DateFormatSymbols.getInstance().getWeekdays();
-        final DayOfWeek[] week = DayOfWeek.getWeek(Calendar.getInstance());
+        week = DayOfWeek.getWeek(Calendar.getInstance());
         final int weekLength = week.length;
         final int midWeek = weekLength / 2;
         for (int i = 0; i < weekLength; i++) {
@@ -475,16 +485,23 @@ public class DateRangePlannerPanel extends JPanel {
                 c.weightx = 0;
             }
             final JCheckBox cb = new JCheckBox(namesOfDays[d.getCalendarField()]);
-            cb.addItemListener(new ItemListener() {
+            cb.addActionListener(new ActionListener() {
+
                 @Override
-                public void itemStateChanged(ItemEvent e) {
-                    if (e.getStateChange() == ItemEvent.SELECTED) {
+                public void actionPerformed(ActionEvent e) {
+                    // Do not use ItemListener in order to avoid issue on loading from xml
+                    if (cb.isSelected()) {
                         weekDays.add(d);
                     } else {
                         weekDays.remove(d);
+                        if (weekDays.isEmpty()) {
+                            cb.setSelected(true);
+                            weekDays.add(d);
+                        }
                     }
                 }
             });
+
             p.add(cb, c);
             weekCheckboxes.add(cb);
 
@@ -496,12 +513,15 @@ public class DateRangePlannerPanel extends JPanel {
                 c.gridx++;
             }
         }
-
+        // Select first
+        weekCheckboxes.get(0).setSelected(true);
+        weekDays.add(week[0]);
+        //
         return p;
     }
 
     protected final void setMonthIncrement(Object src) {
-        this.monthIncrement = (Integer) ((JSpinner) src).getValue();
+        this.monthIncrement = getSpinnerValue((JSpinner) src);
     }
 
     // MONTH
@@ -747,33 +767,62 @@ public class DateRangePlannerPanel extends JPanel {
 
                 final DateRangePlannerPanel planner = new DateRangePlannerPanel();
                 p.setLayout(new BorderLayout());
-
                 p.add(planner, BorderLayout.CENTER);
+
+                JPanel tools = new JPanel();
+                p.add(tools, BorderLayout.SOUTH);
                 final JButton b = new JButton("Print ranges");
-                p.add(b, BorderLayout.SOUTH);
+                tools.add(b);
                 b.addActionListener(new ActionListener() {
 
                     @Override
                     public void actionPerformed(ActionEvent e) {
                         List<DateRange> ranges = planner.getRanges();
-                        System.out.println("---- " + ranges.size() + " ranges :");
+                        System.out.println("Printing " + ranges.size() + " ranges :");
                         for (DateRange dateRange : ranges) {
                             System.out.println(dateRange);
                         }
                         final String configXML = planner.getConfigXML();
-                        System.out.println(configXML);
-                        try {
-                            planner.configureFromXML(configXML);
-                        } catch (Exception e1) {
-                            // TODO Auto-generated catch block
-                            e1.printStackTrace();
-                        }
-                        long t1 = System.currentTimeMillis();
                         System.out.println(getDescriptionFromXML(configXML));
-                        long t2 = System.currentTimeMillis();
-                        System.out.println((t2 - t1) + "ms");
+
                     }
                 });
+                final JButton bLoad = new JButton("Load");
+                tools.add(bLoad);
+                bLoad.addActionListener(new ActionListener() {
+
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        System.out.println("Loading...");
+                        try {
+                            String configXML = FileUtils.read(new File("test.xml"));
+                            System.out.println(configXML);
+                            planner.configureFromXML(configXML);
+                        } catch (Exception e1) {
+                            e1.printStackTrace();
+                        }
+
+                    }
+                });
+
+                final JButton bSave = new JButton("Save");
+                tools.add(bSave);
+
+                bSave.addActionListener(new ActionListener() {
+
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        System.out.println("Saving...");
+                        final String configXML = planner.getConfigXML();
+                        System.out.println(configXML);
+                        try {
+                            FileUtils.write(configXML, new File("test.xml"));
+                        } catch (IOException e1) {
+                            e1.printStackTrace();
+                        }
+                    }
+                });
+
                 f.setContentPane(p);
                 f.pack();
                 f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -807,7 +856,7 @@ public class DateRangePlannerPanel extends JPanel {
             eventCount = -1;
         } else {
             endDate = null;
-            eventCount = ((Number) this.spinDateRangeCount.getValue()).intValue();
+            eventCount = getSpinnerValue(this.spinDateRangeCount);
             if (eventCount <= 0)
                 throw new IllegalArgumentException("Negative event count : " + eventCount);
         }
@@ -818,7 +867,7 @@ public class DateRangePlannerPanel extends JPanel {
         final EventProvider prov;
         if (type == Period.DAY) {
             if (dayRadio1.isSelected()) {
-                final int incr = ((Number) dayEveryDay.getValue()).intValue();
+                final int incr = getSpinnerValue(dayEveryDay);
                 prov = new Daily(incr);
             } else {
                 prov = new Weekly(1, DayOfWeek.WORKING_DAYS);
@@ -827,18 +876,18 @@ public class DateRangePlannerPanel extends JPanel {
             if (this.weekDays.isEmpty()) {
                 prov = null;
             } else {
-                final int incr = ((Number) this.weekIncrementSpinner.getValue()).intValue();
+                final int incr = getSpinnerValue(this.weekIncrementSpinner);
                 prov = new Weekly(incr, this.weekDays);
             }
         } else if (type == Period.MONTH) {
             if (this.spinDayOfMonth.isEnabled()) {
-                prov = new Monthly((Integer) this.spinDayOfMonth.getValue(), this.monthIncrement);
+                prov = new Monthly(getSpinnerValue(this.spinDayOfMonth), this.monthIncrement);
             } else {
                 prov = new MonthlyDayOfWeek((Integer) this.comboWeekOfMonth.getSelectedItem(), (DayOfWeek) this.comboWeekDayOfMonth.getSelectedItem(), this.monthIncrement);
             }
         } else if (type == Period.YEAR) {
             if (this.yearlyDayOfMonth.isEnabled()) {
-                prov = new Yearly((Integer) this.yearlyDayOfMonth.getValue(), this.yearlyMonth, 1);
+                prov = new Yearly(getSpinnerValue(this.yearlyDayOfMonth), this.yearlyMonth, 1);
             } else {
                 prov = new YearlyDayOfWeekEventProvider((Integer) this.yearlyComboWeekOfMonth.getSelectedItem(), (DayOfWeek) this.yearlyComboWeekDayOfMonth.getSelectedItem(), this.yearlyMonth, 1);
             }
@@ -925,14 +974,14 @@ public class DateRangePlannerPanel extends JPanel {
         if (f == Period.DAY.getCalendarField()) {
             b.append("<day every=\"");
             if (this.dayRadio1.isSelected()) {
-                b.append(this.dayEveryDay.getValue());
+                b.append(getSpinnerValue(dayEveryDay));
             } else {
                 b.append("wd");
             }
             b.append("\" />");
         } else if (f == Period.WEEK.getCalendarField()) {
             b.append("<week every=\"");
-            b.append(this.weekIncrementSpinner.getValue());
+            b.append(getSpinnerValue(weekIncrementSpinner));
             b.append("\">");
             for (JCheckBox cb : this.weekCheckboxes) {
                 if (cb.isSelected()) {
@@ -945,9 +994,9 @@ public class DateRangePlannerPanel extends JPanel {
         } else if (f == Period.MONTH.getCalendarField()) {
             if (this.monthRadio1.isSelected()) {
                 b.append("<month day=\"");
-                b.append(spinDayOfMonth.getValue());
+                b.append(getSpinnerValue(spinDayOfMonth));
                 b.append("\" every=\"");
-                b.append(spinMonth2.getValue());
+                b.append(getSpinnerValue(spinMonth2));
                 b.append("\" />");
             } else {
                 b.append("<month weekOfMonth=\"");
@@ -955,13 +1004,13 @@ public class DateRangePlannerPanel extends JPanel {
                 b.append("\" dayOfMonth=\"");
                 b.append(comboWeekDayOfMonth.getSelectedIndex());
                 b.append("\" every=\"");
-                b.append(spinMonth3.getValue());
+                b.append(getSpinnerValue(spinMonth3));
                 b.append("\" />");
             }
         } else if (f == Period.YEAR.getCalendarField()) {
             if (this.yearRadio1.isSelected()) {
                 b.append("<year day=\"");
-                b.append(this.yearlyDayOfMonth.getValue());
+                b.append(getSpinnerValue(this.yearlyDayOfMonth));
                 b.append("\" month=\"");
                 b.append(this.yearMonthCombo.getSelectedIndex());
                 b.append("\" />");
@@ -989,7 +1038,7 @@ public class DateRangePlannerPanel extends JPanel {
             b.append("\"");
         } else if (this.radioPeriodRepeat.isSelected()) {
             b.append("repeat=\"");
-            b.append(this.spinDateRangeCount.getValue().toString());
+            b.append(getSpinnerValue(spinDateRangeCount));
             b.append("\"");
         }
         b.append("/>");
@@ -1006,8 +1055,11 @@ public class DateRangePlannerPanel extends JPanel {
         final Node nSchedule = l1.item(0);
         final long tStart = getAttributeAsLong(nSchedule, "start");
         final long tStop = getAttributeAsLong(nSchedule, "end");
-        this.timeEnd.setTimeInMillis(tStop);
+        listenersEnabled = false;
         this.timeStart.setTimeInMillis(tStart);
+        this.timeEnd.setTimeInMillis(tStop);
+        this.duration.setValue((tStop - tStart) / (60 * 1000));
+        listenersEnabled = true;
         // Period
         final NodeList l2 = dom.getElementsByTagName("period");
         final Node nPeriod = l2.item(0);
@@ -1020,8 +1072,10 @@ public class DateRangePlannerPanel extends JPanel {
             if (l != null) {
                 this.dayRadio1.setSelected(true);
                 this.dayEveryDay.setValue(l);
+                this.dayEveryDay.setEnabled(true);
             } else {
-                this.dayRadio2.setSelected(false);
+                this.dayRadio2.setSelected(true);
+                this.dayEveryDay.setEnabled(false);
             }
         } else if (perioType == Period.WEEK.getCalendarField()) {
             this.radioPeriod.setValue(Period.WEEK);
@@ -1029,9 +1083,14 @@ public class DateRangePlannerPanel extends JPanel {
             Integer e = getAttributeAsInteger(nWeek, "every");
             this.weekIncrementSpinner.setValue(e);
             NodeList l = nWeek.getChildNodes();
+            weekDays.clear();
             for (int i = 0; i < l.getLength(); i++) {
                 Node n = l.item(i);
-                this.weekCheckboxes.get(i).setSelected(n.getNodeName().equals("true"));
+                final boolean selected = n.getNodeName().equals("true");
+                this.weekCheckboxes.get(i).setSelected(selected);
+                if (selected) {
+                    weekDays.add(week[i]);
+                }
             }
         } else if (perioType == Period.MONTH.getCalendarField()) {
             this.radioPeriod.setValue(Period.MONTH);
@@ -1040,10 +1099,23 @@ public class DateRangePlannerPanel extends JPanel {
             if (d != null) {
                 this.monthRadio1.setSelected(true);
                 Integer every = getAttributeAsInteger(nMonth, "every");
+                spinDayOfMonth.setEnabled(true);
+                spinMonth2.setEnabled(true);
+                comboWeekOfMonth.setEnabled(false);
+                comboWeekDayOfMonth.setEnabled(false);
+                spinMonth3.setEnabled(false);
+                //
                 spinDayOfMonth.setValue(d);
                 spinMonth2.setValue(every);
             } else {
                 this.monthRadio2.setSelected(true);
+                //
+                spinDayOfMonth.setEnabled(false);
+                spinMonth2.setEnabled(false);
+                comboWeekOfMonth.setEnabled(true);
+                comboWeekDayOfMonth.setEnabled(true);
+                spinMonth3.setEnabled(true);
+                //
                 Integer weekOfMonth = getAttributeAsInteger(nMonth, "weekOfMonth");
                 Integer dayOfMonth = getAttributeAsInteger(nMonth, "dayOfMonth");
                 Integer every = getAttributeAsInteger(nMonth, "every");
@@ -1058,10 +1130,22 @@ public class DateRangePlannerPanel extends JPanel {
             if (d != null) {
                 this.yearRadio1.setSelected(true);
                 Integer m = getAttributeAsInteger(nYear, "month");
+                this.yearlyDayOfMonth.setEnabled(true);
+                this.yearMonthCombo.setEnabled(true);
+                this.yearlyComboWeekOfMonth.setEnabled(false);
+                this.yearlyComboWeekDayOfMonth.setEnabled(false);
+                this.yearMonthCombo2.setEnabled(false);
+                //
                 this.yearlyDayOfMonth.setValue(d);
                 this.yearMonthCombo.setSelectedIndex(m.intValue());
             } else {
                 this.yearRadio2.setSelected(true);
+                this.yearlyDayOfMonth.setEnabled(false);
+                this.yearMonthCombo.setEnabled(false);
+                this.yearlyComboWeekOfMonth.setEnabled(true);
+                this.yearlyComboWeekDayOfMonth.setEnabled(true);
+                this.yearMonthCombo2.setEnabled(true);
+
                 Integer weekOfMonth = getAttributeAsInteger(nYear, "weekOfMonth");
                 this.yearlyComboWeekOfMonth.setSelectedIndex(weekOfMonth.intValue());
                 Integer weekDayOfMonth = getAttributeAsInteger(nYear, "weekDayOfMonth");
@@ -1082,11 +1166,17 @@ public class DateRangePlannerPanel extends JPanel {
         this.dateStart.setValue(new Date(start));
         if (end != null) {
             this.radioPeriodEndAt.setSelected(true);
+            this.dateEnd.setEnabled(true);
+            this.spinDateRangeCount.setEnabled(false);
             this.dateEnd.setValue(new Date(end));
         } else if (repeat != null) {
             this.radioPeriodRepeat.setSelected(true);
+            this.dateEnd.setEnabled(false);
+            this.spinDateRangeCount.setEnabled(true);
             this.spinDateRangeCount.setValue(repeat);
         } else {
+            this.dateEnd.setEnabled(false);
+            this.spinDateRangeCount.setEnabled(false);
             this.radioPeriodNeverEnd.setSelected(true);
         }
 
@@ -1127,7 +1217,11 @@ public class DateRangePlannerPanel extends JPanel {
 
                 final Node nWeek = nPeriod.getFirstChild();
                 Integer e = getAttributeAsInteger(nWeek, "every");
-                result += "toutes les " + e + "semaines, le ";
+                if (e == 1) {
+                    result += "toutes les semaines, le ";
+                } else {
+                    result += "toutes les " + e + " semaines, le ";
+                }
                 NodeList l = nWeek.getChildNodes();
                 final String[] namesOfDays = DateFormatSymbols.getInstance().getWeekdays();
                 final DayOfWeek[] week = DayOfWeek.getWeek(Calendar.getInstance());
@@ -1210,7 +1304,6 @@ public class DateRangePlannerPanel extends JPanel {
             }
         } catch (Exception e) {
             e.printStackTrace();
-
         }
         return result;
     }
@@ -1262,34 +1355,35 @@ public class DateRangePlannerPanel extends JPanel {
     }
 
     public void setTimeEnd(final long ms) {
-        SwingUtilities.invokeLater(new Runnable() {
-
-            @Override
-            public void run() {
-                if (timeEnd.getTimeInMillis() != ms) {
-                    timeEnd.setTimeInMillis(ms);
-                }
-
-            }
-        });
+        this.listenersEnabled = false;
+        if (timeEnd.getTimeInMillis() != ms) {
+            timeEnd.setTimeInMillis(ms);
+        }
+        this.listenersEnabled = true;
     }
 
     public void setTimeStart(final long ms) {
-        SwingUtilities.invokeLater(new Runnable() {
-
-            @Override
-            public void run() {
-                if (timeStart.getTimeInMillis() != ms) {
-                    timeStart.setTimeInMillis(ms);
-                }
-
-            }
-        });
+        this.listenersEnabled = false;
+        if (timeStart.getTimeInMillis() != ms) {
+            timeStart.setTimeInMillis(ms);
+        }
+        this.listenersEnabled = true;
     }
 
     public void setDuration(final Integer min) {
-        if (!((Integer) duration.getValue()).equals(min)) {
+        this.listenersEnabled = false;
+        if (getSpinnerValue(duration) != min) {
             duration.setValue(min);
         }
+        this.listenersEnabled = true;
     }
+
+    public int getSpinnerValue(JSpinner s) {
+        final Object o = s.getValue();
+        if (o == null)
+            return 0;
+        return ((Number) o).intValue();
+
+    }
+
 }

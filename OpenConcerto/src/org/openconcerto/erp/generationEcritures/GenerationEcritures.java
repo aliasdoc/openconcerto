@@ -423,7 +423,32 @@ public class GenerationEcritures {
             rowValsPort.put("T_PV_HT", portHT);
             rowValsPort.put("QTE", 1);
             rowValsPort.put("ID_TAXE", rowTVAPort.getIDNumber());
-            calc.addLine(rowValsPort, null, 1, false);
+
+            final SQLTable tablePrefCompte = Configuration.getInstance().getRoot().findTable("PREFS_COMPTE");
+            final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
+            SQLRow rowDefaultCptPort;
+            if (rowTVAPort.getFloat("TAUX") > 0) {
+                rowDefaultCptPort = rowPrefsCompte.getForeign("ID_COMPTE_PCE_PORT_SOUMIS");
+                if (rowDefaultCptPort == null || rowDefaultCptPort.isUndefined()) {
+                    try {
+                        rowDefaultCptPort = ComptePCESQLElement.getRowComptePceDefault("PortVenteSoumisTVA");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            } else {
+                rowDefaultCptPort = rowPrefsCompte.getForeign("ID_COMPTE_PCE_PORT_NON_SOUMIS");
+                if (rowDefaultCptPort == null || rowDefaultCptPort.isUndefined()) {
+                    try {
+                        rowDefaultCptPort = ComptePCESQLElement.getRowComptePceDefault("PortVenteNonSoumisTVA");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            rowValsPort.putRowValues("ID_ARTICLE").put("ID_COMPTE_PCE", rowDefaultCptPort.getID());
+
+            calc.addLine(rowValsPort, rowValsPort.getForeign("ID_ARTICLE"), 1, false);
         }
         calc.checkResult();
         return calc;

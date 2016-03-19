@@ -23,6 +23,10 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.sql.Timestamp;
@@ -44,7 +48,8 @@ import org.jopencalendar.ui.DatePickerPanel;
 
 public class TimestampEditorPanel extends JPanel implements ActionListener {
 
-    private TimeTextField time;
+    private TimeSpinField timeSpinner;
+    private TimeTextField timeText;
     private JPanel panelHour;
     private DatePickerPanel pickerPanel;
     private List<ActionListener> listeners = new Vector<ActionListener>();
@@ -52,6 +57,10 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
     private Calendar c = Calendar.getInstance();
 
     public TimestampEditorPanel() {
+        this(false);
+    }
+
+    public TimestampEditorPanel(boolean useSpinner) {
         c.set(Calendar.SECOND, 0);
         c.set(Calendar.MILLISECOND, 0);
         setLayout(new GridBagLayout());
@@ -72,9 +81,16 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
         labelHour.setFont(labelHour.getFont().deriveFont(Font.BOLD));
         this.panelHour.add(labelHour, c);
         c.gridx++;
-        this.time = new TimeTextField();
-        this.time.setMinimumSize(new Dimension(time.getPreferredSize()));
-        this.panelHour.add(this.time, c);
+        if (useSpinner) {
+            this.timeSpinner = new TimeSpinField();
+            this.timeSpinner.setMinimumSize(new Dimension(timeSpinner.getPreferredSize()));
+            this.panelHour.add(this.timeSpinner, c);
+        } else {
+            this.timeText = new TimeTextField();
+            this.timeText.grabFocus();
+            this.timeText.setFocusTraversalKeysEnabled(false);
+            this.panelHour.add(this.timeText, c);
+        }
         c.gridx++;
 
         final JButton buttonClose = new JButton(new ImageIcon(TimestampEditorPanel.class.getResource("close_popup_gray.png")));
@@ -92,6 +108,7 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
         buttonClose.setFocusPainted(false);
         buttonClose.setContentAreaFilled(false);
         buttonClose.setMargin(new Insets(1, 1, 1, 1));
+        buttonClose.setFocusable(false);
         c.gridx = 0;
         this.panelHour.setOpaque(false);
         this.add(this.panelHour, c);
@@ -115,7 +132,7 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
         c.weighty = 1;
         c.insets = new Insets(0, 0, 0, 0);
         this.pickerPanel = new DatePickerPanel();
-
+        this.pickerPanel.setFocusable(false);
         add(this.pickerPanel, c);
         c.gridy++;
 
@@ -129,14 +146,61 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
                 fireTimeChangedPerformed();
             }
         });
-        this.time.addPropertyChangeListener("value", new PropertyChangeListener() {
+        if (useSpinner) {
+            this.timeSpinner.addPropertyChangeListener("value", new PropertyChangeListener() {
 
-            @Override
-            public void propertyChange(PropertyChangeEvent evt) {
-                stateChanged();
-                fireTimeChangedPerformed();
-            }
-        });
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    stateChanged();
+                    fireTimeChangedPerformed();
+                }
+            });
+        } else {
+            this.timeText.addPropertyChangeListener("value", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    stateChanged();
+                    fireTimeChangedPerformed();
+                }
+            });
+            this.timeText.addKeyListener(new KeyListener() {
+
+                @Override
+                public void keyTyped(KeyEvent e) {
+
+                }
+
+                @Override
+                public void keyReleased(KeyEvent e) {
+                    if (e.getKeyCode() == KeyEvent.VK_TAB || e.getKeyCode() == KeyEvent.VK_ENTER) {
+                        if (aCellEditor != null) {
+                            aCellEditor.hidePopup();
+                        }
+                    }
+                }
+
+                @Override
+                public void keyPressed(KeyEvent e) {
+
+                }
+            });
+            this.timeText.addFocusListener(new FocusListener() {
+
+                @Override
+                public void focusLost(FocusEvent e) {
+                    if (aCellEditor != null) {
+                        aCellEditor.hidePopup();
+                    }
+
+                }
+
+                @Override
+                public void focusGained(FocusEvent e) {
+
+                }
+            });
+        }
 
     }
 
@@ -146,7 +210,11 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
         final int hour = c.get(Calendar.HOUR_OF_DAY);
         final int minute = c.get(Calendar.MINUTE);
         this.pickerPanel.setSelectedDate(c);
-        this.time.setTime(hour, minute);
+        if (timeSpinner != null) {
+            this.timeSpinner.setTime(hour, minute);
+        } else {
+            timeText.setTime(hour, minute);
+        }
     }
 
     public Timestamp getTime() {
@@ -160,9 +228,13 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
 
     public void stateChanged() {
         c.setTime(pickerPanel.getSelectedDate());
-        c.set(Calendar.HOUR_OF_DAY, time.getHours());
-        c.set(Calendar.MINUTE, time.getMinutes());
-
+        if (timeSpinner != null) {
+            c.set(Calendar.HOUR_OF_DAY, timeSpinner.getHours());
+            c.set(Calendar.MINUTE, timeSpinner.getMinutes());
+        } else {
+            c.set(Calendar.HOUR_OF_DAY, timeText.getHours());
+            c.set(Calendar.MINUTE, timeText.getMinutes());
+        }
     }
 
     private void fireTimeChangedPerformed() {
@@ -188,6 +260,12 @@ public class TimestampEditorPanel extends JPanel implements ActionListener {
 
     public void setHourVisible(boolean b) {
         this.panelHour.setVisible(b);
+    }
+
+    @Override
+    public void requestFocus() {
+        timeText.requestFocus();
+        timeText.setCaretPosition(0);
     }
 
     public static void main(String[] args) throws Exception {

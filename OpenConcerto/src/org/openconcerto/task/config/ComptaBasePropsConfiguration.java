@@ -13,6 +13,16 @@
  
  package org.openconcerto.task.config;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Properties;
+
+import com.jcraft.jsch.Session;
+
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.PropsConfiguration;
 import org.openconcerto.sql.element.ConfSQLElement;
@@ -27,22 +37,14 @@ import org.openconcerto.sql.users.CompanyAccessSQLElement;
 import org.openconcerto.sql.users.UserCommonSQLElement;
 import org.openconcerto.sql.users.rights.RightSQLElement;
 import org.openconcerto.sql.users.rights.UserRightSQLElement;
+import org.openconcerto.task.element.FWKListPrefs;
+import org.openconcerto.task.element.FWKSessionState;
 import org.openconcerto.task.element.TaskRightSQLElement;
 import org.openconcerto.task.element.TaskSQLElement;
 import org.openconcerto.utils.DesktopEnvironment;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.LogUtils;
 import org.openconcerto.utils.ProductInfo;
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Properties;
-
-import com.jcraft.jsch.Session;
 
 public abstract class ComptaBasePropsConfiguration extends PropsConfiguration {
 

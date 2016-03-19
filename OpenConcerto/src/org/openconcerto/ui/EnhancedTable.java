@@ -384,8 +384,12 @@ public class EnhancedTable extends JTable {
          * resizingColumn.setPreferredWidth(resizingColumn.getWidth()); }
          */
         // Vu! Si on ne le fait pas, les colonnes sortent de la largeur
-
-        super.columnMarginChanged(e);
+        try {
+            super.columnMarginChanged(e);
+        } catch (Exception ex) {
+            // Can happen if editor removed
+            ex.printStackTrace();
+        }
         resizeAndRepaint();
     }
 

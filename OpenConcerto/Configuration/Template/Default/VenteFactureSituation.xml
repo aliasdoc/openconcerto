@@ -18,6 +18,15 @@
 		</field>
 	</element>
 
+	<element location="B5" type="fill">
+		<field base="Common" table="SOCIETE_COMMON" name="TYPE"/>
+		<field base="Common" table="SOCIETE_COMMON" name="CAPITAL" prefix=" au capital de " suffix="€"/>
+	</element>
+
+	<element location="B6" type="fill">
+		<field base="Common" table="SOCIETE_COMMON" name="NUM_SIRET" prefix="N° de SIREN "/>
+	</element>
+
 	<element location="B7" type="replace" replacePattern="_">
 		<field base="Common" table="SOCIETE_COMMON" name="NUM_NII" />
 	</element>
@@ -69,7 +78,9 @@
 
 	<element type="sales.account.command.total" location="J58" />
 
-	<element location="L58" type="sales.partial.value" />
+	<element location="L58" type="fill">
+		<field base="Societe" table="SAISIE_VENTE_FACTURE" name="T_HT" type="devise"/>
+	</element>
 
 	<element type="sales.account.total" location="L61" />
 
@@ -84,7 +95,7 @@
 	<element location="B63" type="fill">
 		<field name="ID_MODE_REGLEMENT">
 			<field name="NOM" prefix="Règlement souhaité" conditionField="COMPTANT" conditionExpValue="true" display="false" />
-			<field name="NOM" prefix="Facture acquitée par" conditionField="COMPTANT" conditionExpValue="false" display="false" />
+			<field name="NOM" prefix="Facture acquittée par" conditionField="COMPTANT" conditionExpValue="false" display="false" />
 			<field name="ID_TYPE_REGLEMENT">
 				<field name="NOM" valuesExpected="Indéfini" />
 			</field>

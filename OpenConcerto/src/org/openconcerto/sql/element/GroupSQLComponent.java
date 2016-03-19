@@ -79,15 +79,13 @@ public class GroupSQLComponent extends BaseSQLComponent {
         super(element);
         this.group = group;
         this.hasAdditionnalFields = this.getElement().getAdditionalFields().size() > 0;
-        this.additionnalFieldsGroup = getAdditionalFieldsGroup(group.getDescendantItems());
+        this.additionnalFieldsGroup = getAdditionalFieldsGroup(group.getDescendantGroups());
     }
 
-    private Group getAdditionalFieldsGroup(Collection<Item> items) {
-        for (Item item : items) {
-            if (item instanceof Group) {
-                if (item.getId().endsWith("additionalElementFields")) {
-                    return (Group) item;
-                }
+    private Group getAdditionalFieldsGroup(Collection<Group> items) {
+        for (Group g : items) {
+            if (g.getId().endsWith("additionalElementFields")) {
+                return g;
             }
         }
         return null;
@@ -162,8 +160,14 @@ public class GroupSQLComponent extends BaseSQLComponent {
                 if ((currentGroup == this.group && this.additionnalFieldsGroup == null) || (currentGroup == this.additionnalFieldsGroup)) {
                     final Map<String, JComponent> additionalFields = this.getElement().getAdditionalFields();
                     for (String field : additionalFields.keySet()) {
-                        Item item = new Item(field);
+                        Item item = new Item(field, new LayoutHints(false, false, true, false, true, false));
+                        int fill = c.fill;
+                        double weightx = c.weightx;
+                        c.weightx = 1;
+                        c.fill = GridBagConstraints.HORIZONTAL;
                         layout(item, 100, x, level + 1, c, panel);
+                        c.weightx = weightx;
+                        c.fill = fill;
                     }
                 }
             }

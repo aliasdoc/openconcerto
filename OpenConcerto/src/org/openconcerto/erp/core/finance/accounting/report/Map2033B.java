@@ -13,14 +13,6 @@
  
  package org.openconcerto.erp.core.finance.accounting.report;
 
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.config.Gestion;
-import org.openconcerto.erp.core.finance.accounting.model.SommeCompte;
-import org.openconcerto.erp.preferences.TemplateNXProps;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.utils.GestionDevise;
-
 import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -31,6 +23,14 @@ import java.util.Map;
 
 import javax.swing.JProgressBar;
 import javax.swing.SwingUtilities;
+
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.config.Gestion;
+import org.openconcerto.erp.core.finance.accounting.model.SommeCompte;
+import org.openconcerto.erp.preferences.TemplateNXProps;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.utils.GestionDevise;
 
 public class Map2033B extends Thread {
     private Map<String, String> m;
@@ -201,8 +201,9 @@ public class Map2033B extends Thread {
          ******************************************************************************************/
         // 238 SommeSolde( 600, 602* )+SommeSolde( 6090, 6092* )
         // S238=601+602+6091+6092
-        long v238 = this.sommeCompte.soldeCompte(601, 602, true, this.dateDeb, this.dateFin) + this.sommeCompte.soldeCompte(6090, 6092, true, this.dateDeb, this.dateFin)
-                + this.sommeCompte.soldeCompte(6081, 6082, true, this.dateDeb, this.dateFin);
+        // FIX Abaque ajout 609
+        long v238 = this.sommeCompte.soldeCompte(601, 602, true, this.dateDeb, this.dateFin) + this.sommeCompte.soldeCompte(609, 609, true, this.dateDeb, this.dateFin)
+                - this.sommeCompte.soldeCompte(6093, 6099, true, this.dateDeb, this.dateFin) + this.sommeCompte.soldeCompte(6081, 6082, true, this.dateDeb, this.dateFin);
         this.m.put("CHARGES3.10", GestionDevise.currencyToString(v238, false));
 
         // 212
@@ -276,7 +277,7 @@ public class Map2033B extends Thread {
          * CHARGES SOCIALES
          ******************************************************************************************/
         // 252 SommeSolde( 645, 647* )
-        long v252 = this.sommeCompte.soldeCompte(645, 648, true, this.dateDeb, this.dateFin);
+        long v252 = this.sommeCompte.soldeCompte(645, 647, true, this.dateDeb, this.dateFin);
         this.m.put("CHARGES3.15", GestionDevise.currencyToString(v252, false));
 
         // 221
@@ -516,6 +517,7 @@ public class Map2033B extends Thread {
         this.dateDeb = dateDeb;
         this.dateFin = dateFin;
         this.sommeCompte = new SommeCompte(rowPosteAnalytique);
+        // this.sommeCompte.setRemoveClotureCompte(true);
     }
 
     public Map2033B(JProgressBar b) {
