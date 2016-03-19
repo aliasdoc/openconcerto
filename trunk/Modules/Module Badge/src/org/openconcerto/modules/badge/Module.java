@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.swing.Action;
+import javax.swing.Icon;
 import javax.swing.JFrame;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -34,7 +35,6 @@ import org.openconcerto.erp.modules.ModulePackager;
 import org.openconcerto.erp.modules.ModulePreferencePanel;
 import org.openconcerto.erp.modules.ModulePreferencePanelDesc;
 import org.openconcerto.erp.modules.RuntimeModuleFactory;
-import org.openconcerto.erp.modules.ModulePreferencePanel.SQLPrefView;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
@@ -230,10 +230,9 @@ public final class Module extends AbstractModule {
 
         final IListPanel panel = new ListeViewPanel(element, new IListe(tableModelEntree));
 
-        final Action createAction = RowAction.createAction("Assigner à", null, new IClosure<List<SQLRowAccessor>>() {
-
+        final Action createAction = RowAction.createAction("Assigner à", (Icon) null, new IClosure<List<? extends SQLRowAccessor>>() {
             @Override
-            public void executeChecked(List<SQLRowAccessor> input) {
+            public void executeChecked(List<? extends SQLRowAccessor> input) {
                 SQLRowAccessor row = input.get(0);
                 PanelFrame frame = new PanelFrame(new AssignationPanel(row.getString("NUMERO_CARTE")), "Assignation d'une carte");
                 frame.setLocationRelativeTo(null);
