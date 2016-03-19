@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
@@ -14,9 +15,12 @@ import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
 
 import org.openconcerto.erp.action.CreateFrameAbstractAction;
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.config.MainFrame;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.sales.invoice.ui.SaisieVenteFactureItemTable;
@@ -49,6 +53,9 @@ import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.SQLTableEvent;
+import org.openconcerto.sql.model.SQLTableEvent.Mode;
+import org.openconcerto.sql.model.SQLTableModifiedListener;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.utils.SQLCreateTable;
@@ -63,6 +70,7 @@ import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.Tuple2;
 import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
@@ -339,6 +347,51 @@ public final class Module extends AbstractModule {
         }
     }
 
+    List<Integer> idsAsked = new ArrayList<Integer>();
+
+    public void checkProjectState(final SQLRowAccessor rowFact) {
+        if (!rowFact.isForeignEmpty("ID_AFFAIRE")) {
+            final SQLRowAccessor rowAff = rowFact.getForeign("ID_AFFAIRE");
+
+            if (rowAff.getInt("ID_ETAT_AFFAIRE") < ProjectStateSQLElement.DOSSIER_CLOS) {
+
+                SQLSelect sel = new SQLSelect();
+                final SQLTable tableVF = rowFact.getTable();
+                sel.addSelect(tableVF.getField("T_TTC"), "SUM");
+                Where w = new Where(tableVF.getField("ID_AFFAIRE"), "=", rowAff.getID());
+                sel.setWhere(w);
+
+                Number total = (Number) tableVF.getDBSystemRoot().getDataSource().executeScalar(sel.asString());
+
+                long devis = rowAff.getForeign("ID_DEVIS").getLong("T_TTC");
+                if (devis == total.longValue()) {
+                    if (!idsAsked.contains(rowFact.getID())) {
+                        idsAsked.add(rowFact.getID());
+                        SwingUtilities.invokeLater(new Runnable() {
+
+                            @Override
+                            public void run() {
+                                int a = JOptionPane.showConfirmDialog(null, "Voulez vous passer l'affaire " + rowAff.getString("NUMERO") + " dans l'état \"Dossier Clos\"?", "Affaire 100% facturée",
+                                        JOptionPane.YES_NO_OPTION);
+                                if (a == JOptionPane.YES_OPTION) {
+                                    SQLRowValues rowVals = rowAff.createEmptyUpdateRow();
+                                    rowVals.put("ID_ETAT_AFFAIRE", ProjectStateSQLElement.DOSSIER_CLOS);
+                                    try {
+                                        rowVals.commit();
+                                    } catch (SQLException e) {
+                                        ExceptionHandler.handle("Erreur lors de la mise à jour de l'état de l'affaire", e);
+                                    }
+                                }
+                                idsAsked.remove(Integer.valueOf(rowFact.getID()));
+                            }
+                        });
+                    }
+                }
+
+            }
+        }
+    }
+
     public RowAction getAcceptAction() {
         return new RowAction(new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
@@ -355,7 +408,7 @@ public final class Module extends AbstractModule {
                 checkAffaire(selectedRow.getID());
             }
         }, false, "project.accept") {
-            public boolean enabledFor(List<SQLRowAccessor> selection) {
+            public boolean enabledFor(List<SQLRowValues> selection) {
                 if (selection != null && selection.size() == 1) {
                     if (selection.get(0).getInt("ID_ETAT_DEVIS") == EtatDevisSQLElement.EN_ATTENTE) {
                         return true;
@@ -430,9 +483,20 @@ public final class Module extends AbstractModule {
             public void putPieceLabel(SQLRowAccessor rowSource, SQLRowValues rowValsPiece) {
                 rowValsPiece.put("NOM", rowSource.getString("NUMERO"));
             }
-
         };
         AccountingRecordsProviderManager.put(GenerationMvtSaisieVenteFacture.ID, p);
+
+        final SQLTable tableFact = ComptaPropsConfiguration.getInstanceCompta().getRootSociete().getTable("SAISIE_VENTE_FACTURE");
+
+        tableFact.addTableModifiedListener(new SQLTableModifiedListener() {
+
+            @Override
+            public void tableModified(SQLTableEvent evt) {
+                if (evt.getMode() == Mode.ROW_ADDED || evt.getMode() == Mode.ROW_UPDATED) {
+                    checkProjectState(evt.getRow());
+                }
+            }
+        });
     }
 
     private JComponent createQuotePanel() {
