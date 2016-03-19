@@ -20,12 +20,12 @@ import org.openconcerto.erp.modules.ModuleFactory;
 import org.openconcerto.modules.timetracking.Module;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.ListMap;
 
 public class MailingTimeTracking {
 
-    public MailingTimeTracking(CollectionMap<Number, SQLRowValues> map, ModuleFactory factory) {
+    public MailingTimeTracking(ListMap<Number, SQLRowValues> map, ModuleFactory factory) {
         final Preferences prefs = factory.getPreferences(false, ComptaPropsConfiguration.getInstanceCompta().getRootSociete());
         final String address = prefs.get(Module.ADR_MAIL_PREFS, "").trim();
         final String smtpServer = prefs.get(Module.SMTP_PREFS, "").trim();

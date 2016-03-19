@@ -45,11 +45,10 @@ import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.PrefType;
 import org.openconcerto.utils.Tuple2;
-import org.openconcerto.utils.cc.IPredicate;
 import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.i18n.TranslationManager;
 
@@ -161,13 +160,13 @@ public final class Module extends AbstractModule {
                 });
 
                 final List<SQLRowValues> list = fetcher.fetch();
-                final CollectionMap<Number, SQLRowValues> mailingMap = new CollectionMap<Number, SQLRowValues>();
+                final ListMap<Number, SQLRowValues> mailingMap = new ListMap<Number, SQLRowValues>();
                 for (SQLRowValues sqlRowValues : list) {
                     final SQLRowAccessor foreign = sqlRowValues.getForeign("ID_AFFAIRE");
                     if (foreign != null) {
                         SQLRowAccessor foreign2 = foreign.getForeign("ID_CLIENT");
                         if (foreign2 != null) {
-                            mailingMap.put(foreign2.getID(), sqlRowValues);
+                            mailingMap.add(foreign2.getID(), sqlRowValues);
                         }
                     }
                 }
@@ -223,7 +222,7 @@ public final class Module extends AbstractModule {
             }
         }, true, "timetracking.task.report.create");
 
-        action.setPredicate(IPredicate.truePredicate());
+        action.setPredicate(IListeEvent.getSingleSelectionPredicate());
         return action;
     }
 
