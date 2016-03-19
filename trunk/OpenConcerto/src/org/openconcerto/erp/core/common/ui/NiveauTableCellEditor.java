@@ -34,6 +34,8 @@ import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import javax.swing.event.CellEditorListener;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.table.TableCellEditor;
@@ -73,10 +75,77 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
                 fireEditingCanceled();
             }
         });
+        this.addCellEditorListener(new CellEditorListener() {
+
+            @Override
+            public void editingStopped(ChangeEvent e) {
+                popup.setVisible(false);
+            }
+
+            @Override
+            public void editingCanceled(ChangeEvent e) {
+                popup.setVisible(false);
+            }
+        });
+
         this.btnPanel = new JPanel(new FlowLayout());
         this.btnPanel.setOpaque(false);
+        this.btnPanel.setFocusable(false);
+        this.popup.setFocusable(false);
         this.fillPopup();
         this.popup.pack();
+    }
+
+    private boolean listenersInited = false;
+
+    private void initListener(final JTable t) {
+        if (!this.listenersInited) {
+            this.listenersInited = true;
+            this.renderer.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    if (e.getKeyCode() == KeyEvent.VK_TAB) {
+                        final int column;
+                        final int row = t.getEditingRow();
+
+                        // gestion tab ou shift+tab
+                        if (e.getModifiers() == KeyEvent.SHIFT_MASK) {
+                            column = t.getEditingColumn() - 1;
+                        } else {
+                            column = t.getEditingColumn() + 1;
+                        }
+
+                        SwingUtilities.invokeLater(new Runnable() {
+
+                            public void run() {
+                                if (t.getCellEditor() != null && t.getCellEditor().stopCellEditing()) {
+                                    if (column >= 0 && column < t.getColumnCount()) {
+                                        t.setColumnSelectionInterval(column, column);
+                                        t.setRowSelectionInterval(row, row);
+                                        // Need to postpone editCell because selection with
+                                        // cancel
+                                        // selection
+                                        SwingUtilities.invokeLater(new Runnable() {
+
+                                            public void run() {
+                                                if (t.editCellAt(row, column)) {
+                                                    t.getEditorComponent().requestFocusInWindow();
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                    } else {
+                        if (e.getKeyCode() == KeyEvent.VK_SPACE && e.getModifiers() == KeyEvent.SHIFT_MASK) {
+                            e.setModifiers(0);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     protected void levelChosen(final int btnLevel) {
@@ -211,6 +280,7 @@ public class NiveauTableCellEditor extends AbstractCellEditor implements TableCe
         if (value == null) {
             value = Integer.valueOf(1);
         }
+        initListener(table);
         this.value = ((Number) value).intValue();
         if (this.value == -1) {
             this.renderer.setText("Ø");

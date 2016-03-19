@@ -29,9 +29,12 @@ import javax.swing.UIManager.LookAndFeelInfo;
 public class FrameUtil {
 
     public static void show(final Window frame) {
-        frame.setVisible(true);
-        if (frame instanceof Frame)
+        if (frame instanceof Frame) {
+            // From Java 7, missing animation on Windows :
+            // https://bugs.openjdk.java.net/browse/JDK-8037575
             ((Frame) frame).setState(Frame.NORMAL);
+        }
+        frame.setVisible(true);
         frame.toFront();
     }
 

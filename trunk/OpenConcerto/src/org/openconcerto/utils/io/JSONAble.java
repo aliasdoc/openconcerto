@@ -13,6 +13,10 @@
  
  package org.openconcerto.utils.io;
 
+import net.minidev.json.JSONObject;
+
 public interface JSONAble {
-    public abstract String toJSON();
+    public JSONObject toJSON();
+
+    public void fromJSON(JSONObject json);
 }

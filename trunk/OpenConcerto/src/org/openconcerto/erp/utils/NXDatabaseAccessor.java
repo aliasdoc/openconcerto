@@ -13,6 +13,7 @@
  
  package org.openconcerto.erp.utils;
 
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.map.model.DatabaseAccessor;
 import org.openconcerto.map.model.Ville;
 import org.openconcerto.sql.Configuration;
@@ -29,11 +30,22 @@ import java.util.List;
 
 // TODO use the one from Nego
 public class NXDatabaseAccessor implements DatabaseAccessor {
+
+    private final SQLTable tableVille;
+
+    public NXDatabaseAccessor(ComptaPropsConfiguration comptaConf) {
+        super();
+        if (comptaConf.getRootSociete().contains("VILLE")) {
+            this.tableVille = ComptaPropsConfiguration.getInstanceCompta().getRootSociete().getTable("VILLE");
+        } else {
+            this.tableVille = comptaConf.getBase().getTable("VILLE");
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public List<Ville> read() {
-        SQLTable ville = Configuration.getInstance().getBase().getTable("VILLE");
-        SQLSelect sel = new SQLSelect(Configuration.getInstance().getBase());
-        sel.addSelectStar(ville);
+        SQLSelect sel = new SQLSelect();
+        sel.addSelectStar(this.tableVille);
         List<SQLRow> l = (List<SQLRow>) Configuration.getInstance().getBase().getDataSource().execute(sel.asString(), SQLRowListRSH.createFromSelect(sel));
 
         List<Ville> lResult = new ArrayList<Ville>();
@@ -51,8 +63,7 @@ public class NXDatabaseAccessor implements DatabaseAccessor {
     }
 
     public void store(Ville v) {
-        SQLTable ville = Configuration.getInstance().getBase().getTable("VILLE");
-        SQLRowValues rowVals = new SQLRowValues(ville);
+        SQLRowValues rowVals = new SQLRowValues(this.tableVille);
         rowVals.put("NOM", v.getName());
         rowVals.put("CODE_POSTAL", v.getCodepostal());
         rowVals.put("X_LAMBERT", v.getXLambert());
@@ -61,15 +72,14 @@ public class NXDatabaseAccessor implements DatabaseAccessor {
         try {
             rowVals.insert();
         } catch (SQLException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
     }
 
     @Override
     public void delete(Ville v) {
-        SQLTable villeT = Configuration.getInstance().getBase().getTable("VILLE");
-        final Where w = new Where(villeT.getField("NOM"), "=", v.getName()).and(new Where(villeT.getField("CODE_POSTAL"), "=", v.getCodepostal()));
-        villeT.getDBSystemRoot().getDataSource().execute("DELETE FROM " + villeT.getSQLName().quote() + " WHERE " + w);
+        final Where w = new Where(this.tableVille.getField("NOM"), "=", v.getName()).and(new Where(this.tableVille.getField("CODE_POSTAL"), "=", v.getCodepostal()));
+        this.tableVille.getDBSystemRoot().getDataSource().execute("DELETE FROM " + this.tableVille.getSQLName().quote() + " WHERE " + w);
     }
+
 }

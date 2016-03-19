@@ -89,7 +89,7 @@ public class Acompte {
             }
             a = new Acompte(percent, null);
         } else {
-            a = new Acompte(null, StringUtils.getBigDecimalFromUserText(s));
+            a = new Acompte(null, StringUtils.getBigDecimalFromUserText(s.replaceAll(",", ".")));
         }
         return a;
     }

@@ -77,7 +77,6 @@ public class OOXMLField extends OOXMLElement {
      * @return la valeur du composant
      */
     public Object getValue() {
-
         if (this.row != null && !this.row.isUndefined()) {
 
             // if
@@ -218,7 +217,7 @@ public class OOXMLField extends OOXMLElement {
 
                         if (o != null && scale != null && scale.trim().length() > 0) {
 
-                            o = ((BigDecimal) o).setScale(Integer.valueOf(scale));
+                            o = ((BigDecimal) o).setScale(Integer.valueOf(scale), RoundingMode.HALF_UP);
                         }
                         if (this.elt.getAttributeValue("upperCase") != null) {
                             o = o.toString().toUpperCase();
@@ -229,7 +228,7 @@ public class OOXMLField extends OOXMLElement {
 
                         if (o2 != null && scale != null && scale.trim().length() > 0) {
 
-                            o2 = ((BigDecimal) o2).setScale(Integer.valueOf(scale));
+                            o2 = ((BigDecimal) o2).setScale(Integer.valueOf(scale), RoundingMode.HALF_UP);
                         }
 
                         stringValue = (o2 == null) ? "" : o2.toString();
@@ -380,21 +379,24 @@ public class OOXMLField extends OOXMLElement {
             } else if (typeComp.equalsIgnoreCase("DeviseLettre")) {
                 // Devise exprimée en lettre
                 Long prix = (Long) result;
-                return getLettreFromDevise(prix.longValue(), Nombre.FR, Tuple2.create(" euros ", " cents"));
-            } else if (typeComp.equalsIgnoreCase("DeviseLettreEng")) {
-                // Devise exprimée en lettre
-                Long prix = (Long) result;
-                SQLRowAccessor tarif = this.row.getForeign("ID_TARIF");
-                if (tarif.isUndefined()) {
-                    return getLettreFromDevise(prix.longValue(), Nombre.EN, Tuple2.create(" euros ", " cents"));
-                } else {
-                    SQLRowAccessor rowDevise = tarif.getForeign("ID_DEVISE");
-                    if (rowDevise.isUndefined()) {
-                        return getLettreFromDevise(prix.longValue(), Nombre.EN, Tuple2.create(" euros ", " cents"));
-                    } else {
-                        return getLettreFromDevise(prix.longValue(), Nombre.EN, Tuple2.create(" " + rowDevise.getString("LIBELLE") + " ", " " + rowDevise.getString("LIBELLE_CENT") + " "));
-                    }
+                String deviseLabel = this.elt.getAttributeValue("deviseLabel");
+                if (deviseLabel == null || deviseLabel.trim().length() == 0) {
+                    deviseLabel = " euros";
                 }
+                String deviseCentLabel = this.elt.getAttributeValue("deviseCentLabel");
+                if (deviseCentLabel == null || deviseCentLabel.trim().length() == 0) {
+                    deviseCentLabel = " cents";
+                }
+                return getLettreFromDevise(prix.longValue(), Nombre.FR, Tuple2.create(deviseLabel, deviseCentLabel));
+            } else if (typeComp.equalsIgnoreCase("DeviseLettreEng")) {
+                Long prix = (Long) result;
+                return getDeviseLettre(prix, Nombre.EN);
+            } else if (typeComp.equalsIgnoreCase("DeviseLettrePL")) {
+                Long prix = (Long) result;
+                return getDeviseLettre(prix, Nombre.PL);
+            } else if (typeComp.equalsIgnoreCase("DeviseLettreES")) {
+                Long prix = (Long) result;
+                return getDeviseLettre(prix, Nombre.ES);
             } else if (typeComp.equalsIgnoreCase("VilleFull")) {
                 return this.row.getString("CODE_POSTAL") + " " + this.row.getString("VILLE");
             } else if (typeComp.equalsIgnoreCase("Ville")) {
@@ -458,6 +460,31 @@ public class OOXMLField extends OOXMLElement {
         }
 
         return (result == null) ? "" : result;
+    }
+
+    private Object getDeviseLettre(Long prix, int country) {
+        String deviseLabel = this.elt.getAttributeValue("deviseLabel");
+        if (deviseLabel == null || deviseLabel.trim().length() == 0) {
+            deviseLabel = " euros";
+        }
+        String deviseCentLabel = this.elt.getAttributeValue("deviseCentLabel");
+        if (deviseCentLabel == null || deviseCentLabel.trim().length() == 0) {
+            deviseCentLabel = " centimes";
+        }
+        Tuple2<String, String> defaultTuple = Tuple2.create(deviseLabel, deviseCentLabel);
+        // Devise exprimée en lettre
+
+        SQLRowAccessor tarif = this.row.getForeign("ID_TARIF");
+        if (tarif.isUndefined()) {
+            return getLettreFromDevise(prix.longValue(), country, defaultTuple);
+        } else {
+            SQLRowAccessor rowDevise = tarif.getForeign("ID_DEVISE");
+            if (rowDevise.isUndefined()) {
+                return getLettreFromDevise(prix.longValue(), country, defaultTuple);
+            } else {
+                return getLettreFromDevise(prix.longValue(), country, Tuple2.create(" " + rowDevise.getString("LIBELLE") + " ", " " + rowDevise.getString("LIBELLE_CENT") + " "));
+            }
+        }
     }
 
     private Object getTraduction() {
@@ -611,7 +638,7 @@ public class OOXMLField extends OOXMLElement {
 
         if (decimal.intValue() > 0) {
             // result.append(" et " + n2.getText() + " cents");
-            result.append((langue == Nombre.FR ? " et " : " and ") + n2.getText() + deviseName.get1());
+            result.append(" " + n1.getLocal().getSeparateurLabel() + " " + n2.getText() + deviseName.get1());
         }
         if (result != null && result.length() > 0) {
             return result.toString().replaceFirst(String.valueOf(result.charAt(0)), String.valueOf(result.charAt(0)).toUpperCase());

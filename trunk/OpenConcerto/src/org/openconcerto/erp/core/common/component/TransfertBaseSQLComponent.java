@@ -29,6 +29,7 @@ import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.sql.view.EditPanel.EditMode;
 import org.openconcerto.sql.view.list.RowValuesTable;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.utils.ExceptionHandler;
@@ -142,9 +143,18 @@ public abstract class TransfertBaseSQLComponent extends BaseSQLComponent {
         return null;
     }
 
-    public static void openTransfertFrame(List<SQLRowValues> sourceRows, String destTableName) {
+    public static EditFrame openTransfertFrame(List<SQLRowValues> sourceRows, String destTableName) {
+        return openTransfertFrame(sourceRows, destTableName, null);
+    }
+
+    public static EditFrame openTransfertFrame(List<SQLRowValues> sourceRows, String destTableName, String compID) {
         final SQLElement elt = Configuration.getInstance().getDirectory().getElement(destTableName);
-        final EditFrame editFrame = new EditFrame(elt);
+        final EditFrame editFrame;
+        if (compID == null || compID.trim().length() == 0) {
+            editFrame = new EditFrame(elt);
+        } else {
+            editFrame = new EditFrame(elt.createComponent(compID), EditMode.CREATION);
+        }
         editFrame.setIconImage(new ImageIcon(Gestion.class.getResource("frameicon.png")).getImage());
         final SQLComponent sqlComponent = editFrame.getSQLComponent();
         if (sqlComponent instanceof TransfertBaseSQLComponent) {
@@ -189,6 +199,7 @@ public abstract class TransfertBaseSQLComponent extends BaseSQLComponent {
                 comp.importFrom(result);
                 FrameUtil.show(editFrame);
             }
+            return editFrame;
         } else {
             throw new IllegalArgumentException("Table " + destTableName + " SQLComponent is not a TransfertBaseSQLComponent");
         }

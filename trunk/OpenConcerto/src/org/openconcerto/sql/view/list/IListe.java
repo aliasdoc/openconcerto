@@ -1189,7 +1189,11 @@ public final class IListe extends JPanel {
         final List<R> res = new ArrayList<R>();
         for (int i = start; i <= stop; i++) {
             if (selectionModel.isSelectedIndex(i)) {
-                res.add(getRow(i, clazz));
+                try {
+                    res.add(getRow(i, clazz));
+                } catch (Exception e) {
+                    System.err.println("IListe.iterateSelectedRows() index " + i + " is selected but not in the model anymore.");
+                }
             }
         }
         return res;

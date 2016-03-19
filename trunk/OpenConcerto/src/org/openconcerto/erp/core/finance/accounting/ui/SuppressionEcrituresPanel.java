@@ -33,6 +33,7 @@ import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
@@ -90,9 +91,14 @@ public class SuppressionEcrituresPanel extends JPanel {
 
         buttonOK.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                EcritureSQLElement elt = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
-                elt.archiveMouvement(idMvt);
                 ((JFrame) SwingUtilities.getRoot(SuppressionEcrituresPanel.this)).dispose();
+                try {
+                    EcritureSQLElement elt = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
+                    elt.archiveMouvement(idMvt);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null, "Impossible de supprimer le mouvement associé.\n" + ex.getMessage());
+                }
+
             }
         });
         buttonCancel.addActionListener(new ActionListener() {

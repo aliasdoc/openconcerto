@@ -14,6 +14,7 @@
  package org.openconcerto.erp.core.supplychain.order.component;
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.component.AdresseSQLComponent;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
@@ -21,15 +22,18 @@ import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
+import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.supplychain.order.ui.CommandeItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
-import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
+import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
+import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.utils.TM;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.DefaultElementSQLObject;
+import org.openconcerto.sql.element.ElementSQLObject;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLBackgroundTableCache;
 import org.openconcerto.sql.model.SQLInjector;
@@ -50,7 +54,9 @@ import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.TitledSeparator;
+import org.openconcerto.ui.component.ComboLockedMode;
 import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.ITextCombo;
 import org.openconcerto.ui.preferences.DefaultProps;
 import org.openconcerto.utils.ExceptionHandler;
 
@@ -82,10 +88,10 @@ import org.apache.commons.dbutils.handlers.ArrayListHandler;
 public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
     private CommandeItemTable table = new CommandeItemTable();
+    private PanelOOSQLComponent panelOO;
+
     private JUniqueTextField numeroUniqueCommande;
     private final SQLTable tableNum = getTable().getBase().getTable("NUMEROTATION_AUTO");
-    private final JCheckBox checkImpression = new JCheckBox("Imprimer");
-    private final JCheckBox checkVisu = new JCheckBox("Visualiser");
     private final ITextArea infos = new ITextArea(3, 3);
     private ElementComboBox fourn = new ElementComboBox();
     final JCheckBox boxLivrClient = new JCheckBox("Livrer directement le client");
@@ -166,6 +172,35 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             this.addRequiredSQLObject(boxEnCours, "EN_COURS");
         }
 
+        if (getTable().contains("DATE_RECEPTION_DEMANDEE")) {
+            // Date
+            JLabel labelDateRecptDemande = new JLabel(getLabelFor("DATE_RECEPTION_DEMANDEE"));
+            labelDateRecptDemande.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.gridx = 0;
+            c.gridy++;
+            c.weightx = 0;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelDateRecptDemande, c);
+
+            c.gridx++;
+            c.fill = GridBagConstraints.NONE;
+            JDate dateRecptDemande = new JDate();
+            this.add(dateRecptDemande, c);
+            this.addView(dateRecptDemande, "DATE_RECEPTION_DEMANDEE", REQ);
+
+            JLabel labelDateRecptConfirme = new JLabel(getLabelFor("DATE_RECEPTION_CONFIRMEE"));
+            labelDateRecptConfirme.setHorizontalAlignment(SwingConstants.RIGHT);
+            c.gridx++;
+            c.weightx = 0;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            this.add(labelDateRecptConfirme, c);
+
+            c.gridx++;
+            c.fill = GridBagConstraints.NONE;
+            JDate dateRecptConfirme = new JDate();
+            this.add(dateRecptConfirme, c);
+            this.addView(dateRecptConfirme, "DATE_RECEPTION_CONFIRMEE");
+        }
         // Fournisseur
         if (getTable().contains("ID_CONTACT_FOURNISSEUR")) {
             c.gridx = 0;
@@ -189,7 +224,6 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
                 @Override
                 public void propertyChange(PropertyChangeEvent arg0) {
-                    // TODO Raccord de méthode auto-généré
                     if (fourn.getSelectedRow() != null) {
                         boxContactFournisseur.getRequest().setWhere(new Where(contactElement.getTable().getField("ID_FOURNISSEUR"), "=", fourn.getSelectedRow().getID()));
                     } else {
@@ -224,7 +258,8 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                 // c.gridy++;
                 this.addView("ID_ADRESSE");
                 final DefaultElementSQLObject comp = (DefaultElementSQLObject) this.getView("ID_ADRESSE").getComp();
-
+                final ElementSQLObject componentPrincipale = (ElementSQLObject) this.getView("ID_ADRESSE");
+                ((AdresseSQLComponent) componentPrincipale.getSQLChild()).setDestinataireVisible(true);
                 final JCheckBox boxLivr = new JCheckBox("Livré par le fournisseur");
                 this.add(boxLivr, c);
                 this.addSQLObject(boxLivr, "LIVRAISON_F");
@@ -416,7 +451,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             c.fill = GridBagConstraints.HORIZONTAL;
             this.add(new JLabel(getLabelFor("ID_DEVISE"), SwingConstants.RIGHT), c);
 
-            c.gridx = GridBagConstraints.RELATIVE;
+            c.gridx++;
             c.gridwidth = 1;
             c.weightx = 1;
             c.weighty = 0;
@@ -428,7 +463,6 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
                 @Override
                 public void propertyChange(PropertyChangeEvent arg0) {
-                    // TODO Raccord de méthode auto-généré
                     if (fourn.getSelectedRow() != null) {
                         boxDevise.setValue(fourn.getSelectedRow().getForeignID("ID_DEVISE"));
                     } else {
@@ -436,6 +470,27 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                     }
                 }
             });
+
+            if (getTable().contains("INCOTERM")) {
+                // Incoterm
+                c.gridx++;
+                c.weightx = 0;
+                c.fill = GridBagConstraints.HORIZONTAL;
+                this.add(new JLabel(getLabelFor("INCOTERM"), SwingConstants.RIGHT), c);
+
+                c.gridx++;
+                c.gridwidth = 1;
+                c.weightx = 1;
+                c.weighty = 0;
+                c.fill = GridBagConstraints.NONE;
+                ITextCombo box = new ITextCombo(ComboLockedMode.LOCKED);
+
+                for (String s : ReferenceArticleSQLElement.CONDITIONS) {
+                    box.addItem(s);
+                }
+                this.add(box, c);
+                this.addView(box, "INCOTERM", REQ);
+            }
 
         }
 
@@ -485,7 +540,6 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                 @Override
                 public void propertyChange(PropertyChangeEvent evt) {
                     table.setDevise(boxDevise.getSelectedRow());
-
                 }
             });
         }
@@ -504,14 +558,12 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
         c.gridx = 0;
         c.gridy++;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.anchor = GridBagConstraints.WEST;
-
-        JPanel panelOO = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        panelOO.add(this.checkImpression, c);
-        panelOO.add(this.checkVisu, c);
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.SOUTHEAST;
         c.gridwidth = GridBagConstraints.REMAINDER;
-        this.add(panelOO, c);
+
+        this.panelOO = new PanelOOSQLComponent(this);
+        this.add(this.panelOO, c);
 
         addRequiredSQLObject(this.fourn, "ID_FOURNISSEUR");
         addSQLObject(textNom, "NOM");
@@ -655,6 +707,14 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
         addRequiredSQLObject(fieldTTC, "T_TTC");
         addRequiredSQLObject(fieldService, "T_SERVICE");
+
+        // Disable
+
+        this.allowEditable("T_HT", false);
+        this.allowEditable("T_TVA", false);
+        this.allowEditable("T_TTC", false);
+        this.allowEditable("T_SERVICE", false);
+
         final TotalPanel totalTTC = new TotalPanel(this.table, fieldHT, fieldTVA, fieldTTC, textPortHT, textRemiseHT, fieldService, null, fieldDevise, null, null,
                 (getTable().contains("ID_TAXE_PORT") ? comboTaxePort : null));
 
@@ -700,7 +760,6 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
             @Override
             public void propertyChange(PropertyChangeEvent evt) {
-                // TODO Raccord de méthode auto-généré
                 totalTTC.updateTotal();
             }
         });
@@ -747,7 +806,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             // generation du document
             final CommandeXmlSheet sheet = new CommandeXmlSheet(getTable().getRow(idCommande));
             sheet.createDocumentAsynchronous();
-            sheet.showPrintAndExportAsynchronous(this.checkVisu.isSelected(), this.checkImpression.isSelected(), true);
+            sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
 
             // incrémentation du numéro auto
             if (NumerotationAutoSQLElement.getNextNumero(getElement().getClass()).equalsIgnoreCase(this.numeroUniqueCommande.getText().trim())) {
@@ -778,7 +837,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
     public void select(SQLRowAccessor r) {
         if (!getTable().contains("LIVRAISON_F") && r != null && !r.isUndefined()) {
 
-            SQLRowAccessor adr = r.getForeign("ID_ADRESSE");
+            SQLRowAccessor adr = (r.getFields().contains("ID_ADRESSE") ? r.getForeign("ID_ADRESSE") : null);
             boxLivrClient.setSelected(adr != null && !adr.isUndefined());
             panelAdrSpec.setVisible(boxLivrClient.isSelected());
 
@@ -842,7 +901,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         // generation du document
         final CommandeXmlSheet sheet = new CommandeXmlSheet(getTable().getRow(id));
         sheet.createDocumentAsynchronous();
-        sheet.showPrintAndExportAsynchronous(this.checkVisu.isSelected(), this.checkImpression.isSelected(), true);
+        sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
 
     }
 

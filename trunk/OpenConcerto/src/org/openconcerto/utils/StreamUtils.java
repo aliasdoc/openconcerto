@@ -15,6 +15,7 @@
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -81,6 +82,20 @@ public class StreamUtils {
         } finally {
             ous.close();
         }
+    }
+
+    /**
+     * Read until the end of the stream is reached. NOTE : since this method didn't create the
+     * stream, it doesn't close it.
+     * 
+     * @param ins the stream to read from.
+     * @return the bytes.
+     * @throws IOException if an error occurs.
+     */
+    public static byte[] read(final InputStream ins) throws IOException {
+        final ByteArrayOutputStream out = new ByteArrayOutputStream(512);
+        copy(ins, out);
+        return out.toByteArray();
     }
 
     public static void writeln(final String s, final OutputStream out) throws IOException {

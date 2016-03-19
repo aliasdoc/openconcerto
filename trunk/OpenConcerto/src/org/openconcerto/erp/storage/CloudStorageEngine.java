@@ -44,7 +44,7 @@ public class CloudStorageEngine implements StorageEngine {
 
     @Override
     public void store(InputStream inStream, String remotePath, String title, boolean synchronous) throws IOException {
-        final File localFile = File.createTempFile("OpenConcerto", title);
+        final File localFile = File.createTempFile("OpenConcerto" + (System.currentTimeMillis() % 500000), title);
         remotePath = remotePath.replace('\\', '/');
         try {
             final ComptaPropsConfiguration config = ComptaPropsConfiguration.getInstanceCompta();

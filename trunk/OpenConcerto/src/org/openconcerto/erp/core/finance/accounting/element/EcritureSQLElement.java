@@ -157,6 +157,9 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
         listEcriture.add("LETTRAGE");
         listEcriture.add("ID_COMPTE_PCE");
         listEcriture.add("ID_MOUVEMENT");
+        if (getTable().contains("NOM_PIECE")) {
+            listEcriture.add("NOM_PIECE");
+        }
         listEcriture.add("NOM");
         listEcriture.add("DATE_LETTRAGE");
         listEcriture.add("DATE");

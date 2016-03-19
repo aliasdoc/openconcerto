@@ -24,25 +24,25 @@ import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.sqlobject.ElementComboBoxUtils;
-import org.openconcerto.sql.ui.StringWithId;
-import org.openconcerto.ui.light.LightUIDescriptor;
 import org.openconcerto.ui.light.LightUIElement;
 import org.openconcerto.ui.light.LightUILine;
+import org.openconcerto.ui.light.LightUIPanel;
+import org.openconcerto.utils.ui.StringWithId;
 
 /**
  * Fill value from default or database
  */
-public class LightUIDescriptorFiller {
-    private final LightUIDescriptor desc;
+public class LightUIPanelFiller {
+    private final LightUIPanel panel;
 
-    public LightUIDescriptorFiller(LightUIDescriptor desc) {
-        this.desc = desc;
+    public LightUIPanelFiller(LightUIPanel panel) {
+        this.panel = panel;
     }
 
     public void fillWithDefaultValues() {
-        final int lineCount = desc.getSize();
+        final int lineCount = this.panel.getSize();
         for (int i = 0; i < lineCount; i++) {
-            final LightUILine l = desc.getLine(i);
+            final LightUILine l = this.panel.getLine(i);
             final int elementCount = l.getSize();
             for (int j = 0; j < elementCount; j++) {
                 final LightUIElement element = l.getElement(j);
@@ -55,13 +55,16 @@ public class LightUIDescriptorFiller {
         }
     }
 
-    public void fillFromId(PropsConfiguration configuration, SQLTable table, long id) {
-        System.err.println("LightUIDescriptorFiller.fillFromId() " + id);
+    public void fillFromId(final PropsConfiguration configuration, final SQLTable table, final long id) {
+        System.err.println("LightUIFrameFiller.fillFromId() " + id);
         final SQLRow row = table.getRow((int) id);
-
-        final int lineCount = desc.getSize();
+        this.fillFromRow(this.panel, configuration, table, row);
+    }
+    
+    public void fillFromRow(final LightUIPanel panel, final PropsConfiguration configuration, final SQLTable table, final SQLRow row) {
+        final int lineCount = panel.getSize();
         for (int i = 0; i < lineCount; i++) {
-            final LightUILine l = desc.getLine(i);
+            final LightUILine l = panel.getLine(i);
             final int elementCount = l.getSize();
             for (int j = 0; j < elementCount; j++) {
                 final LightUIElement element = l.getElement(j);
@@ -84,7 +87,7 @@ public class LightUIDescriptorFiller {
                         final Where where = new Where(foreignTable.getKey(), "=", row.getLong(field.getName()));
                         List<SQLRowValues> fetchedRows = ElementComboBoxUtils.fetchRows(configuration, foreignTable, fieldsToFetch, where);
                         if (fetchedRows.size() > 1) {
-                            throw new IllegalStateException("multiple rows fetched for id " + id + " on table " + table.getName());
+                            throw new IllegalStateException("multiple rows fetched for id " + row.getID() + " on table " + table.getName());
                         }
 
                         for (final SQLRowValues vals : fetchedRows) {
@@ -106,10 +109,10 @@ public class LightUIDescriptorFiller {
                     if (date != null) {
                         element.setValue(String.valueOf(row.getDate(field.getName()).getTimeInMillis()));
                     }
+                } else if(type == LightUIElement.TYPE_PANEL) {
+                    this.fillFromRow((LightUIPanel) element, configuration, table, row);
                 }
-
             }
-
         }
     }
 }

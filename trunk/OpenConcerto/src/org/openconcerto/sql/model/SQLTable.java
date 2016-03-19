@@ -101,6 +101,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     public static final String undefTable = SQLSchema.FWK_TABLENAME_PREFIX + "UNDEFINED_IDS";
     // {SQLSchema=>{TableName=>UndefID}}
     private static final Map<SQLSchema, Map<String, Number>> UNDEFINED_IDs = new HashMap<SQLSchema, Map<String, Number>>();
+    private static final boolean AUTOFIX_UNDEFINED = false;
 
     @SuppressWarnings("unchecked")
     private static final Map<String, Number> getUndefIDs(final SQLSchema schema) {
@@ -529,11 +530,16 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                 // empty table
                 throw new IllegalStateException(this + " is empty, can not infer UNDEFINED_ID");
             } else {
-                final String update = "INSERT into " + new SQLName(this.getDBRoot().getName(), undefTable) + " VALUES('" + this.getName() + "', " + undef + ");";
+                final String update = "INSERT into " + new SQLName(this.getDBRoot().getName(), undefTable) + " (\"TABLENAME\",\"UNDEFINED_ID\") VALUES('" + this.getName() + "', " + undef + ");";
                 Log.get().config("the first row (which should be the undefined):\n" + update);
                 return undef.intValue();
             }
         } else if ("inDB".equals(policy)) {
+            if (AUTOFIX_UNDEFINED) {
+                final String update = "INSERT into " + new SQLName(this.getDBRoot().getName(), undefTable) + " (\"TABLENAME\",\"UNDEFINED_ID\")  VALUES ('" + this.getName() + "',null );";
+                this.getDBSystemRoot().getDataSource().execute(update);
+                return SQLRow.NONEXISTANT_ID;
+            }
             throw new IllegalStateException("Not in " + new SQLName(this.getDBRoot().getName(), undefTable) + " : " + this.getName());
         } else if (policy != null && !"nonexistant".equals(policy)) {
             final int res = Integer.parseInt(policy);

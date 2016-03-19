@@ -22,6 +22,8 @@
 		<FIELD name="NUMERO_COMMUNE" label="" />
 		<FIELD name="TYPE" label="Type" />
 		<FIELD name="EMAIL_CONTACT" label="Email contact" />
+		<FIELD name="DEPARTEMENT" label="Departement" />
+		<FIELD name="DISTRICT" label="District" />
 	</TABLE>
 	<TABLE name="AFFACTURAGE">
 		<FIELD name="NB_FACT" label="Number of invoice" />
@@ -302,6 +304,7 @@
 		<FIELD name="ID_TAXE_PORT" label="Tax on shipping" />
 	</TABLE>
 	<TABLE name="BON_DE_LIVRAISON_ELEMENT">
+		<FIELD name="POURCENT_REMISE" label="% discount" />
 		<FIELD name="ID_FAMILLE_ARTICLE" label="Product family" />
 		<FIELD name="QTE_UNITAIRE" label="Qté U.V." titlelabel="Qté U.V." />
 		<FIELD name="ID_UNITE_VENTE" label="Sale unit" titlelabel="Sale unit" />
@@ -528,6 +531,10 @@
 		<FIELD name="FONCTION" label="Position" />
 		<FIELD name="ID_CLIENT" label="Customer" />
 		<FIELD name="NO_MAILING" label="No mailing" />
+		<FIELD name="TYPE" label="Type" />
+		<FIELD name="SERVICE" label="Department" />
+		<FIELD name="PAYS" label="Country" />
+		<FIELD name="ID_ADRESSE" label="Address" />
 	</TABLE>
 
 	<TABLE name="CONTACT_FOURNISSEUR">
@@ -578,6 +585,9 @@
 	</TABLE>
 
 	<TABLE name="COMMANDE">
+		<FIELD name="DATE_RECEPTION_DEMANDEE" label="Requested receipt date" />
+		<FIELD name="DATE_RECEPTION_CONFIRMEE" label="Confirmed receipt date" />
+		<FIELD name="INCOTERM" label="Incoterm" />
 		<FIELD name="EN_COURS" label="In progress" />
 		<FIELD name="NOM" label="Label" />
 		<FIELD name="NUMERO" label="Number" />
@@ -595,9 +605,11 @@
 		<FIELD name="ID_DEVISE" label="Currency" />
 		<FIELD name="ID_CLIENT" label="Customer" />
 		<FIELD name="ID_ADRESSE" label="Specific delivery address" />
+		<FIELD name="ID_MODELE" label="Template" />
 	</TABLE>
 
 	<TABLE name="COMMANDE_ELEMENT">
+		<FIELD name="INCOTERM" label="Incoterm" />
 		<FIELD name="QTE_UNITAIRE" label="Unit price" />
 		<FIELD name="ID_CODE_FOURNISSEUR" label="Supplier code" />
 		<FIELD name="ID_UNITE_VENTE" label="Sale unit" titlelabel="Sale unit" />
@@ -803,7 +815,8 @@
 		<FIELD name="ID_TARIF" label="Pricelist to apply" />
 		<FIELD name="ADRESSE_IDENTIQUE" label="Same address" />
 		<FIELD name="T_DEVISE" label="Total currency" />
-		<FIELD name="DUNNING_DATE" label="Dunning date" titlelabel="Dunning date" />
+		<FIELD name="DUNNING_DATE" label="Dunning date" />
+		<FIELD name="ID_TARIF" label="Pricelist to apply" />
 	</TABLE>
 	<TABLE name="DEVIS_ELEMENT">
 		<FIELD name="ID_FAMILLE_ARTICLE" label="Product family" />
@@ -958,6 +971,69 @@
 		<FIELD name="MAIL" label="Courriel" titlelabel="Courriel" />
 		<FIELD name="NB_PERS_A_CHARGE" label="Nombre de personnes à charge" titlelabel="Nombre de personnes à charge" />
 		<FIELD name="ID_SITUATION_FAMILIALE" label="Situtation familiale (*)" titlelabel="Situtation familiale" />
+	</TABLE>
+
+	<TABLE name="FACTURE_FOURNISSEUR">
+		<FIELD name="NOM" label="Reference" />
+		<FIELD name="TAUX_APPLIQUE" label="Taux de conversion" titlelabel="Taux de conversion" />
+		<FIELD name="NUMERO" label="Number" />
+		<FIELD name="INFOS" label="Informations" />
+		<FIELD name="DATE" label="Date" />
+		<FIELD name="ID_FOURNISSEUR" label="Supplier" />
+		<FIELD name="ID_COMMERCIAL" label="Saleman" />
+		<FIELD name="SOURCE" label="Source" titlelabel="Source" />
+		<FIELD name="T_HT" label="Total pre-tax" />
+		<FIELD name="T_TVA" label="Tax" />
+		<FIELD name="T_TTC" label="Total" />
+		<FIELD name="T_DEVISE" label="Total currency" />
+		<FIELD name="T_POIDS" label="Total weight" />
+		<FIELD name="ID_POLE_PRODUIT" label="Pôle produit" titlelabel="Pôle produit" />
+		<FIELD name="ID_DEVISE" label="Devise" titlelabel="Devise" />
+		<FIELD name="ID_COMPTE_PCE" label="Compte de charge" titlelabel="Compte de charge" />
+		<FIELD name="ID_CLIENT" label="Customer" />
+		<FIELD name="ID_ADRESSE" label="Adresse de livraison spécifique" />
+	</TABLE>
+	<TABLE name="FACTURE_FOURNISSEUR_ELEMENT">
+		<FIELD name="ID_FAMILLE_ARTICLE" label="Product family" />
+		<FIELD name="QTE_UNITAIRE" label="Qty S. Unit" />
+		<FIELD name="ID_UNITE_VENTE" label="Sale unit" />
+		<FIELD name="ID_ARTICLE" label="Product" />
+		<FIELD name="DESCRIPTIF" label="Description" />
+		<FIELD name="POURCENT_REMISE" label="% discount" />
+		<FIELD name="ID_PAYS" label="Country" />
+		<FIELD name="CODE_DOUANIER" label="Customs code" />
+		<FIELD name="ID_DEVISE" label="Currency" />
+		<FIELD name="PV_U_DEVISE" label="Price currency" />
+		<FIELD name="PV_T_DEVISE" label="Total currency price" />
+		<FIELD name="ID_COMMANDE_CLIENT" label="Order" />
+		<FIELD name="ID_STYLE" label="Style" titlelabel="Style" />
+		<FIELD name="CODE" label="Code" titlelabel="Code" />
+		<FIELD name="NOM" label="Name" />
+		<FIELD name="PA_HT" label="Purchase price" />
+		<FIELD name="MARGE_HT" label="Margin" />
+		<FIELD name="PV_HT" label="Unit sale price" />
+		<FIELD name="ID_TAXE" label="Tax" />
+		<FIELD name="POIDS" label="Weight" />
+		<FIELD name="QTE" label="Quantity" />
+		<FIELD name="SERVICE" label="Service" />
+		<FIELD name="PRIX_METRIQUE_VT_1" label="P.V. UV HT" titlelabel="P.V. UV HT" />
+		<FIELD name="PRIX_METRIQUE_HA_1" label="P.A. UV HT" titlelabel="P.A. UV HT" />
+		<FIELD name="VALEUR_METRIQUE_1" label="Longueur par défaut" titlelabel="Longueur par défaut" />
+		<FIELD name="ID_METRIQUE_1" label="Métrique" titlelabel="Métrique" />
+		<FIELD name="PRIX_METRIQUE_VT_2" label="PV au metre HT" titlelabel="PV au metre HT" />
+		<FIELD name="PRIX_METRIQUE_HA_2" label="PHA au metre HT" titlelabel="PHA au metre HT" />
+		<FIELD name="VALEUR_METRIQUE_2" label="Largeur" titlelabel="Largeur" />
+		<FIELD name="ID_METRIQUE_2" label="Métrique" titlelabel="Métrique" />
+		<FIELD name="PRIX_METRIQUE_VT_3" label="PV au kg HT" titlelabel="PV au kg HT" />
+		<FIELD name="PRIX_METRIQUE_HA_3" label="PHA au kg HT" titlelabel="PHA au kg HT" />
+		<FIELD name="VALEUR_METRIQUE_3" label="poids / m²" titlelabel="poids / m²" />
+		<FIELD name="ID_METRIQUE_3" label="Métrique" titlelabel="Métrique" />
+		<FIELD name="T_PV_TTC" label="Total" />
+		<FIELD name="T_PV_HT" label="Total sales" />
+		<FIELD name="T_PA_HT" label="Total purchase" />
+		<FIELD name="T_POIDS" label="Total weight" />
+		<FIELD name="ID_MODE_VENTE_ARTICLE" label="Sales type" />
+		<FIELD name="POURCENT_ACOMPTE" label="% of deposit" />
 	</TABLE>
 
 	<TABLE name="FAMILLE_ARTICLE">
@@ -1186,6 +1262,7 @@
 		<FIELD name="NOM" label="Label" />
 		<FIELD name="DATE" label="Date" />
 		<FIELD name="ID_ARTICLE" label="Product" />
+		<FIELD name="REEL" label="Real" />
 	</TABLE>
 
 	<TABLE name="NATURE_COMPTE">

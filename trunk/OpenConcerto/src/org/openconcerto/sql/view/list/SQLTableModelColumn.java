@@ -82,6 +82,8 @@ public abstract class SQLTableModelColumn {
         return res;
     }
 
+    // not IFieldPath so that we can rely on FieldPath.equals() (to use
+    // Set<FieldPath>.contains())
     /**
      * The paths needed to {@link #show(SQLRowAccessor)}.
      * 

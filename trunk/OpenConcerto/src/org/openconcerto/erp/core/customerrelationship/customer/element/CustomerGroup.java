@@ -17,20 +17,24 @@ import org.openconcerto.ui.group.Group;
 import org.openconcerto.ui.group.LayoutHints;
 
 public class CustomerGroup extends Group {
+    public final static String ID = "customerrelationship.customer.default";
 
     public CustomerGroup() {
-        super("customerrelationship.customer.default");
+        super(ID);
         final Group g = new Group("customerrelationship.customer.identifier");
         g.addItem("CODE");
         g.addItem("DATE");
+        g.addItem("FORME_JURIDIQUE");
+        g.addItem("GROUPE");
         g.addItem("NOM", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
         g.addItem("CATEGORIES");
-        g.addItem("GROUPE");
+        g.addItem("RESPONSABLE");
         g.addItem("ID_PAYS");
 
         g.addItem("TEL");
-        g.addItem("FAX");
+        g.addItem("TEL_P");
         g.addItem("MAIL", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
+        g.addItem("FAX");
         g.addItem("SITE_INTERNET", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
 
         g.addItem("SIRET");
@@ -38,7 +42,10 @@ public class CustomerGroup extends Group {
 
         g.addItem("BLOQUE");
         g.addItem("BLOQUE_LIVRAISON");
+
         this.add(g);
+
+        // this.add(new Group("customerrelationship.customer.additionalElementFields"));
 
         final Group gAddress = new Group("customerrelationship.customer.address", LayoutHints.DEFAULT_SEPARATED_GROUP_HINTS);
         // gAddress.addItem("ID_ADRESSE", new LayoutHints(true, true, true, true, true, false, true,
@@ -55,6 +62,7 @@ public class CustomerGroup extends Group {
         this.add(gContact);
 
         final Group gPayment = new Group("customerrelationship.customer.payment", LayoutHints.DEFAULT_SEPARATED_GROUP_HINTS);
+        gPayment.addItem("RIB", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
         gPayment.addItem("CENTRE_GESTION", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
         gPayment.addItem("ID_MODE_REGLEMENT", new LayoutHints(true, true, true, true, true, false, true, true));
         gPayment.addItem("ID_COMPTE_PCE");
@@ -74,9 +82,9 @@ public class CustomerGroup extends Group {
 
         this.add(gState);
         final Group gInfo = new Group("customerrelationship.customer.info", LayoutHints.DEFAULT_SEPARATED_GROUP_HINTS);
+        gInfo.addItem("INFOS", new LayoutHints(true, true, true, true, true, true, true, true));
         gInfo.addItem("COMMENTAIRES", new LayoutHints(true, true, true, true, true, true, true, true));
         this.add(gInfo);
 
     }
-
 }

@@ -22,12 +22,14 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
+import org.openconcerto.utils.ExceptionHandler;
 
 import java.awt.event.ActionEvent;
 import java.sql.SQLException;
@@ -57,6 +59,20 @@ public class CommandeSQLElement extends ComptaSQLConfElement {
         factureAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
         getRowActions().add(factureAction);
 
+        PredicateRowAction tagValidAction = new PredicateRowAction(new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+
+                final SQLRowValues asRowValues = IListe.get(e).getSelectedRow().asRow().createEmptyUpdateRow();
+                asRowValues.put("EN_COURS", Boolean.FALSE);
+                try {
+                    asRowValues.commit();
+                } catch (SQLException e1) {
+                    ExceptionHandler.handle("Une erreur est survenue pour notifier la commande valider", e1);
+                }
+            }
+        }, false, "supplychain.order.valid");
+        tagValidAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
+        getRowActions().add(tagValidAction);
     }
 
     protected List<String> getListFields() {

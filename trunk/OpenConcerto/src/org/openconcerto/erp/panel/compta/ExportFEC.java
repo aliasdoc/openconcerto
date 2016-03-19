@@ -168,7 +168,8 @@ public class ExportFEC extends AbstractExport {
             } else {
                 line.add("");
                 bufOut.close();
-                JOptionPane.showMessageDialog(new JFrame(), "Erreur", "Une écriture n'est pas validée (pas de date):\n" + line, JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(new JFrame(), "Une écriture n'est pas validée (pas de date):\n" + line, "Erreur FEC", JOptionPane.ERROR_MESSAGE);
+                return;
             }
             // Montantdevise
             addAmountField(line, ((Number) array[8]).longValue() + ((Number) array[9]).longValue());

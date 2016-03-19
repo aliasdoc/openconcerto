@@ -29,6 +29,9 @@ public class VenteFactureSoldeEditGroup extends Group {
 
         this.add(g);
 
+        final Group gAdd = new Group("sales.invoice.partial.additionalElementFields");
+        this.add(gAdd);
+
         final Group gCustomer = new Group("sales.invoice.partial.balance.customer");
         gCustomer.addItem("sales.invoice.customer", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
         add(gCustomer);

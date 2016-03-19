@@ -13,23 +13,8 @@
  
  package org.openconcerto.erp.core.supplychain.stock.element;
 
-import org.openconcerto.erp.core.sales.product.model.ProductComponent;
-import org.openconcerto.erp.core.sales.product.model.ProductHelper;
-import org.openconcerto.erp.core.supplychain.stock.element.StockItem.TypeStockMouvement;
-import org.openconcerto.sql.model.DBRoot;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLRowValuesListFetcher;
-import org.openconcerto.sql.model.SQLSelect;
-import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.Where;
-import org.openconcerto.sql.utils.SQLUtils;
-import org.openconcerto.utils.ListMap;
-import org.openconcerto.utils.RTInterruptedException;
-import org.openconcerto.utils.cc.ITransformer;
-
 import java.awt.GraphicsEnvironment;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
@@ -42,6 +27,27 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
 import org.apache.commons.dbutils.ResultSetHandler;
+
+import org.openconcerto.erp.core.sales.product.model.ProductComponent;
+import org.openconcerto.erp.core.sales.product.model.ProductHelper;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItem.TypeStockMouvement;
+import org.openconcerto.sql.model.ConnectionHandlerNoSetup;
+import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.sql.model.SQLDataSource;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
+import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.utils.SQLUtils;
+import org.openconcerto.utils.DecimalUtils;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.RTInterruptedException;
+import org.openconcerto.utils.Tuple3;
+import org.openconcerto.utils.cc.ITransformer;
 
 public class StockItemsUpdater {
 
@@ -96,6 +102,12 @@ public class StockItemsUpdater {
         this.headless = headless;
     }
 
+    List<Tuple3<SQLRowAccessor, Integer, BigDecimal>> reliquat = new ArrayList<Tuple3<SQLRowAccessor, Integer, BigDecimal>>();
+
+    public void addReliquat(SQLRowAccessor article, int qte, BigDecimal qteUnit) {
+        reliquat.add(Tuple3.create(article, qte, qteUnit));
+    }
+
     List<String> requests = new ArrayList<String>();
 
     public void update() throws SQLException {
@@ -111,6 +123,7 @@ public class StockItemsUpdater {
         final ListMap<SQLRow, SQLRowValues> cmd = new ListMap<SQLRow, SQLRowValues>();
 
         for (StockItem stockItem : stockItems) {
+
             if (stockItem.isStockInit()) {
                 requests.add(stockItem.getUpdateRequest());
             } else {
@@ -126,12 +139,22 @@ public class StockItemsUpdater {
             stockItem.fillCommandeFournisseur(cmd);
         }
 
-        List<? extends ResultSetHandler> handlers = new ArrayList<ResultSetHandler>(requests.size());
+        final List<? extends ResultSetHandler> handlers = new ArrayList<ResultSetHandler>(requests.size());
         for (String s : requests) {
             handlers.add(null);
         }
         // FIXME FIRE TABLE CHANGED TO UPDATE ILISTE ??
-        SQLUtils.executeMultiple(stockTable.getDBSystemRoot(), requests, handlers);
+        try {
+            SQLUtils.executeAtomic(stockTable.getDBSystemRoot().getDataSource(), new ConnectionHandlerNoSetup<Object, IOException>() {
+                @Override
+                public Object handle(SQLDataSource ds) throws SQLException, IOException {
+                    SQLUtils.executeMultiple(stockTable.getDBSystemRoot(), requests, handlers);
+                    return null;
+                }
+            });
+        } catch (IOException e) {
+            ExceptionHandler.handle("Erreur de la mise à jour des stocks!", e);
+        }
 
         final DBRoot root = this.rowSource.getTable().getDBRoot();
         if (root.contains("ARTICLE_ELEMENT")) {
@@ -224,20 +247,22 @@ public class StockItemsUpdater {
             for (int i = index; i < items.size(); i++) {
                 SQLRowAccessor r = items.get(i);
 
-                // On ne calcul pas les stocks pour les éléments ayant des fils (le mouvement de
-                // stock
-                // des fils impactera les stocks automatiquement)
-                if (r.getTable().contains("NIVEAU")) {
-                    if (i + 1 < items.size()) {
-                        SQLRowAccessor rNext = items.get(i + 1);
-                        if (rNext.getInt("NIVEAU") > r.getInt("NIVEAU")) {
-                            fillProductComponent(productComponents, qte * r.getInt("QTE"), i + 1, rNext.getInt("NIVEAU"));
-                            continue;
+                if (!r.getTable().contains("NIVEAU") || r.getInt("NIVEAU") >= 1) {
+                    // On ne calcul pas les stocks pour les éléments ayant des fils (le mouvement de
+                    // stock
+                    // des fils impactera les stocks automatiquement)
+                    if (r.getTable().contains("NIVEAU")) {
+                        if (i + 1 < items.size()) {
+                            SQLRowAccessor rNext = items.get(i + 1);
+                            if (rNext.getInt("NIVEAU") > r.getInt("NIVEAU")) {
+                                fillProductComponent(productComponents, qte * r.getInt("QTE"), i + 1, rNext.getInt("NIVEAU"));
+                                continue;
+                            }
                         }
                     }
-                }
-                if ((!r.getTable().contains("NIVEAU") || r.getInt("NIVEAU") == level) && !r.isForeignEmpty("ID_ARTICLE")) {
-                    productComponents.add(ProductComponent.createFrom(r, qte));
+                    if ((!r.getTable().contains("NIVEAU") || r.getInt("NIVEAU") == level) && !r.isForeignEmpty("ID_ARTICLE")) {
+                        productComponents.add(ProductComponent.createFrom(r, qte));
+                    }
                 }
             }
         }
@@ -284,12 +309,19 @@ public class StockItemsUpdater {
             if (productComp.getProduct().getBoolean("GESTION_STOCK")) {
                 StockItem stockItem = new StockItem(productComp.getProduct());
                 double qteFinal = productComp.getQty().doubleValue();
+
+                // reliquat
+                for (Tuple3<SQLRowAccessor, Integer, BigDecimal> t : reliquat) {
+                    if (stockItem.getArticle() != null && stockItem.getArticle().equalsAsRow(t.get0())) {
+                        double qteFinalReliquat = t.get2().multiply(new BigDecimal(t.get1()), DecimalUtils.HIGH_PRECISION).doubleValue();
+                        qteFinal -= qteFinalReliquat;
+                    }
+                }
                 if (!this.type.isEntry()) {
                     qteFinal = -qteFinal;
                 }
 
                 stockItem.updateQty(qteFinal, this.type.getType());
-
                 stockItems.add(stockItem);
                 if (this.createMouvementStock) {
                     final Date time = this.rowSource.getDate("DATE").getTime();

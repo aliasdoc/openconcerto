@@ -14,13 +14,17 @@
  package org.openconcerto.erp.core.common.ui;
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
+import org.openconcerto.sql.users.UserManager;
+import org.openconcerto.sql.users.rights.UserRights;
 import org.openconcerto.sql.view.list.RowValuesTable;
 import org.openconcerto.sql.view.list.SQLTableElement;
 import org.openconcerto.ui.DefaultGridBagConstraints;
@@ -99,14 +103,22 @@ public class TotalPanel extends JPanel implements TableModelListener {
         this.textPortHT = textPortHT;
         this.textRemiseHT = textRemiseHT;
         this.textService = textService;
-        this.textHA = (textTotalHA == null) ? new DeviseField() : textTotalHA;
-        this.textHASel = new DeviseField();
+
         this.textTotalHTSel = new DeviseField(true);
         this.textServiceSel = new DeviseField();
         this.textTotalTTCSel = new DeviseField();
         this.textTotalTVASel = new DeviseField();
+        this.textHA = (textTotalHA == null) ? new DeviseField() : textTotalHA;
+        this.textHASel = new DeviseField();
         this.marge = new JTextField();
         this.margeSel = new JTextField();
+        final UserRights rights = UserManager.getInstance().getCurrentUser().getRights();
+
+        final boolean showHA = rights.haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE);
+        this.textHA.setVisible(showHA);
+        this.textHASel.setVisible(showHA);
+        this.marge.setVisible(showHA);
+        this.margeSel.setVisible(showHA);
 
         if (articleItemTable.getTableElementTotalDevise() != null) {
             this.textTotalDevise = textTotalDevise;
@@ -158,10 +170,13 @@ public class TotalPanel extends JPanel implements TableModelListener {
         c.weightx = 0;
         c.fill = GridBagConstraints.HORIZONTAL;
         if (this.gestionHA) {
+            final JLabel labelMarge = new JLabel("Marge");
+            final JLabel labelHA = new JLabel((this.ha == articleItemTable.getPrebilanElement()) ? "Budget prévisionnel" : "Total achat HT");
 
             // Total HA HT
             c.gridy++;
-            this.add(new JLabel((this.ha == articleItemTable.getPrebilanElement()) ? "Budget prévisionnel" : "Total achat HT"), c);
+            this.add(labelHA, c);
+            labelHA.setVisible(showHA);
 
             c.gridx++;
             c.weightx = 1;
@@ -171,7 +186,8 @@ public class TotalPanel extends JPanel implements TableModelListener {
             c.gridy++;
             c.gridx = 1;
             c.weightx = 0;
-            this.add(new JLabel("Marge"), c);
+            this.add(labelMarge, c);
+            labelMarge.setVisible(showHA);
 
             c.gridx++;
             c.weightx = 1;
@@ -272,10 +288,13 @@ public class TotalPanel extends JPanel implements TableModelListener {
         c.gridwidth = 1;
         c.weightx = 0;
         if (this.gestionHA) {
+            final JLabel labelMarge = new JLabel("Marge");
+            final JLabel labelHA = new JLabel((this.ha == articleItemTable.getPrebilanElement()) ? "Budget prévisionnel" : "Total achat HT");
 
             // Total HA HT
             c.gridy++;
-            this.add(new JLabel((this.ha == articleItemTable.getPrebilanElement()) ? "Budget prévisionnel" : "Total achat HT"), c);
+            this.add(labelHA, c);
+            labelHA.setVisible(showHA);
 
             c.gridx++;
             c.weightx = 1;
@@ -285,7 +304,8 @@ public class TotalPanel extends JPanel implements TableModelListener {
             c.gridy++;
             c.gridx = 4;
             c.weightx = 0;
-            this.add(new JLabel("Marge"), c);
+            this.add(labelMarge, c);
+            labelMarge.setVisible(showHA);
 
             c.gridx++;
             c.weightx = 1;
@@ -489,6 +509,30 @@ public class TotalPanel extends JPanel implements TableModelListener {
             rowValsPort.put(articleTable.getPrixTotalHTElement().getField().getName(), valPortHT);
             rowValsPort.put("QTE", 1);
             rowValsPort.put("ID_TAXE", tvaPort.getIDNumber());
+
+            final SQLTable tablePrefCompte = Configuration.getInstance().getRoot().findTable("PREFS_COMPTE");
+            final SQLRow rowPrefsCompte = tablePrefCompte.getRow(2);
+            SQLRow rowDefaultCptPort;
+            if (tvaPort.getFloat("TAUX") > 0) {
+                rowDefaultCptPort = rowPrefsCompte.getForeign("ID_COMPTE_PCE_PORT_SOUMIS");
+                if (rowDefaultCptPort == null || rowDefaultCptPort.isUndefined()) {
+                    try {
+                        rowDefaultCptPort = ComptePCESQLElement.getRowComptePceDefault("PortVenteSoumisTVA");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            } else {
+                rowDefaultCptPort = rowPrefsCompte.getForeign("ID_COMPTE_PCE_PORT_NON_SOUMIS");
+                if (rowDefaultCptPort == null || rowDefaultCptPort.isUndefined()) {
+                    try {
+                        rowDefaultCptPort = ComptePCESQLElement.getRowComptePceDefault("PortVenteNonSoumisTVA");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            rowValsPort.putRowValues("ID_ARTICLE").put("ID_COMPTE_PCE", rowDefaultCptPort);
         } else {
             rowValsPort = null;
         }
@@ -563,7 +607,7 @@ public class TotalPanel extends JPanel implements TableModelListener {
 
                 // TVA Port inclus
                 if (rowValsPort != null) {
-                    calc.addLine(rowValsPort, null, 0, false);
+                    calc.addLine(rowValsPort, rowValsPort.getForeign("ID_ARTICLE"), 0, false);
                 }
 
                 // Verification du resultat ht +tva = ttc

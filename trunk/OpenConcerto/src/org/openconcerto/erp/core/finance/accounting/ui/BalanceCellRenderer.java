@@ -19,6 +19,7 @@ import java.awt.Color;
 import java.awt.Component;
 
 import javax.swing.JTable;
+import javax.swing.SwingConstants;
 
 public class BalanceCellRenderer extends CompteCellRenderer {
 
@@ -38,7 +39,7 @@ public class BalanceCellRenderer extends CompteCellRenderer {
         }
 
         super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
+        this.setHorizontalAlignment(SwingConstants.LEFT);
         if (!isSelected) {
             // si le numéro compte est composé d'un seul chiffre
             final int length = numeroCompte.length();
@@ -70,6 +71,7 @@ public class BalanceCellRenderer extends CompteCellRenderer {
 
         if (value != null && value.getClass() == Long.class) {
             this.setText(GestionDevise.currencyToString(((Long) value).longValue()));
+            this.setHorizontalAlignment(SwingConstants.RIGHT);
         }
 
         return this;

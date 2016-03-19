@@ -312,6 +312,9 @@ public class CommandeClientSQLComponent extends TransfertBaseSQLComponent {
                     if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
                         final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                        if (!rowClient.isForeignEmpty("ID_COMMERCIAL")) {
+                            comboCommercial.setValue(rowClient.getForeignID("ID_COMMERCIAL"));
+                        }
                         int idClient = rowClient.getID();
                         comboContact.getRequest().setWhere(new Where(contactElement.getTable().getField("ID_CLIENT"), "=", idClient));
                     } else {
@@ -322,29 +325,38 @@ public class CommandeClientSQLComponent extends TransfertBaseSQLComponent {
             });
 
         }
-        final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
-        final AddressChoiceUI addressUI = new AddressChoiceUI();
-        addressUI.addToUI(this, c);
-        comboClient.addModelListener("wantedID", new PropertyChangeListener() {
-
-            @Override
-            public void propertyChange(PropertyChangeEvent evt) {
-                int wantedID = comboClient.getWantedID();
-                System.err.println("SET WHERE ID_CLIENT = " + wantedID);
-                if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
-
-                    addressUI.getComboAdrF().getRequest()
-                            .setWhere(new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
-                    addressUI.getComboAdrL().getRequest()
-                            .setWhere(new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
-                } else {
-                    addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
-                    addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
-                }
-            }
-        });
-
         SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        if (prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.ADDRESS_SPEC, true)) {
+
+            final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+            final AddressChoiceUI addressUI = new AddressChoiceUI();
+            addressUI.addToUI(this, c);
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+
+                        addressUI
+                                .getComboAdrF()
+                                .getRequest()
+                                .setWhere(
+                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI
+                                .getComboAdrL()
+                                .getRequest()
+                                .setWhere(
+                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                    } else {
+                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                    }
+                }
+            });
+        }
+
         if (prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.ORDER_PACKAGING_MANAGEMENT, true)) {
             // Emballage
             c.gridy++;
@@ -463,8 +475,14 @@ public class CommandeClientSQLComponent extends TransfertBaseSQLComponent {
         if (getTable().contains("PREBILAN")) {
             addSQLObject(fieldHA, "PREBILAN");
         } else if (getTable().contains("T_HA")) {
+            this.allowEditable("T_HA", false);
             addSQLObject(fieldHA, "T_HA");
         }
+        // Disable
+        this.allowEditable("T_HT", false);
+        this.allowEditable("T_TVA", false);
+        this.allowEditable("T_TTC", false);
+        this.allowEditable("T_SERVICE", false);
 
         JTextField poids = new JTextField();
         SQLRequestComboBox boxTaxePort = new SQLRequestComboBox(false, 8);

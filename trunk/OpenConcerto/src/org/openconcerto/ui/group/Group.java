@@ -115,6 +115,22 @@ public class Group extends Item {
         return getDescFromID(id) != null;
     }
 
+    public final Collection<Group> getDescendantGroups() {
+        final List<Group> res = new ArrayList<Group>();
+        this.getDescendantGroups(res);
+        return res;
+    }
+
+    protected void getDescendantGroups(final Collection<Group> res) {
+        for (final Tuple2<Item, Integer> t : this.list) {
+            if (t.get0() instanceof Group) {
+                Group g = (Group) t.get0();
+                res.add(g);
+                g.getDescendantGroups(res);
+            }
+        }
+    }
+
     @Override
     public final Collection<Item> getDescendantItems() {
         final List<Item> res = new ArrayList<Item>();

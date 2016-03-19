@@ -13,10 +13,17 @@
  
  package org.openconcerto.ui.light;
 
-import org.openconcerto.utils.io.JSONconverter;
-import org.openconcerto.utils.io.Transferable;
+import java.io.Externalizable;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 
-public class ColumnSpec implements Transferable {
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+import org.openconcerto.utils.ui.StringWithId;
+import net.minidev.json.JSONObject;
+
+public class ColumnSpec implements Externalizable, Transferable {
     // Must stay immutable
 
     private String id;
@@ -25,17 +32,48 @@ public class ColumnSpec implements Transferable {
     // Default value (to add a new line)
     private Object defaultValue;
     private int width;
+    private int maxWidth;
+    private int minWidth;
     private boolean editable;
     private LightUIElement editors;
 
-    public ColumnSpec(String id, Class<?> valueClass, String columnName, Object defaultValue, int width, boolean editable, LightUIElement editors) {
+    public ColumnSpec() {
+        // Serialization
+    }
+
+    public ColumnSpec(final JSONObject json) {
+        this.fromJSON(json);
+    }
+
+    public ColumnSpec(final String id, final Class<?> valueClass, final String columnName, final Object defaultValue, final int width, final boolean editable, final LightUIElement editors) {
+        this.init(id, valueClass, columnName, defaultValue, editable, editors);
+        this.width = width;
+
+        final int minWidth = width - 200;
+        final int maxWidth = width + 200;
+
+        this.minWidth = (minWidth < 0) ? 0 : minWidth;
+        this.maxWidth = maxWidth;
+    }
+
+    public ColumnSpec(final String id, final Class<?> valueClass, final String columnName, final Object defaultValue, final boolean editable, final LightUIElement editors) {
+        this.init(id, valueClass, columnName, defaultValue, editable, editors);
+        this.setDefaultPrefs();
+    }
+
+    private void init(final String id, final Class<?> valueClass, final String columnName, final Object defaultValue, final boolean editable, final LightUIElement editors) {
         this.id = id;
         this.valueClass = valueClass;
         this.columnName = columnName;
         this.defaultValue = defaultValue;
-        this.width = width;
         this.editable = editable;
         this.editors = editors;
+    }
+
+    public void setPrefs(final int width, final int maxWidth, final int minWidth) {
+        this.width = width;
+        this.maxWidth = maxWidth;
+        this.minWidth = minWidth;
     }
 
     public String getId() {
@@ -70,6 +108,22 @@ public class ColumnSpec implements Transferable {
         this.defaultValue = defaultValue;
     }
 
+    public int getMaxWidth() {
+        return this.maxWidth;
+    }
+    
+    public void setMaxWidth(final int maxWidth) {
+        this.maxWidth = maxWidth;
+    }
+
+    public int getMinWidth() {
+        return this.minWidth;
+    }
+    
+    public void setMinWidth(final int minWidth) {
+        this.minWidth = minWidth;
+    }
+
     public int getWidth() {
         return this.width;
     }
@@ -94,20 +148,88 @@ public class ColumnSpec implements Transferable {
         this.editors = editors;
     }
 
-    @Override
-    public String toJSON() {
-        final StringBuilder result = new StringBuilder("{");
-        
-        result.append("\"id\":" + JSONconverter.getJSON(this.id) + ",");
-        result.append("\"columnName\":" + JSONconverter.getJSON(this.columnName) + ",");
-        result.append("\"width\":" + JSONconverter.getJSON(this.width) + ",");
-        result.append("\"defaultValue\":" + JSONconverter.getJSON(this.defaultValue) + ",");
-        result.append("\"editable\":" + JSONconverter.getJSON(this.editable) + ",");
-        result.append("\"editors\":" + JSONconverter.getJSON(this.editors) + ",");
-        result.append("\"valueClass\":" + JSONconverter.getJSON(this.valueClass));
-        
-        result.append("}");
-        return result.toString();
+    private void setDefaultPrefs() {
+        // TODO : Faire varier en fonction du type;
+        this.width = 200;
+        this.maxWidth = 500;
+        this.minWidth = 50;
     }
 
+    @Override
+    public void writeExternal(ObjectOutput out) throws IOException {
+        out.writeUTF(this.id);
+        out.writeUTF(this.columnName);
+        out.writeInt(this.width);
+        out.writeInt(this.maxWidth);
+        out.writeInt(this.minWidth);
+        out.writeObject(this.defaultValue);
+        out.writeBoolean(this.editable);
+        out.writeObject(this.editors);
+        out.writeObject(this.valueClass);
+    }
+
+    @Override
+    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+        this.id = in.readUTF();
+        this.columnName = in.readUTF();
+        this.width = in.readInt();
+        this.maxWidth = in.readInt();
+        this.minWidth = in.readInt();
+        this.defaultValue = in.readObject();
+        this.editable = in.readBoolean();
+        this.editors = (LightUIElement) in.readObject();
+        this.valueClass = (Class<?>) in.readObject();
+    }
+
+    @Override
+    public JSONObject toJSON() {
+        final JSONObject result = new JSONObject();
+        result.put("class", "ColumnSpec");
+        result.put("id", this.id);
+        result.put("column-name", this.columnName);
+        result.put("width", this.width);
+        result.put("max-width", this.maxWidth);
+        result.put("min-width", this.minWidth);
+        if(this.defaultValue != null) {
+            result.put("default-value", JSONConverter.getJSON(this.defaultValue));
+        }
+        if (this.editable) {
+            result.put("editable", true);
+        }
+        if(this.editors != null) {
+            result.put("editors", JSONConverter.getJSON(this.editors));
+        }
+        result.put("value-class", JSONConverter.getJSON(this.valueClass));
+        return result;
+    }
+
+    @Override
+    public void fromJSON(final JSONObject json) {
+        this.id = (String) JSONConverter.getParameterFromJSON(json, "id", String.class);
+        this.columnName = (String) JSONConverter.getParameterFromJSON(json, "column-name", String.class);
+        this.width = (Integer) JSONConverter.getParameterFromJSON(json, "width", Integer.class);
+        this.maxWidth = (Integer) JSONConverter.getParameterFromJSON(json, "max-width", Integer.class);
+        this.minWidth = (Integer) JSONConverter.getParameterFromJSON(json, "min-width", Integer.class);
+        this.editable = (Boolean) JSONConverter.getParameterFromJSON(json, "editable", Boolean.class, Boolean.FALSE);
+
+        final JSONObject jsonDefaultValue = (JSONObject) JSONConverter.getParameterFromJSON(json, "default-value", JSONObject.class);
+        if (jsonDefaultValue != null) {
+            final String defaultValueClassName = (String) JSONConverter.getParameterFromJSON(jsonDefaultValue, "class", String.class);
+            if (defaultValueClassName.equals(StringWithId.class.getSimpleName())) {
+                this.defaultValue = new StringWithId(jsonDefaultValue);
+            }
+        }
+        final JSONObject jsonEditors = (JSONObject) JSONConverter.getParameterFromJSON(json, "editors", JSONObject.class);
+        if (jsonEditors != null) {
+            this.editors = LightUIElement.createUIElementFromJSON(jsonEditors);
+        }
+        final String sValueClass = (String) JSONConverter.getParameterFromJSON(json, "value-class", String.class);
+        if (sValueClass != null) {
+            try {
+                this.valueClass = Class.forName(sValueClass);
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("invalid value for 'value-class', " + ex.getMessage());
+            }
+        }
+    }
 }

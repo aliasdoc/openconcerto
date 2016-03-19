@@ -15,12 +15,15 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.users.rights.UserRightsManager;
+import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 
 import java.awt.GridBagConstraints;
@@ -56,6 +59,13 @@ public class SaisieVenteFactureItemSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    protected SQLTableModelSourceOnline createTableSource() {
+
+        SQLTableModelSourceOnline table = super.createTableSource();
+        return table;
+    }
+
     /*
      * (non-Javadoc)
      * 
@@ -73,7 +83,9 @@ public class SaisieVenteFactureItemSQLElement extends ComptaSQLConfElement {
                 l.add("PRIX_METRIQUE_VT_1");
                 l.add("ID_MODE_VENTE_ARTICLE");
             }
-            l.add("PA_HT");
+            if (UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
+                l.add("PA_HT");
+            }
             l.add("PV_HT");
         l.add("QTE");
         l.add("T_PV_HT");

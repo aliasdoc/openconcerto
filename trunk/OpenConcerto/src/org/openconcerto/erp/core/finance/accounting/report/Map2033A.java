@@ -113,10 +113,11 @@ public class Map2033A extends Thread {
         // 237* )
         // Racine = "109, 201, 203, 205, 208, 237"
         // S014=201...205+208+237+232
+        // Fix Abaque 208 - 2087
         long v014 = this.sommeCompte.sommeCompteFils("109", this.dateDebut, this.dateFin) + this.sommeCompte.sommeCompteFils("201", this.dateDebut, this.dateFin)
                 + this.sommeCompte.sommeCompteFils("203", this.dateDebut, this.dateFin) + this.sommeCompte.sommeCompteFils("232", this.dateDebut, this.dateFin)
-                + this.sommeCompte.sommeCompteFils("205", this.dateDebut, this.dateFin) + this.sommeCompte.soldeCompte(2088, 2089, true, this.dateDebut, this.dateFin)
-                + this.sommeCompte.soldeCompte(2080, 2086, true, this.dateDebut, this.dateFin) + this.sommeCompte.sommeCompteFils("237", this.dateDebut, this.dateFin);
+                + this.sommeCompte.sommeCompteFils("205", this.dateDebut, this.dateFin) + this.sommeCompte.soldeCompte(208, 208, true, this.dateDebut, this.dateFin)
+                - this.sommeCompte.soldeCompte(2087, 2087, true, this.dateDebut, this.dateFin) + this.sommeCompte.sommeCompteFils("237", this.dateDebut, this.dateFin);
         this.m.put("ACTIF1.1", GestionDevise.currencyToString(v014, false));
 
         // 016 -SommeSolde( 280, 280* ) - SommeSolde(2905) - SommeSolde (2908)
@@ -234,7 +235,7 @@ public class Map2033A extends Thread {
         // 050 SommeSolde( 30, 36* )
         // Racine = "31-36, 38"
         // S050=31...36
-        long v050 = this.sommeCompte.soldeCompte(31, 35, true, this.dateDebut, this.dateFin);
+        long v050 = this.sommeCompte.soldeCompte(30, 35, true, this.dateDebut, this.dateFin);
         this.m.put("ACTIF1.5", GestionDevise.currencyToString(v050, false));
 
         // 052 -SommeSolde( 390, 396*)
@@ -693,7 +694,7 @@ public class Map2033A extends Thread {
         // 164 -SommeSolde( 4190, 4195* )
         // Racine = "4191"
         // S164=-4191
-        long v164 = -this.sommeCompte.soldeCompte(4191, 4191, true, this.dateDebut, this.dateFin);
+        long v164 = -this.sommeCompte.soldeCompte(4191, 4191, true, this.dateDebut, this.dateFin) + this.sommeCompte.soldeCompteCrediteur(510, 517, true, this.dateDebut, this.dateFin);
         this.m.put("PASSIF3.26", GestionDevise.currencyToString(v164, false));
 
         // 152
@@ -894,6 +895,7 @@ public class Map2033A extends Thread {
         this.dateDebut = dateDeb;
         this.dateFin = dateFin;
         this.sommeCompte = new SommeCompte(posteAnalytique);
+        // this.sommeCompte.setRemoveClotureCompte(true);
 
     }
 

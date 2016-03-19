@@ -19,12 +19,14 @@ import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.DBSystemRoot;
 import org.openconcerto.sql.model.SQLSystem;
 import org.openconcerto.sql.users.rights.UserRightsManager;
+import org.openconcerto.sql.utils.Copy.FileExistsMode;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.ReloadPanel;
 import org.openconcerto.ui.VFlowLayout;
 import org.openconcerto.ui.preferences.BackupProps;
 import org.openconcerto.utils.Backup;
+import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.ExceptionHandler;
 
 import java.awt.Color;
@@ -330,11 +332,11 @@ public class BackupPanel extends JPanel implements ActionListener {
                                 File fBase = new File(fDest, "Base");
                                 Copy copy;
                                 try {
-                                    copy = new Copy(true, fBase, sysRoot, false, false);
-                                    final Collection<String> rootsToBackup = BackupPanel.this.listDb == null ? sysRoot.getChildrenNames() : BackupPanel.this.listDb;
-                                    for (String db : rootsToBackup) {
-                                        copy.applyTo(db, null);
-                                    }
+                                    copy = new Copy(true, fBase, FileExistsMode.DELETE, sysRoot, false, false);
+                                    final Collection<String> rootsOrigin = BackupPanel.this.listDb == null ? sysRoot.getChildrenNames() : BackupPanel.this.listDb;
+                                    copy.applyTo(null, BackupPanel.this.listDb == null ? null : CollectionUtils.<String, String> createMap(BackupPanel.this.listDb), null);
+                                    sysRoot.setRootsToMap(rootsOrigin);
+                                    sysRoot.reload();
                                 } catch (SQLException e) {
                                     e.printStackTrace();
                                     errors++;

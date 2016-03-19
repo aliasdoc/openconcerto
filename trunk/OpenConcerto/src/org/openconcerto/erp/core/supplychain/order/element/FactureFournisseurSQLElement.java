@@ -13,20 +13,25 @@
  
  package org.openconcerto.erp.core.supplychain.order.element;
 
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.erp.core.supplychain.order.component.FactureFournisseurSQLComponent;
-import org.openconcerto.sql.element.SQLComponent;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.supplychain.order.component.FactureFournisseurSQLComponent;
+import org.openconcerto.erp.generationDoc.gestcomm.FactureFournisseurXmlSheet;
+import org.openconcerto.erp.model.MouseSheetXmlListeListener;
+import org.openconcerto.sql.element.SQLComponent;
+
 public class FactureFournisseurSQLElement extends ComptaSQLConfElement {
 
     public FactureFournisseurSQLElement() {
         super("FACTURE_FOURNISSEUR", "une facture fournisseur", "factures fournisseur");
-
+        MouseSheetXmlListeListener mouseSheetXmlListeListener = new MouseSheetXmlListeListener(FactureFournisseurXmlSheet.class);
+        mouseSheetXmlListeListener.setGenerateHeader(true);
+        mouseSheetXmlListeListener.setShowHeader(true);
+        getRowActions().addAll(mouseSheetXmlListeListener.getRowActions());
     }
 
     protected List<String> getListFields() {

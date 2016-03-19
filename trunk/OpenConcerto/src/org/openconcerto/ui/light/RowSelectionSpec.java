@@ -17,49 +17,74 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.ArrayList;
+import java.util.List;
 
-public class RowSelectionSpec implements Externalizable {
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONConverter;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
+
+public class RowSelectionSpec implements Externalizable, JSONAble {
     private String tableId;
-    private long[] ids;
+
+    private List<Long> ids;
 
     /**
      * Define selected ids of a table. ids are ids from selected lines
-     * */
+     */
     public RowSelectionSpec() {
         // Serialization
     }
 
-    public RowSelectionSpec(String tableId, long[] ids) {
-        this.tableId = tableId;
-        this.ids = ids;
+    public RowSelectionSpec(final JSONObject json) {
+        this.fromJSON(json);
     }
 
-    public long[] getIds() {
-        return ids;
+    public RowSelectionSpec(String tableId, List<Long> ids) {
+        this.init(tableId, ids);
+    }
+    
+    public RowSelectionSpec(String tableId) {
+        this.init(tableId, null);
+    }
+    
+    private void init(final String tableId, final List<Long> ids) {
+        this.tableId = tableId;
+        if(ids != null) {
+            this.ids = ids;
+        } else {
+            this.ids = new ArrayList<Long>();
+        }
+    }
+
+    public List<Long> getIds() {
+        return this.ids;
     }
 
     public String getTableId() {
-        return tableId;
+        return this.tableId;
     }
 
     @Override
     public String toString() {
-        String r = "RowSelectionSpec:" + tableId + " : ";
-        for (int i = 0; i < ids.length; i++) {
-            if (i < ids.length - 1) {
-                r += ids[i] + ", ";
+        final StringBuilder r = new StringBuilder("RowSelectionSpec: ").append(this.tableId).append(" : ");
+        final int idsSize = this.ids.size();
+        for (int i = 0; i < idsSize; i++) {
+            if (i < idsSize - 1) {
+                r.append(this.ids.get(i)).append(", ");
             } else {
-                r += ids[i];
+                r.append(this.ids.get(i));
             }
         }
-        return r;
+        return r.toString();
     }
 
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         try {
-            out.writeUTF(tableId);
-            out.writeObject(ids);
+            out.writeUTF(this.tableId);
+            out.writeObject(this.ids);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -69,9 +94,28 @@ public class RowSelectionSpec implements Externalizable {
 
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        tableId = in.readUTF();
-        ids = (long[]) in.readObject();
+        this.tableId = in.readUTF();
+        this.ids = (List<Long>) in.readObject();
 
+    }
+
+    @Override
+    public JSONObject toJSON() {
+        final JSONObject json = new JSONObject();
+        json.put("class", "RowSelectionSpec");
+        json.put("table-id", this.tableId);
+        json.put("ids", this.ids);
+        return json;
+    }
+
+    @Override
+    public void fromJSON(JSONObject json) {
+        this.tableId = (String) JSONConverter.getParameterFromJSON(json, "table-id", String.class);
+        final JSONArray jsonIds = (JSONArray) JSONConverter.getParameterFromJSON(json, "ids", JSONArray.class);
+        this.ids = new ArrayList<Long>();
+        for (final Object jsonId : jsonIds) {
+            this.ids.add((Long) JSONConverter.getObjectFromJSON(jsonId, Long.class));
+        }
     }
 
 }

@@ -85,8 +85,8 @@ public class PreferenceFrame extends JFrame {
         this.getContentPane().add(p1, c);
         this.setBackground(p1.getBackground());
         this.getContentPane().setBackground(p1.getBackground());
-        this.setMinimumSize(new Dimension(800, 660));
-        this.setPreferredSize(new Dimension(800, 660));
+        this.setMinimumSize(new Dimension(880, 680));
+        this.setPreferredSize(new Dimension(880, 680));
         prefTree.addTreeSelectionListener(this.mainPrefPanel);
         buttonClose.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {

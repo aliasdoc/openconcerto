@@ -78,6 +78,21 @@ public class ContactItemTable extends JPanel {
         SQLTableElement tableElementMail = new SQLTableElement(elt.getTable().getField("EMAIL"));
         list.add(tableElementMail);
 
+        if (elt.getTable().contains("TYPE")) {
+            SQLTableElement tableElementType = new SQLTableElement(elt.getTable().getField("TYPE"));
+            list.add(tableElementType);
+        }
+
+        if (elt.getTable().contains("SERVICE")) {
+            SQLTableElement tableElementService = new SQLTableElement(elt.getTable().getField("SERVICE"));
+            list.add(tableElementService);
+        }
+
+        if (elt.getTable().contains("PAYS")) {
+            SQLTableElement tableElementPays = new SQLTableElement(elt.getTable().getField("PAYS"));
+            list.add(tableElementPays);
+        }
+
         if (elt.getTable().contains("ENVOI_RAPPORT_MAIL")) {
             SQLTableElement tableElementEnvoiMail = new SQLTableElement(elt.getTable().getField("ENVOI_RAPPORT_MAIL"));
             list.add(tableElementEnvoiMail);

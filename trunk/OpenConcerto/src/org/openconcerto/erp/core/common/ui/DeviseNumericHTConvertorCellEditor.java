@@ -14,6 +14,7 @@
  package org.openconcerto.erp.core.common.ui;
 
 import org.openconcerto.erp.config.Log;
+import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.StringUtils;
@@ -27,13 +28,14 @@ import java.math.RoundingMode;
 import javax.swing.AbstractAction;
 import javax.swing.JPopupMenu;
 
-public class DeviseNumericHTConvertorCellEditor extends DeviseNumericCellEditor implements MouseListener {
+public class DeviseNumericHTConvertorCellEditor extends DeviseNumericWithRangeCellEditor implements MouseListener {
 
-    private float taxe = 19.6F;
+    private float taxe = TaxeCache.getCache().getFirstTaxe().getFloat("TAUX");
 
     public DeviseNumericHTConvertorCellEditor(SQLField field) {
         super(field);
         this.textField.addMouseListener(this);
+        setMin(null);
     }
 
     public void setTaxe(float d) {

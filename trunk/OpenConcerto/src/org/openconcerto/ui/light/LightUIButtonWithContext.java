@@ -21,5 +21,4 @@ public class LightUIButtonWithContext extends LightUIElement {
         setGridWidth(1);
         setLabel(label);
     }
-
 }

@@ -76,16 +76,35 @@ public class HashWriter {
 
     public static byte[] getHash(File f) throws Exception {
         final MessageDigest hashSum = MessageDigest.getInstance("SHA-256");
-        final BufferedInputStream fb = new BufferedInputStream(new FileInputStream(f));
-        final byte[] buffer = new byte[BLOCK_SIZE];
-        int readSize = fb.read(buffer);
-        while (readSize > 0) {
-            // Update
-            hashSum.update(buffer, 0, readSize);
-            // read
-            readSize = fb.read(buffer);
+        FileInputStream fIn = null;
+        try {
+            fIn = new FileInputStream(f);
+            BufferedInputStream fb = null;
+            try {
+                fb = new BufferedInputStream(fIn);
+                final byte[] buffer = new byte[BLOCK_SIZE];
+                int readSize = fb.read(buffer);
+                while (readSize > 0) {
+                    // Update
+                    hashSum.update(buffer, 0, readSize);
+                    // read
+                    readSize = fb.read(buffer);
+                }
+            } catch (Exception e) {
+                throw new IOException(e);
+            } finally {
+                if (fb != null) {
+                    fb.close();
+                }
+            }
+        } catch (Exception e) {
+            throw new IOException(e);
+        } finally {
+            if (fIn != null) {
+                fIn.close();
+            }
         }
-        fb.close();
+
         byte[] fileHash = new byte[hashSum.getDigestLength()];
         fileHash = hashSum.digest();
         return fileHash;

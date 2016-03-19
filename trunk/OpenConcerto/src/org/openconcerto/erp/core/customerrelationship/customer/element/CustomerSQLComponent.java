@@ -13,6 +13,38 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.element;
 
+import org.openconcerto.erp.core.common.component.AdresseSQLComponent;
+import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
+import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseClientItemTable;
+import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
+import org.openconcerto.erp.utils.TM;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.element.ElementSQLObject;
+import org.openconcerto.sql.element.GroupSQLComponent;
+import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.UndefinedRowValuesCache;
+import org.openconcerto.sql.preferences.SQLPreferences;
+import org.openconcerto.sql.sqlobject.JUniqueTextField;
+import org.openconcerto.sql.sqlobject.SQLSearchableTextCombo;
+import org.openconcerto.sql.ui.textmenu.TextFieldWithMenu;
+import org.openconcerto.sql.ui.textmenu.TextFieldWithMenuItemsTableFetcher;
+import org.openconcerto.sql.ui.textmenu.TextFieldWithWebBrowsing;
+import org.openconcerto.sql.view.EditFrame;
+import org.openconcerto.sql.view.EditPanel.EditMode;
+import org.openconcerto.sql.view.IListFrame;
+import org.openconcerto.sql.view.ListeAddPanel;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.FrameUtil;
+import org.openconcerto.ui.JDate;
+import org.openconcerto.ui.JLabelBold;
+import org.openconcerto.ui.component.ComboLockedMode;
+import org.openconcerto.ui.component.ITextArea;
+import org.openconcerto.ui.component.InteractionMode;
+
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
@@ -36,36 +68,6 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
 import com.lowagie.text.Font;
-
-import org.openconcerto.erp.core.common.component.AdresseSQLComponent;
-import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
-import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseClientItemTable;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.TM;
-import org.openconcerto.sql.element.ElementSQLObject;
-import org.openconcerto.sql.element.GroupSQLComponent;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowValues;
-import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.UndefinedRowValuesCache;
-import org.openconcerto.sql.sqlobject.JUniqueTextField;
-import org.openconcerto.sql.sqlobject.SQLSearchableTextCombo;
-import org.openconcerto.sql.ui.textmenu.TextFieldWithMenu;
-import org.openconcerto.sql.ui.textmenu.TextFieldWithMenuItemsTableFetcher;
-import org.openconcerto.sql.ui.textmenu.TextFieldWithWebBrowsing;
-import org.openconcerto.sql.view.EditFrame;
-import org.openconcerto.sql.view.EditPanel.EditMode;
-import org.openconcerto.sql.view.IListFrame;
-import org.openconcerto.sql.view.ListeAddPanel;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.ui.FrameUtil;
-import org.openconcerto.ui.JDate;
-import org.openconcerto.ui.JLabelBold;
-import org.openconcerto.ui.component.ComboLockedMode;
-import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.ui.component.InteractionMode;
 
 public class CustomerSQLComponent extends GroupSQLComponent {
     private ContactItemTable table;
@@ -128,7 +130,7 @@ public class CustomerSQLComponent extends GroupSQLComponent {
                 }
             });
             return t;
-        } else if (id.equals("GROUPE") || id.equals("CENTRE_GESTION") || id.equals("METHODE_RELANCE")) {
+        } else if (id.equals("GROUPE") || id.equals("FORME_JURIDIQUE") || id.equals("CENTRE_GESTION") || id.equals("METHODE_RELANCE")) {
             return new SQLSearchableTextCombo(ComboLockedMode.UNLOCKED, 1, 20, false);
         } else if (id.equals("SITE_INTERNET")) {
             return new TextFieldWithWebBrowsing();
@@ -186,7 +188,8 @@ public class CustomerSQLComponent extends GroupSQLComponent {
             });
             return textFax;
         }
-        return super.createEditor(id);
+        JComponent c = super.createEditor(id);
+        return c;
     }
 
     @Override
@@ -203,7 +206,8 @@ public class CustomerSQLComponent extends GroupSQLComponent {
         } else if (id.equals("customerrelationship.customer.address")) {
             return new JLabelBold("Adresses du client");
         }
-        return super.getLabel(id);
+        JComponent c = super.getLabel(id);
+        return c;
     }
 
     @Override

@@ -37,7 +37,6 @@ import org.openconcerto.sql.ui.SoftwareInfoPanel;
 import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.EditPanel;
 import org.openconcerto.sql.view.list.IListe;
-import org.openconcerto.sql.view.list.ITableModel;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.ui.component.ITextCombo;
 import org.openconcerto.ui.component.WaitIndeterminatePanel;
@@ -111,8 +110,9 @@ public class Gestion {
         try {
             FileUtils.openFile(f);
         } catch (IOException e) {
-            ExceptionHandler
-                    .handle("Impossible d'ouvrir le fichier " + f + ".\nVérifiez qu'un logiciel pour lire les fichiers PDF est installé sur votre ordinateur (http://get.adobe.com/fr/reader).");
+            JOptionPane.showMessageDialog(null, "Impossible d'ouvrir le fichier " + f
+                    + ".\nVérifiez qu'un logiciel pour lire les fichiers PDF est installé sur votre ordinateur.\nVoir http://get.adobe.com/fr/reader.", "Erreur d'ouverture du PDF",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -196,8 +196,8 @@ public class Gestion {
 
             }
         });
-        System.out.println(System.getProperty("java.vendor", "??") + " - " + System.getProperty("java.version", "??"));
-        System.out.println(System.getProperty("java.runtime.version", "??") + " - " + System.getProperty("os.name", "??"));
+        System.out.println("Java version: " + System.getProperty("java.vendor", "??") + " - " + System.getProperty("java.version", "??"));
+        System.out.println("Runtime: Java " + System.getProperty("java.runtime.version", "??") + " - " + System.getProperty("os.name", "??"));
         ExceptionHandler.setForceUI(true);
         ExceptionHandler.setForumURL("http://www.openconcerto.org/forum");
         ExceptionHandler.setSoftwareInformations(SoftwareInfoPanel.FACTORY);

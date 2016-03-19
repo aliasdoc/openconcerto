@@ -13,17 +13,45 @@
  
  package org.openconcerto.erp.core.supplychain.receipt.component;
 
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSeparator;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
+
+import org.apache.commons.dbutils.handlers.ArrayListHandler;
+
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
-import org.openconcerto.erp.core.supplychain.receipt.element.BonReceptionSQLElement;
+import org.openconcerto.erp.core.sales.product.ui.ReliquatRowValuesTable;
 import org.openconcerto.erp.core.supplychain.receipt.ui.BonReceptionItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
+import org.openconcerto.erp.generationDoc.gestcomm.BonReceptionXmlSheet;
+import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
@@ -49,32 +77,9 @@ import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.GestionDevise;
 
-import java.awt.Color;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.sql.SQLException;
-import java.util.List;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
-
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
-
 public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
     private BonReceptionItemTable tableBonItem;
+    private ReliquatRowValuesTable tableBonReliquatItem;
     private ElementComboBox selectCommande;
     private ElementComboBox fournisseur;
     private JUniqueTextField textNumeroUnique;
@@ -84,6 +89,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
     private final DeviseField textTotalTTC = new DeviseField();
     private final JTextField textPoidsTotal = new JTextField(6);
     private final JTextField textReference = new JTextField(25);
+    private PanelOOSQLComponent panelOO;
     private JDate date = new JDate(true);
 
     public BonReceptionSQLComponent() {
@@ -340,6 +346,30 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         this.add(panelTotalTTC, c);
         c.anchor = GridBagConstraints.WEST;
 
+        if (getTable().getDBRoot().contains("RELIQUAT_BR")) {
+
+            c.gridwidth = GridBagConstraints.REMAINDER;
+            c.weightx = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            c.gridx = 0;
+            c.gridy++;
+            TitledSeparator sep = new TitledSeparator("Reliquat de kits");
+            c.insets = new Insets(10, 2, 1, 2);
+            this.add(sep, c);
+            c.insets = new Insets(2, 2, 1, 2);
+
+            // Reliquat du bon
+            this.tableBonReliquatItem = new ReliquatRowValuesTable("RELIQUAT_BR");
+            c.gridx = 0;
+            c.gridy++;
+            c.weightx = 1;
+            c.weighty = 1;
+            c.gridwidth = GridBagConstraints.REMAINDER;
+            c.fill = GridBagConstraints.BOTH;
+            this.add(this.tableBonReliquatItem, c);
+            this.tableBonItem.setReliquatTable(tableBonReliquatItem);
+        }
+
         /*******************************************************************************************
          * * INFORMATIONS COMPLEMENTAIRES
          ******************************************************************************************/
@@ -365,6 +395,15 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         DefaultGridBagConstraints.lockMinimumSize(scrollPane);
 
         this.add(textInfos, c);
+
+        c.gridx = 0;
+        c.gridy++;
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.SOUTHEAST;
+        c.gridwidth = GridBagConstraints.REMAINDER;
+
+        this.panelOO = new PanelOOSQLComponent(this);
+        this.add(this.panelOO, c);
 
         this.addRequiredSQLObject(date, "DATE");
         this.addSQLObject(textInfos, "INFOS");
@@ -416,7 +455,9 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
             idBon = super.insert(order);
             try {
                 this.tableBonItem.updateField("ID_BON_RECEPTION", idBon);
-
+                if (this.tableBonReliquatItem != null) {
+                    this.tableBonReliquatItem.updateField("ID_BON_RECEPTION_ORIGINE", idBon);
+                }
                 this.tableBonItem.createArticle(idBon, this.getElement());
 
                 // incrémentation du numéro auto
@@ -441,6 +482,11 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
                         }
                     }
                 });
+                // generation du document
+                final BonReceptionXmlSheet sheet = new BonReceptionXmlSheet(getTable().getRow(idBonFinal));
+                sheet.createDocumentAsynchronous();
+                sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
+
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
@@ -461,6 +507,46 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         return this.tableBonItem.getRowValuesTable();
     }
 
+    public void loadFromReliquat(List<SQLRowValues> l) {
+        this.tableBonItem.insertFromReliquat(l);
+        this.tableBonItem.setEnabled(false);
+    }
+
+    public void loadQuantity(List<SQLRowValues> l) {
+        Map<Integer, SQLRowValues> map = new HashMap<Integer, SQLRowValues>();
+        for (SQLRowValues sqlRowValues : l) {
+            if (!sqlRowValues.isForeignEmpty("ID_ARTICLE")) {
+                final int foreignID = sqlRowValues.getForeignID("ID_ARTICLE");
+                if (!map.containsKey(foreignID)) {
+                    map.put(foreignID, sqlRowValues);
+                } else {
+                    SQLRowValues vals = map.get(foreignID);
+                    if (sqlRowValues.getInt("QTE") > 0) {
+                        if (sqlRowValues.getBigDecimal("QTE_UNITAIRE").equals(BigDecimal.ONE) || sqlRowValues.getInt("QTE") > 1) {
+                            vals.put("QTE", vals.getInt("QTE") + sqlRowValues.getInt("QTE"));
+                        } else {
+                            vals.put("QTE_UNITAIRE", vals.getBigDecimal("QTE_UNITAIRE").add(sqlRowValues.getBigDecimal("QTE_UNITAIRE")));
+                        }
+                    }
+                }
+            }
+        }
+        int count = this.tableBonItem.getModel().getRowCount();
+        for (int i = 0; i < count; i++) {
+            SQLRowValues r = this.tableBonItem.getModel().getRowValuesAt(i);
+            SQLRowValues rowTR = map.get(r.getForeignID("ID_ARTICLE"));
+            if (rowTR != null && !rowTR.isUndefined()) {
+                if (r.getInt("QTE") > 0) {
+                    if (r.getBigDecimal("QTE_UNITAIRE").equals(BigDecimal.ONE) || r.getInt("QTE") > 1) {
+                        this.tableBonItem.getModel().putValue(r.getInt("QTE") - rowTR.getInt("QTE"), i, "QTE");
+                    } else {
+                        this.tableBonItem.getModel().putValue(r.getBigDecimal("QTE_UNITAIRE").subtract(rowTR.getBigDecimal("QTE_UNITAIRE")), i, "QTE_UNITAIRE");
+                    }
+                }
+            }
+        }
+    }
+
     @Override
     public void update() {
 
@@ -477,6 +563,9 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
             // Mise à jour de l'élément
             super.update();
             this.tableBonItem.updateField("ID_BON_RECEPTION", getSelectedID());
+            if (tableBonReliquatItem != null) {
+                this.tableBonReliquatItem.updateField("ID_BON_RECEPTION_ORIGINE", getSelectedID());
+            }
             this.tableBonItem.createArticle(getSelectedID(), this.getElement());
             final int id = getSelectedID();
             ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
@@ -509,6 +598,10 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
                     }
                 }
             });
+            // generation du document
+            final BonReceptionXmlSheet sheet = new BonReceptionXmlSheet(getTable().getRow(id));
+            sheet.createDocumentAsynchronous();
+            sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
 
         }
     }
@@ -605,8 +698,26 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         }, row, row.getReferentRows(getTable().getTable("BON_RECEPTION_ELEMENT")),
                 getTable().contains("CREATE_VIRTUAL_STOCK") && row.getBoolean("CREATE_VIRTUAL_STOCK") ? TypeStockUpdate.REAL_VIRTUAL_RECEPT : TypeStockUpdate.REAL_RECEPT);
 
+        if (getTable().getDBRoot().contains("RELIQUAT_BR")) {
+            List<SQLRow> l = row.getReferentRows(getTable().getTable("RELIQUAT_BR"));
+            for (SQLRow sqlRow : l) {
+                stockUpdater.addReliquat(sqlRow.getForeign("ID_ARTICLE"), sqlRow.getInt("QTE"), sqlRow.getBigDecimal("QTE_UNITAIRE"));
+            }
+        }
+
         stockUpdater.update();
 
+    }
+
+    @Override
+    public void select(SQLRowAccessor r) {
+        super.select(r);
+        if (this.tableBonReliquatItem != null) {
+            this.tableBonReliquatItem.getRowValuesTable().clear();
+            if (r != null) {
+                this.tableBonReliquatItem.getRowValuesTable().insertFrom("ID_BON_RECEPTION_ORIGINE", r.asRowValues());
+            }
+        }
     }
 
     @Override

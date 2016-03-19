@@ -15,7 +15,9 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.PanelFrame;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
+import org.openconcerto.erp.core.sales.product.action.InventairePanel;
 import org.openconcerto.erp.core.sales.product.component.ReferenceArticleSQLComponent;
 import org.openconcerto.erp.generationDoc.gestcomm.FicheArticleXmlSheet;
 import org.openconcerto.erp.model.MouseSheetXmlListeListener;
@@ -24,15 +26,19 @@ import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.preferences.SQLPreferences;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.EditPanel.EditMode;
+import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
@@ -40,6 +46,7 @@ import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ListMap;
 
@@ -47,7 +54,9 @@ import java.awt.event.ActionEvent;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.AbstractAction;
 
@@ -61,11 +70,27 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
     public static final int AU_METRE_LARGEUR = 6;
     private static final int PRIX_HA = 1;
     private static final int PRIX_VT = 2;
+    protected final PredicateRowAction stock;
+
+    public static final String[] CONDITIONS = new String[] { "CFR", "CIF", "CPT", "DAT", "DDP", "DDU", "EXW", "FCA", "FOB" };
 
     public ReferenceArticleSQLElement() {
         super("ARTICLE", "un article", "articles");
 
         getRowActions().addAll(new MouseSheetXmlListeListener(FicheArticleXmlSheet.class).getRowActions());
+        this.stock = new PredicateRowAction(new AbstractAction("Mettre à jour les stocks") {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+
+                PanelFrame p = new PanelFrame(new InventairePanel(IListe.get(e), IListe.get(e).getSelectedRows()), "Mise à jour des stocks");
+                FrameUtil.show(p);
+
+            }
+        }, true, false);
+        stock.setPredicate(IListeEvent.getNonEmptySelectionPredicate());
+        getRowActions().add(stock);
+
         PredicateRowAction clone = new PredicateRowAction(new AbstractAction("Dupliquer") {
 
             @Override
@@ -113,6 +138,30 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
             paHTCol.setRenderer(CURRENCY_RENDERER);
         }
 
+        if (getTable().getDBRoot().contains("ARTICLE_ELEMENT") && !getTable().getDBRoot().contains("TARIF_AGENCE")) {
+            source.getColumns().add(new BaseSQLTableModelColumn("Type", String.class) {
+
+                @Override
+                protected Object show_(SQLRowAccessor r) {
+
+                    Collection<? extends SQLRowAccessor> c = r.getReferentRows(getTable().getTable("ARTICLE_ELEMENT").getField("ID_ARTICLE_PARENT"));
+                    if (c.size() == 0) {
+                        // "Article simple"
+                        return "Article simple";
+                    } else {
+                        // "Kit
+                        return "Nomenclature";
+                    }
+                }
+
+                @Override
+                public Set<FieldPath> getPaths() {
+                    Path p = new Path(getTable());
+                    p = p.add(getTable().getTable("ARTICLE_ELEMENT").getField("ID_ARTICLE_PARENT"));
+                    return CollectionUtils.createSet(new FieldPath(p, "QTE"));
+                }
+            });
+        }
         return source;
     }
 

@@ -227,9 +227,18 @@ public class TotalCalculator {
         rowValsC2.put("NUMERO", null);
         rowValsC2.put("ID", null);
 
+        SQLRowValues rowValsC3 = new SQLRowValues(compteTable);
+        rowValsC3.put("NUMERO", null);
+        rowValsC3.put("ID", null);
+        SQLRowValues rowValsC4 = new SQLRowValues(compteTable);
+        rowValsC4.put("NUMERO", null);
+        rowValsC4.put("ID", null);
+
         rowVals.put(tvaTable.getKey().getName(), null);
         rowVals.put("ID_COMPTE_PCE_COLLECTE", rowValsC1);
         rowVals.put("ID_COMPTE_PCE_DED", rowValsC2);
+        rowVals.put("ID_COMPTE_PCE_VENTE", rowValsC3);
+        rowVals.put("ID_COMPTE_PCE_VENTE_SERVICE", rowValsC4);
 
         SQLRowValuesListFetcher fetch = SQLRowValuesListFetcher.create(rowVals);
         List<SQLRowValues> rowValsList = fetch.fetch();
@@ -347,7 +356,34 @@ public class TotalCalculator {
             }
         }
 
+        // TODO Ne pas fetcher la TVA pour chaque instance de TotalCalculator utiliser un cache
+        if (mapTVA == null) {
+            fetchTVA();
+        }
+        final SQLRowAccessor foreignTVA = rowAccessorLine.getForeign("ID_TAXE");
+        Integer idTVA = null;
+        if (foreignTVA != null) {
+            idTVA = foreignTVA.getID();
+        }
+        SQLRowAccessor tva = mapTVA.get(idTVA);
+
         SQLRowAccessor cpt = (achat ? this.rowDefaultCptAchat : this.rowDefaultCptProduit);
+        if (!achat) {
+            // Total Service
+            if (bServiceActive != null && bServiceActive && service != null && service.booleanValue()) {
+                totalService = totalService.add(totalLineHT);
+                cpt = this.rowDefaultCptService;
+                if (tva != null && !tva.isForeignEmpty("ID_COMPTE_PCE_VENTE_SERVICE")) {
+                    cpt = tva.getForeign("ID_COMPTE_PCE_VENTE_SERVICE");
+                }
+            } else {
+                // Compte defini par défaut dans la TVA
+                if (tva != null && !tva.isForeignEmpty("ID_COMPTE_PCE_VENTE")) {
+                    cpt = tva.getForeign("ID_COMPTE_PCE_VENTE");
+                }
+
+            }
+        }
         if (article != null && !article.isUndefined()) {
             String suffix = (this.achat ? "_ACHAT" : "");
             SQLRowAccessor compteArticle = article.getForeign("ID_COMPTE_PCE" + suffix);
@@ -370,11 +406,13 @@ public class TotalCalculator {
             }
         }
 
-        // Total Service
-        if (bServiceActive != null && bServiceActive) {
-            if (service != null && service.booleanValue()) {
-                totalService = totalService.add(totalLineHT);
-                cpt = this.rowDefaultCptService;
+        if (achat) {
+            // Total Service
+            if (bServiceActive != null && bServiceActive) {
+                if (service != null && service.booleanValue()) {
+                    totalService = totalService.add(totalLineHT);
+                    cpt = this.rowDefaultCptService;
+                }
             }
         }
 
@@ -407,16 +445,7 @@ public class TotalCalculator {
             }
         }
 
-        // TODO Ne pas fetcher la TVA pour chaque instance de TotalCalculator utiliser un cache
-        if (mapTVA == null) {
-            fetchTVA();
-        }
-        final SQLRowAccessor foreignTVA = rowAccessorLine.getForeign("ID_TAXE");
-        Integer idTVA = null;
-        if (foreignTVA != null) {
-            idTVA = foreignTVA.getID();
-        }
-        addHT(totalLineHT, mapTVA.get(idTVA), cpt, selection);
+        addHT(totalLineHT, tva, cpt, selection);
     }
 
     /**

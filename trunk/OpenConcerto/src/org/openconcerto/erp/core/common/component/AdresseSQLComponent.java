@@ -66,6 +66,23 @@ public class AdresseSQLComponent extends BaseSQLComponent {
         c.weightx = 1;
         this.add(textRue, c);
 
+        if (getTable().contains("DISTRICT")) {
+            // District
+            c.gridy++;
+            c.gridx = 0;
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            final JLabel labelDistrict = new JLabel(getLabelFor("DISTRICT"), SwingConstants.RIGHT);
+            this.add(labelDistrict, c);
+            final SQLTextCombo district = new SQLTextCombo();
+            c.gridx++;
+            c.fill = GridBagConstraints.NONE;
+            DefaultGridBagConstraints.lockMinimumSize(district);
+            this.add(district, c);
+            this.addView(district, "DISTRICT", REQ);
+        }
+
         // Ville
         final VilleRowItemView villeRIV = new VilleRowItemView(new ITextComboVilleViewer());
         villeRIV.init("VILLE", new LinkedHashSet<SQLField>(Arrays.asList(getField("CODE_POSTAL"), getField("VILLE"))));
@@ -96,6 +113,7 @@ public class AdresseSQLComponent extends BaseSQLComponent {
         c.fill = GridBagConstraints.NONE;
         DefaultGridBagConstraints.lockMinimumSize(cedex);
         this.add(cedex, c);
+
         // Province / Etat
         c.gridy++;
         c.gridx = 0;
@@ -109,6 +127,22 @@ public class AdresseSQLComponent extends BaseSQLComponent {
         c.fill = GridBagConstraints.NONE;
         DefaultGridBagConstraints.lockMinimumSize(province);
         this.add(province, c);
+        if (getTable().contains("DEPARTEMENT")) {
+            // Departement
+            c.gridy++;
+            c.gridx = 0;
+            c.weightx = 0;
+            c.gridwidth = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            final JLabel labelDpt = new JLabel(getLabelFor("DEPARTEMENT"), SwingConstants.RIGHT);
+            this.add(labelDpt, c);
+            final SQLTextCombo dpt = new SQLTextCombo();
+            c.gridx++;
+            c.fill = GridBagConstraints.NONE;
+            DefaultGridBagConstraints.lockMinimumSize(dpt);
+            this.add(dpt, c);
+            this.addView(dpt, "DEPARTEMENT", REQ);
+        }
 
         // Pays
         c.gridy++;

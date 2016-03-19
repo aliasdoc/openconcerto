@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Vector;
 import java.util.logging.Level;
 
 import javax.swing.JButton;
@@ -55,7 +56,7 @@ public class SQLRequestLog {
     private static final Color BG_PINK = new Color(254, 240, 240);
     private static final String ACTIVER_LA_CAPTURE = "Enable monitoring";
     private static final String DESACTIVER_LA_CAPTURE = "Disable monitoring";
-    private static List<SQLRequestLog> list = new ArrayList<SQLRequestLog>(500);
+    private static Vector<SQLRequestLog> list = new Vector<SQLRequestLog>(500);
     private static boolean enabled;
     private String query;
     private String comment;
@@ -108,10 +109,13 @@ public class SQLRequestLog {
     public static void log(String query, String comment, int connectionId, long starAtMs, long startTime, long afterCache, long afterQueryInfo, long afterExecute, long afterHandle, long endTime) {
 
         if (enabled) {
-            final String ex = ExceptionUtils.getStackTrace(new Exception());
+            if (list.size() < 50000) {
+                final String ex = ExceptionUtils.getStackTrace(new Exception());
 
-            list.add(new SQLRequestLog(query, comment, connectionId, starAtMs, ex, SwingUtilities.isEventDispatchThread(), startTime, afterCache, afterQueryInfo, afterExecute, afterHandle, endTime));
-            fireEvent();
+                list.add(new SQLRequestLog(query, comment, connectionId, starAtMs, ex, SwingUtilities.isEventDispatchThread(), startTime, afterCache, afterQueryInfo, afterExecute, afterHandle,
+                        endTime));
+                fireEvent();
+            }
 
         }
         count++;
@@ -148,7 +152,7 @@ public class SQLRequestLog {
                 final long totalMs = getTotalMs();
                 final long totalSQLMs = getTotalSQLMs();
                 textInfo.setText("Total: " + totalMs + " ms,  Swing: " + getTotalSwing() + " ms, SQL: " + totalSQLMs + " ms, processing: " + (totalMs - totalSQLMs) + " ms , " + getNbConnections()
-                        + " conn., " + getNbThread() + " threads");
+                        + " conn., " + getNbThread() + " threads. Total: " + list.size() + " / " + count);
             }
         });
     }
@@ -585,7 +589,7 @@ public class SQLRequestLog {
         }
     }
 
-    protected static void highLight(SQLRequestLogModel model, TableRowSorter<TableModel> sorter, int s) {
+    protected synchronized static void highLight(SQLRequestLogModel model, TableRowSorter<TableModel> sorter, int s) {
         if (s >= 0 && s < model.getRowCount()) {
             final SQLRequestLog rowAt = model.getRowAt(sorter.convertRowIndexToModel(s));
             String req = rowAt.getQuery();

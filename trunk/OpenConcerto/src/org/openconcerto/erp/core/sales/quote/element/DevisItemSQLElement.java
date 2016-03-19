@@ -15,6 +15,7 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.utils.KDUtils;
@@ -23,15 +24,16 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.UISQLComponent;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
+import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
+import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.FileUtils;
 
 import java.awt.event.ActionEvent;
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,13 +59,22 @@ public class DevisItemSQLElement extends ComptaSQLConfElement {
             l.add("PRIX_METRIQUE_VT_1");
             l.add("ID_MODE_VENTE_ARTICLE");
         }
-        l.add("PA_HT");
+        if (UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
+            l.add("PA_HT");
+        }
         l.add("PV_HT");
 
         l.add("QTE");
         l.add("T_PV_HT");
         l.add("T_PV_TTC");
         return l;
+    }
+
+    @Override
+    protected SQLTableModelSourceOnline createTableSource() {
+
+        SQLTableModelSourceOnline table = super.createTableSource();
+        return table;
     }
 
     protected List<String> getComboFields() {

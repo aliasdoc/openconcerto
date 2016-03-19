@@ -597,12 +597,17 @@ public class Caisse {
 
     public static int getTicketWidth() {
         final Document d = getDocument();
+        @SuppressWarnings("unchecked")
         final List<Element> children = d.getRootElement().getChildren("printer");
         if (children != null) {
             for (Element e : children) {
                 if (e.getAttribute("printWidth") != null) {
-                    final String attributeValue = e.getAttributeValue("printWidth");
-                    return Integer.parseInt(attributeValue);
+                    final String attributeValue = e.getAttributeValue("printWidth", "40");
+                    try {
+                        return Integer.parseInt(attributeValue);
+                    } catch (Exception ex) {
+                        return 20;
+                    }
                 }
             }
         }

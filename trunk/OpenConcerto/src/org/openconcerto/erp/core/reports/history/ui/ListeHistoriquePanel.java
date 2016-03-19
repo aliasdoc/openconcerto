@@ -116,7 +116,8 @@ public class ListeHistoriquePanel extends JPanel {
                 id = row.getID();
             }
 
-            for (int i = 0; i < ListeHistoriquePanel.this.vectListePanel.size(); i++) {
+            final int size = ListeHistoriquePanel.this.vectListePanel.size();
+            for (int i = 0; i < size; i++) {
                 IListPanel liste = ListeHistoriquePanel.this.vectListePanel.get(i);
 
                 // remove listener
@@ -247,6 +248,8 @@ public class ListeHistoriquePanel extends JPanel {
                     if (request.getAllFields().containsAll(where.getFields())) {
                         request.setWhere(where);
                     }
+                } else {
+                    request.setWhere(Where.FALSE);
                 }
 
                 if (elt.getTable().contains("ID_MOUVEMENT")) {
@@ -563,6 +566,10 @@ public class ListeHistoriquePanel extends JPanel {
 
     public IListe getListe(int index) {
         return this.vectListePanel.get(index).getListe();
+    }
+
+    public IListPanel getListePanel(int index) {
+        return this.vectListePanel.get(index);
     }
 
     public void fireListesChanged() {

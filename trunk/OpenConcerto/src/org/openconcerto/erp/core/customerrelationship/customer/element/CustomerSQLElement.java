@@ -13,6 +13,7 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.element;
 
+import org.openconcerto.sql.element.GlobalMapper;
 import org.openconcerto.sql.element.GroupSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 
@@ -20,8 +21,9 @@ public class CustomerSQLElement extends ClientNormalSQLElement {
 
     public CustomerSQLElement() {
         super();
-        setDefaultGroup(new CustomerGroup());
-
+        final CustomerGroup group = new CustomerGroup();
+        GlobalMapper.getInstance().map(CustomerGroup.ID, group);
+        setDefaultGroup(group);
     }
 
     @Override

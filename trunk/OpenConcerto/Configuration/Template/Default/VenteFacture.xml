@@ -18,6 +18,16 @@
 		</field>
 	</element>
 
+
+	<element location="B5" type="fill">
+		<field base="Common" table="SOCIETE_COMMON" name="TYPE"/>
+		<field base="Common" table="SOCIETE_COMMON" name="CAPITAL" prefix=" au capital de " suffix="€"/>
+	</element>
+
+	<element location="B6" type="fill">
+		<field base="Common" table="SOCIETE_COMMON" name="NUM_SIRET" prefix="N° de SIREN "/>
+	</element>
+
 	<element location="B7" type="replace" replacePattern="_">
 		<field base="Common" table="SOCIETE_COMMON" name="NUM_NII" />
 	</element>
@@ -77,7 +87,7 @@
 	<element location="B63" type="fill">
 		<field name="ID_MODE_REGLEMENT">
 			<field name="NOM" prefix="Règlement souhaité" conditionField="COMPTANT" conditionExpValue="true" display="false" />
-			<field name="NOM" prefix="Facture acquitée par" conditionField="COMPTANT" conditionExpValue="false" display="false" />
+			<field name="NOM" prefix="Facture acquittée par" conditionField="COMPTANT" conditionExpValue="false" display="false" />
 			<field name="ID_TYPE_REGLEMENT">
 				<field name="NOM" valuesExpected="Indéfini" />
 			</field>
@@ -89,7 +99,7 @@
 	</element>
 
 	<element location="B64" type="fill">
-		<field name="DATE" type="DateEcheance" prefix="Règlement de cette facture au plus tard le " valuesExpected=" " />
+		<field name="DATE" type="DateEcheance" datePattern="dd/MM/yy" prefix="Règlement de cette facture au plus tard le " valuesExpected=" " />
 	</element>
 
 	<element location="B64" type="fill">

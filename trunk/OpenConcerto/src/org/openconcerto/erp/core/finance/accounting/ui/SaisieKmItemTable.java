@@ -197,7 +197,7 @@ public class SaisieKmItemTable extends JPanel implements MouseListener {
         m.put("NOM", compteRow.getString("NOM"));
 
         if (ecrRow.getTable().contains("NOM_PIECE")) {
-            m.put("NOM_PIECE", compteRow.getString("NOM_PIECE"));
+            m.put("NOM_PIECE", ecrRow.getString("NOM_PIECE"));
         }
 
         if (contrePasser) {

@@ -17,5 +17,6 @@ public class LightUITextField extends LightUIElement {
     public LightUITextField(String id) {
         this.setId(id);
         this.setType(TYPE_TEXT_FIELD);
+        this.setValueType(LightUIElement.VALUE_TYPE_STRING);
     }
 }

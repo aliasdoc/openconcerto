@@ -25,11 +25,17 @@ import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 
 public class DeviseTableCellRenderer extends DefaultTableCellRenderer {
-    private final DecimalFormat decimalFormat = new DecimalFormat("##,##0.00#");
-    private final DecimalFormat decimalFormat2 = new DecimalFormat("##,##0.00#######");
+    private final DecimalFormat decimalFormat;
+    private final DecimalFormat decimalFormat2;
     private BigDecimal oneCents = new BigDecimal(0.01f);
 
     public DeviseTableCellRenderer() {
+        this(new DecimalFormat("##,##0.00#"), new DecimalFormat("##,##0.00#######"));
+    }
+
+    public DeviseTableCellRenderer(DecimalFormat decimalFormat, DecimalFormat decimalFormatLessOne) {
+        this.decimalFormat = decimalFormat;
+        this.decimalFormat2 = decimalFormatLessOne;
         final DecimalFormatSymbols symbol = DecimalFormatSymbols.getInstance();
         symbol.setDecimalSeparator('.');
         decimalFormat.setDecimalFormatSymbols(symbol);

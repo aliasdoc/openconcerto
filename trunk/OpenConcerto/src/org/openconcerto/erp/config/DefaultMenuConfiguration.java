@@ -45,6 +45,7 @@ import org.openconcerto.erp.core.finance.accounting.action.ListeDesDevisesAction
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesEcrituresAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesEcrituresAnalytiquesAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesJournauxAction;
+import org.openconcerto.erp.core.finance.accounting.action.ListeDesPostesAnalytiquesAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeDesTauxDeChangeAction;
 import org.openconcerto.erp.core.finance.accounting.action.ListeEcritureParClasseAction;
 import org.openconcerto.erp.core.finance.accounting.action.NouveauClotureAction;
@@ -116,6 +117,7 @@ import org.openconcerto.erp.core.supplychain.order.action.NouvelleCommandeAction
 import org.openconcerto.erp.core.supplychain.order.action.NouvelleFactureFournisseurAction;
 import org.openconcerto.erp.core.supplychain.product.action.ListeDesArticlesFournisseurAction;
 import org.openconcerto.erp.core.supplychain.receipt.action.ListeDesBonsReceptionsAction;
+import org.openconcerto.erp.core.supplychain.receipt.action.ListeDesReliquatsBonsReceptionsAction;
 import org.openconcerto.erp.core.supplychain.receipt.action.NouveauBonReceptionAction;
 import org.openconcerto.erp.core.supplychain.stock.action.ListeDesMouvementsStockAction;
 import org.openconcerto.erp.core.supplychain.stock.action.NouvelleSaisieMouvementStockAction;
@@ -375,6 +377,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         // group.addItem("accounting.vat.report");
         group.addItem("accounting.costs.report");
         group.addItem("accounting.balance.report");
+        // group.addItem("accounting.2050Report");
         group.addItem("employe.social.report");
         return group;
     }
@@ -388,6 +391,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         analytic.addItem("accounting.analytical.ledger");
         analytic.addItem("accounting.analytical.entries.ledger");
         analytic.addItem("accounting.analytical.ledger.global");
+        analytic.addItem("accounting.analytical.dpt");
         group.add(analytic);
         group.addItem("accounting.general.ledger");
         group.addItem("accounting.entries.ledger");
@@ -452,6 +456,9 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
             if (rights.haveRight(NXRights.LOCK_MENU_ACHAT.getCode())) {
                     gSupplier.addItem("supplier.order.list");
                 gSupplier.addItem("supplier.receipt.list");
+                if (configuration.getRootSociete().contains("RELIQUAT_BR")) {
+                    gSupplier.addItem("supplier.receipt.reliquat.list");
+                }
                 gSupplier.addItem("supplier.purchase.list");
                 gSupplier.addItem("supplier.invoice.purchase.list");
                     gSupplier.addItem("supplier.credit.list");
@@ -472,13 +479,14 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         group.addItem("test.lettrage.fact");
         group.addItem("test.lettrage.compt");
         group.addItem("test.lettrage.achat");
+        // group.addItem("test.export.ecrp");
 
         return group;
     }
 
     /**
      * Actions
-     * */
+     */
     private void registerFilesMenuActions(final MenuAndActions mManager) {
         mManager.registerAction("backup", new SauvegardeBaseAction());
         mManager.registerAction("modules", new AbstractAction() {
@@ -570,6 +578,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
                 mManager.registerAction("supplier.history", new NouvelHistoriqueListeFournAction());
             if (rights.haveRight(NXRights.LOCK_MENU_ACHAT.getCode())) {
                     mManager.registerAction("supplier.order.list", new ListeDesCommandesAction());
+                mManager.registerAction("supplier.receipt.reliquat.list", new ListeDesReliquatsBonsReceptionsAction());
                 mManager.registerAction("supplier.receipt.list", new ListeDesBonsReceptionsAction());
                 mManager.registerAction("supplier.purchase.list", new ListeSaisieAchatAction());
                 mManager.registerAction("supplier.invoice.purchase.list", new ListeDesFacturesFournisseurAction());
@@ -591,6 +600,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         mManager.registerAction("accounting.general.ledger", new EtatGrandLivreAction());
         mManager.registerAction("accounting.entries.ledger", new ListeDesEcrituresAction());
         mManager.registerAction("accounting.analytical.entries.ledger", new ListeDesEcrituresAnalytiquesAction());
+        mManager.registerAction("accounting.analytical.dpt", new ListeDesPostesAnalytiquesAction());
         mManager.registerAction("accounting.analytical.ledger.global", new ImpressionRepartitionAnalytiqueAction());
         mManager.registerAction("accounting.entries.list", new ListeEcritureParClasseAction());
         mManager.registerAction("accounting.validating", new NouvelleValidationAction());
@@ -604,6 +614,7 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
         mManager.registerAction("accounting.costs.report", new EtatChargeAction());
         mManager.registerAction("accounting.balance.report", new CompteResultatBilanAction());
         mManager.registerAction("employe.social.report", new N4DSAction());
+        // mManager.registerAction("accounting.2050Report", new CompteResultatBilan2050Action());
     }
 
     public void registerStatsMenuActions(final MenuAndActions mManager) {
@@ -708,6 +719,8 @@ public class DefaultMenuConfiguration implements MenuConfiguration {
     }
 
     private void registerHelpTestActions(final MenuAndActions mManager) {
+
+        // mManager.registerAction("test.export.ecrp", new ExportPointageAction());
 
     }
 }

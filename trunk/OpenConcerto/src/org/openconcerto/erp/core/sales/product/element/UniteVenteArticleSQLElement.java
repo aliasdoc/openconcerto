@@ -13,11 +13,6 @@
  
  package org.openconcerto.erp.core.sales.product.element;
 
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.sql.element.BaseSQLComponent;
-import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
@@ -25,6 +20,12 @@ import java.util.List;
 
 import javax.swing.JLabel;
 import javax.swing.JTextField;
+
+import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.sql.element.BaseSQLComponent;
+import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.CollectionMap;
 
 public class UniteVenteArticleSQLElement extends ComptaSQLConfElement {
 
@@ -45,6 +46,13 @@ public class UniteVenteArticleSQLElement extends ComptaSQLConfElement {
         final List<String> l = new ArrayList<String>();
         l.add("NOM");
         return l;
+    }
+
+    @Override
+    public CollectionMap<String, String> getShowAs() {
+        final CollectionMap<String, String> res = new CollectionMap<String, String>();
+        res.putAll(null, "NOM");
+        return res;
     }
 
     /*

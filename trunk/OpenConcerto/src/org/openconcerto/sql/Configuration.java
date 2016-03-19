@@ -16,6 +16,23 @@
  */
 package org.openconcerto.sql;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.w3c.dom.Document;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+
+import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.SQLElementDirectory;
 import org.openconcerto.sql.model.DBFileCache;
 import org.openconcerto.sql.model.DBItemFileCache;
@@ -25,16 +42,13 @@ import org.openconcerto.sql.model.DBSystemRoot;
 import org.openconcerto.sql.model.FieldMapper;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLFilter;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowListRSH;
+import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.SQLFieldTranslator;
 import org.openconcerto.utils.FileUtils;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import net.jcip.annotations.GuardedBy;
 
 /**
@@ -170,6 +184,28 @@ public abstract class Configuration {
                 this.nonInteractiveSQLExecutor.shutdown();
             }
         }
+    }
+
+    /**
+     * Get xml value from table FWK_LIST_PREFS for an user and a table.
+     * 
+     * @throws ParserConfigurationException
+     * @throws IOException
+     * @throws SAXException
+     */
+    public Document getXMLConf(final long userId, final String idTable) throws ParserConfigurationException, SAXException, IOException {
+        final SQLElement element = this.getDirectory().getElement("FWK_LIST_PREFS");
+        final SQLTable columnPrefsTable = element.getTable();
+        final SQLSelect select = new SQLSelect();
+        select.addSelectStar(columnPrefsTable);
+        select.setWhere((new Where(columnPrefsTable.getField("ID_USER"), "=", userId)).and(new Where(columnPrefsTable.getField("ID_TABLE"), "=", idTable)));
+        final List<SQLRow> rqResult = SQLRowListRSH.execute(select);
+        if (rqResult != null && !rqResult.isEmpty()) {
+            final DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
+            final DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
+            return docBuilder.parse(new InputSource(new StringReader(rqResult.get(0).getString("VALUE"))));
+        }
+        return null;
     }
 
     /**

@@ -63,7 +63,7 @@ public class FichePayeModel extends AbstractTableModel {
     private SQLJavaEditor javaEdit = new SQLJavaEditor(VariablePayeSQLElement.getMapTree());
 
     // liste des variable de paye à calculer
-    private float salBrut, cotPat, cotSal, netImp, netAPayer, csg;
+    private float salBrut, cotPat, cotSal, netImp, netAPayer, csg, csgSansAbattement;
     private Map<Integer, String> mapField;
 
     private final double tauxCSG;
@@ -128,7 +128,7 @@ public class FichePayeModel extends AbstractTableModel {
         this.netAPayer = 0.0F;
         this.netImp = 0.0F;
         this.csg = 0.0F;
-
+        this.csgSansAbattement = 0.0F;
     }
 
     public void loadAllElements() {
@@ -628,7 +628,7 @@ public class FichePayeModel extends AbstractTableModel {
         rowValsFiche.put("NET_A_PAYER", Float.valueOf(this.netAPayer + this.salBrut));
         rowValsFiche.put("COT_SAL", Float.valueOf(this.cotSal));
         rowValsFiche.put("COT_PAT", Float.valueOf(this.cotPat));
-        rowValsFiche.put("CSG", Float.valueOf((this.salBrut + this.csg) * (float) this.tauxCSG));
+        rowValsFiche.put("CSG", Float.valueOf((this.salBrut + this.csg) * (float) this.tauxCSG) + this.csgSansAbattement);
 
         try {
             rowValsFiche.update(this.idFiche);
@@ -841,6 +841,14 @@ public class FichePayeModel extends AbstractTableModel {
             } else {
                 this.netAPayer -= montantSal;
                 this.netImp -= montantSal;
+            }
+
+            if (rowSource.getBoolean("PART_PAT_IMPOSABLE")) {
+                this.netImp += montantPat;
+            }
+
+            if (rowSource.getBoolean("PART_CSG_SANS_ABATTEMENT")) {
+                this.csgSansAbattement += montantPat;
             }
 
             if (rowSource.getBoolean("PART_CSG")) {

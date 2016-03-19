@@ -32,6 +32,7 @@ import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
 import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
+import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLRow;
@@ -258,29 +259,31 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             });
 
         }
+        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        if (prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.ADDRESS_SPEC, true)) {
 
-        final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
-        final AddressChoiceUI addressUI = new AddressChoiceUI();
-        addressUI.addToUI(this, c);
-        comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+            final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+            final AddressChoiceUI addressUI = new AddressChoiceUI();
+            addressUI.addToUI(this, c);
+            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
 
-            @Override
-            public void propertyChange(PropertyChangeEvent evt) {
-                int wantedID = comboClient.getWantedID();
-                System.err.println("SET WHERE ID_CLIENT = " + wantedID);
-                if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    int wantedID = comboClient.getWantedID();
+                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
-                    addressUI.getComboAdrF().getRequest()
-                            .setWhere(new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
-                    addressUI.getComboAdrL().getRequest()
-                            .setWhere(new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
-                } else {
-                    addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
-                    addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                        addressUI.getComboAdrF().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI.getComboAdrL().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                    } else {
+                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                    }
                 }
-            }
-        });
-
+            });
+        }
         if (getTable().contains("SPEC_LIVRAISON")) {
             // Date livraison
             c.gridx++;
@@ -465,7 +468,9 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             addSQLObject(fieldHA, "PREBILAN");
         } else if (getTable().contains("T_HA")) {
             addSQLObject(fieldHA, "T_HA");
+            this.allowEditable("T_HA", false);
         }
+        // Disable
 
         SQLRequestComboBox boxTaxePort = new SQLRequestComboBox(false, 8);
 
@@ -481,6 +486,10 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         this.addRequiredSQLObject(this.textTotalHT, "TOTAL_HT");
         this.addRequiredSQLObject(this.textTotalTVA, "TOTAL_TVA");
         this.addRequiredSQLObject(this.textTotalTTC, "TOTAL_TTC");
+        this.allowEditable("TOTAL_HT", false);
+        this.allowEditable("TOTAL_TVA", false);
+        this.allowEditable("TOTAL_TTC", false);
+        this.allowEditable("TOTAL_POIDS", false);
         final TotalPanel panelTotal = new TotalPanel(tableBonItem, textTotalHT, textTotalTVA, textTotalTTC, textPortHT, textRemiseHT, fieldService, fieldHA, fieldDevise, this.textPoidsTotal, null,
                 (getTable().contains("ID_TAXE_PORT") ? boxTaxePort : null));
 

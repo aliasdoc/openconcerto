@@ -114,6 +114,10 @@ public abstract class SheetXml {
 
     }
 
+    public static void submitInQueue(Runnable r) {
+        runnableQueue.submit(r);
+    }
+
     public void showPrintAndExport(final boolean showDocument, final boolean printDocument, boolean exportToPDF) {
         showPrintAndExport(showDocument, printDocument, exportToPDF, Boolean.getBoolean("org.openconcerto.oo.useODSViewer"), false);
     }

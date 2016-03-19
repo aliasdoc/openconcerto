@@ -13,10 +13,26 @@
  
  package org.openconcerto.erp.core.supplychain.receipt.element;
 
+import java.awt.event.ActionEvent;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import javax.swing.AbstractAction;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+
+import org.apache.commons.dbutils.handlers.ArrayListHandler;
+
 import org.openconcerto.erp.config.Gestion;
+import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.supplychain.order.component.SaisieAchatSQLComponent;
 import org.openconcerto.erp.core.supplychain.receipt.component.BonReceptionSQLComponent;
+import org.openconcerto.erp.generationDoc.gestcomm.BonReceptionXmlSheet;
+import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
@@ -25,22 +41,44 @@ import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.view.EditFrame;
-
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import javax.swing.ImageIcon;
-import javax.swing.JFrame;
-
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
+import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
+import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
+import org.openconcerto.utils.CollectionMap;
 
 public class BonReceptionSQLElement extends ComptaSQLConfElement {
 
     public BonReceptionSQLElement() {
         super("BON_RECEPTION", "un bon de réception", "Bons de réception");
+
+        PredicateRowAction actionsTRFA = new PredicateRowAction(new AbstractAction("Transfert vers facture fournisseur") {
+            public void actionPerformed(ActionEvent e) {
+                TransfertBaseSQLComponent.openTransfertFrame(IListe.get(e).getSelectedRows(), "FACTURE_FOURNISSEUR");
+            }
+        }, true);
+        actionsTRFA.setPredicate(IListeEvent.getNonEmptySelectionPredicate());
+
+        PredicateRowAction actionTRSimple = new PredicateRowAction(new AbstractAction("Transfert vers facture simple") {
+            public void actionPerformed(ActionEvent e) {
+                transfertFacture(IListe.get(e).getSelectedRow().getID());
+            }
+        }, false);
+        actionTRSimple.setPredicate(IListeEvent.getSingleSelectionPredicate());
+
+        getRowActions().add(actionsTRFA);
+        getRowActions().add(actionTRSimple);
+
+        MouseSheetXmlListeListener mouseSheetXmlListeListener = new MouseSheetXmlListeListener(BonReceptionXmlSheet.class);
+        mouseSheetXmlListeListener.setGenerateHeader(true);
+        mouseSheetXmlListeListener.setShowHeader(true);
+        getRowActions().addAll(mouseSheetXmlListeListener.getRowActions());
+    }
+
+    @Override
+    public CollectionMap<String, String> getShowAs() {
+        final CollectionMap<String, String> res = new CollectionMap<String, String>();
+        res.putAll(null, "NUMERO", "DATE");
+        return res;
     }
 
     protected List<String> getListFields() {
@@ -48,6 +86,7 @@ public class BonReceptionSQLElement extends ComptaSQLConfElement {
         l.add("NUMERO");
         l.add("DATE");
         l.add("ID_FOURNISSEUR");
+        l.add("TOTAL_HT");
         l.add("INFOS");
         return l;
     }

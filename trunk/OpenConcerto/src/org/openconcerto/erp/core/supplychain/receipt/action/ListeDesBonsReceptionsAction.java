@@ -15,19 +15,34 @@
 
 import org.openconcerto.erp.action.CreateFrameAbstractAction;
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.ui.IListFilterDatePanel;
 import org.openconcerto.erp.core.supplychain.receipt.element.BonReceptionSQLElement;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.model.graph.PathBuilder;
 import org.openconcerto.sql.view.IListFrame;
 import org.openconcerto.sql.view.ListeAddPanel;
+import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
+import org.openconcerto.sql.view.list.IListe;
+import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.table.PercentTableCellRenderer;
+import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.DecimalUtils;
 
 import java.awt.GridBagConstraints;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Collection;
+import java.util.Set;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -43,32 +58,26 @@ public class ListeDesBonsReceptionsAction extends CreateFrameAbstractAction {
 
     public JFrame createFrame() {
         final SQLElement element = Configuration.getInstance().getDirectory().getElement("BON_RECEPTION");
-        final IListFrame frame = new IListFrame(new ListeAddPanel(element));
-        frame.getPanel().getListe().getJTable().addMouseListener(new MouseAdapter() {
+        final SQLTableModelSourceOnline tableSource = element.getTableSource(true);
 
-            public void mousePressed(MouseEvent mouseEvent) {
+        BaseSQLTableModelColumn colAvancement = new BaseSQLTableModelColumn("Avancement facturation", BigDecimal.class) {
 
-                if (mouseEvent.getButton() == MouseEvent.BUTTON3 && frame.getPanel().getListe().getSelectedId() > 1) {
-                    System.err.println("Display Menu");
-                    JPopupMenu menuDroit = new JPopupMenu();
+            @Override
+            protected Object show_(SQLRowAccessor r) {
 
-                    final SQLRow rowCmd = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete().getTable("BON_RECEPTION").getRow(frame.getPanel().getListe().getSelectedId());
-
-                    // Transfert vers facture
-                    AbstractAction factureAction = (new AbstractAction("Transfert vers facture") {
-                        public void actionPerformed(ActionEvent e) {
-                            transfertFactureFournisseur(rowCmd);
-                        }
-                    });
-
-                    menuDroit.add(factureAction);
-
-                    menuDroit.pack();
-                    menuDroit.show(mouseEvent.getComponent(), mouseEvent.getPoint().x, mouseEvent.getPoint().y);
-                    menuDroit.setVisible(true);
-                }
+                return getAvancement(r);
             }
-        });
+
+            @Override
+            public Set<FieldPath> getPaths() {
+                final Path p = new PathBuilder(element.getTable()).addTable("TR_BON_RECEPTION").addTable("FACTURE_FOURNISSEUR").build();
+                return CollectionUtils.createSet(new FieldPath(p, "T_HT"));
+            }
+        };
+        tableSource.getColumns().add(colAvancement);
+        colAvancement.setRenderer(new PercentTableCellRenderer());
+
+        final IListFrame frame = new IListFrame(new ListeAddPanel(element, new IListe(tableSource)));
 
         // Date panel
         IListFilterDatePanel datePanel = new IListFilterDatePanel(frame.getPanel().getListe(), element.getTable().getField("DATE"), IListFilterDatePanel.getDefaultMap());
@@ -83,6 +92,24 @@ public class ListeDesBonsReceptionsAction extends CreateFrameAbstractAction {
         frame.getPanel().add(datePanel, c);
 
         return frame;
+    }
+
+    private BigDecimal getAvancement(SQLRowAccessor r) {
+        Collection<? extends SQLRowAccessor> rows = r.getReferentRows(r.getTable().getTable("TR_BON_RECEPTION"));
+        long totalFact = 0;
+        long total = (r.getObject("TOTAL_HT") == null ? 0 : r.getLong("TOTAL_HT"));
+        for (SQLRowAccessor row : rows) {
+            if (!row.isForeignEmpty("ID_FACTURE_FOURNISSEUR")) {
+                SQLRowAccessor rowFact = row.getForeign("ID_FACTURE_FOURNISSEUR");
+                Long l = rowFact.getLong("T_HT");
+                totalFact += l;
+            }
+        }
+        if (total > 0) {
+            return new BigDecimal(totalFact).divide(new BigDecimal(total), DecimalUtils.HIGH_PRECISION).movePointRight(2).setScale(2, RoundingMode.HALF_UP);
+        } else {
+            return BigDecimal.ONE.movePointRight(2);
+        }
     }
 
     /**

@@ -38,6 +38,7 @@ import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.RowValuesTable;
 import org.openconcerto.sql.view.list.SQLTableElement;
+import org.openconcerto.ui.JComponentUtils;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.group.Group;
@@ -45,6 +46,7 @@ import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.text.SimpleDocumentListener;
 
 import java.awt.Component;
+import java.awt.Dimension;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.math.BigDecimal;
@@ -147,7 +149,7 @@ public class VenteFactureSituationSQLComponent extends TransfertGroupSQLComponen
             @Override
             public void update(DocumentEvent e) {
                 Acompte a = acompteField.getValue();
-                table.calculPourcentage(a,TypeCalcul.CALCUL_FACTURABLE);
+                table.calculPourcentage(a, TypeCalcul.CALCUL_FACTURABLE);
             }
         });
         final TotalPanel total = ((TotalPanel) getEditor("sales.invoice.partial.total.amount"));

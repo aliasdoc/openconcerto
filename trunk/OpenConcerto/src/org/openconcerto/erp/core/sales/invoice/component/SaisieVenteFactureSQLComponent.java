@@ -41,6 +41,7 @@ import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
 import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
+import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.erp.preferences.ModeReglementDefautPrefPanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.ElementSQLObject;
@@ -83,6 +84,7 @@ import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -106,7 +108,10 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     private AbstractArticleItemTable tableFacture;
     private JLabel labelAffaire = new JLabel("Affaire");
     private final JDate dateSaisie = new JDate(true);
-    private DeviseField textPortHT, textAvoirTTC, textRemiseHT, fieldTTC, textTotalAvoir;
+    private DeviseField textPortHT, textAvoirTTC, textRemiseHT, fieldTTC, textNetAPayer;
+    private DeviseField totalTimbre, netPayer;
+    private JTextField tauxTimbre;
+
     private SQLElement factureElt = Configuration.getInstance().getDirectory().getElement("SAISIE_VENTE_FACTURE");
     private SQLTable tableAvoir = Configuration.getInstance().getDirectory().getElement("AVOIR_CLIENT").getTable();
     public static final SQLTable TABLE_ADRESSE = Configuration.getInstance().getDirectory().getElement("ADRESSE").getTable();
@@ -132,6 +137,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
     protected TotalPanel totalTTC;
     private final boolean displayDpt;
     private final ElementComboBox comboDpt = new ElementComboBox();
+    private final boolean gestionTimbre;
 
     // Type intervention
     private SQLTextCombo textTypeMission = new SQLTextCombo();
@@ -141,7 +147,9 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
             int idCli = SaisieVenteFactureSQLComponent.this.comboClient.getWantedID();
             if (idCli > 1) {
                 SQLRow rowCli = SaisieVenteFactureSQLComponent.this.client.getTable().getRow(idCli);
-
+                if (!rowCli.isForeignEmpty("ID_COMMERCIAL")) {
+                    comboCommercial.setValue(rowCli.getForeignID("ID_COMMERCIAL"));
+                }
                 if (getMode() == SQLComponent.Mode.INSERTION || !isFilling()) {
                     SQLElement sqleltModeRegl = Configuration.getInstance().getDirectory().getElement("MODE_REGLEMENT");
                     int idModeRegl = rowCli.getInt("ID_MODE_REGLEMENT");
@@ -185,6 +193,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         this.defaultNum = this.tableNum.getRow(defaultNum);
         SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
         this.displayDpt = prefs.getBoolean(GestionClientPreferencePanel.DISPLAY_CLIENT_DPT, false);
+        this.gestionTimbre = prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.GESTION_TIMBRE_FISCAL, false);
     }
 
     public SaisieVenteFactureSQLComponent() {
@@ -421,6 +430,9 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
         this.comboClient.addValueListener(this.changeClientListener);
 
+        // SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        // if (prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.ADDRESS_SPEC, true)) {
+
         final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
         final org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI addressUI = new org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI();
 
@@ -450,6 +462,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                     }
                 }
             });
+        // }
         // Contact
         this.contact = new ElementComboBox();
 
@@ -693,6 +706,14 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         JTextField poids = new JTextField();
         addSQLObject(poids, "T_POIDS");
 
+        // Disable
+        this.allowEditable("T_HA", false);
+        this.allowEditable("T_HT", false);
+        this.allowEditable("T_TVA", false);
+        this.allowEditable("T_TTC", false);
+        this.allowEditable("T_SERVICE", false);
+        this.allowEditable("T_POIDS", false);
+
         totalTTC = new TotalPanel(this.tableFacture, fieldHT, fieldTVA, this.fieldTTC, this.textPortHT, this.textRemiseHT, fieldService, fieldTHA, fieldDevise, poids, null, (getTable().contains(
                 "ID_TAXE_PORT") ? boxTaxePort : null));
         DefaultGridBagConstraints.lockMinimumSize(totalTTC);
@@ -709,6 +730,19 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         c.gridy++;
         c.weighty = 0;
         this.add(panelBottom, c);
+
+        // Ligne : Timbre
+        c.gridy++;
+        c.gridx = 0;
+        c.weightx = 1;
+        c.weighty = 0;
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.anchor = GridBagConstraints.EAST;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        final JPanel timbrePanel = createTimbrePanel();
+        this.add(timbrePanel, c);
+
+        timbrePanel.setVisible(this.gestionTimbre);
 
         // Ligne : Avoir
         c.gridy++;
@@ -777,6 +811,34 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
         this.comboClient.addValueListener(this.listenerModeReglDefaut);
         this.fieldTTC.getDocument().addDocumentListener(new SimpleDocumentListener() {
+            @Override
+            public void update(DocumentEvent e) {
+                calculTimbre();
+                refreshText();
+            }
+
+        });
+
+        if (this.checkTaux != null) {
+            this.checkTaux.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    calculTimbre();
+                    refreshText();
+                }
+
+            });
+        }
+        this.tauxTimbre.getDocument().addDocumentListener(new SimpleDocumentListener() {
+            @Override
+            public void update(DocumentEvent e) {
+                calculTimbre();
+                refreshText();
+            }
+
+        });
+
+        this.totalTimbre.getDocument().addDocumentListener(new SimpleDocumentListener() {
             @Override
             public void update(DocumentEvent e) {
                 refreshText();
@@ -910,6 +972,20 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
     }
 
+    private void calculTimbre() {
+        totalTimbre.setValue(0L);
+        if (gestionTimbre && this.checkTaux != null && this.checkTaux.isSelected()) {
+            if (tauxTimbre.getText().trim().length() != 0) {
+                BigDecimal taux = new BigDecimal(tauxTimbre.getText());
+                Long ttc = fieldTTC.getValue();
+                if (ttc != null) {
+                    long timbreValue = taux.multiply(new BigDecimal(ttc)).movePointLeft(2).setScale(0, RoundingMode.HALF_UP).longValue();
+                    totalTimbre.setValue(timbreValue);
+                }
+            }
+        }
+    }
+
     private JPanel createPanelAvoir() {
         JPanel panelAvoir = new JPanel(new GridBagLayout());
         panelAvoir.setOpaque(false);
@@ -925,17 +1001,50 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         this.selAvoir.setAddIconVisible(false);
         panelAvoir.add(this.selAvoir, cA);
         final JLabel labelTotalAvoir = new JLabel("Total à régler");
-        this.textTotalAvoir = new DeviseField();
-        this.textTotalAvoir.setEditable(false);
+        this.textNetAPayer = new DeviseField();
+        this.textNetAPayer.setEditable(false);
         cA.gridx++;
         cA.weightx = 0;
         panelAvoir.add(labelTotalAvoir, cA);
         cA.gridx++;
         cA.weightx = 0;
-        panelAvoir.add(this.textTotalAvoir, cA);
-        this.textTotalAvoir.setHorizontalAlignment(SwingConstants.RIGHT);
+        panelAvoir.add(this.textNetAPayer, cA);
+        addView(textNetAPayer, "NET_A_PAYER");
+        this.textNetAPayer.setHorizontalAlignment(SwingConstants.RIGHT);
 
         return panelAvoir;
+    }
+
+    private JCheckBox checkTaux;
+
+    private JPanel createTimbrePanel() {
+        JPanel panelTimbre = new JPanel(new GridBagLayout());
+        panelTimbre.setOpaque(false);
+        GridBagConstraints cA = new DefaultGridBagConstraints();
+        this.checkTaux = new JCheckBox(getLabelFor("SOUMIS_TIMBRE_FISCAL") + " " + getLabelFor("TAUX_TIMBRE_FISCAL"));
+        checkTaux.setHorizontalAlignment(SwingConstants.RIGHT);
+        cA.weightx = 1;
+        checkTaux.setHorizontalAlignment(SwingConstants.RIGHT);
+        panelTimbre.add(checkTaux, cA);
+        cA.weightx = 0;
+        cA.gridx++;
+        this.tauxTimbre = new JTextField(8);
+        panelTimbre.add(this.tauxTimbre, cA);
+        final JLabel labelTotalTimbre = new JLabel(getLabelFor("TOTAL_TIMBRE_FISCAL"));
+        this.totalTimbre = new DeviseField();
+        this.totalTimbre.setEditable(false);
+        cA.gridx++;
+        cA.weightx = 0;
+        panelTimbre.add(labelTotalTimbre, cA);
+        cA.gridx++;
+        cA.weightx = 0;
+        panelTimbre.add(this.totalTimbre, cA);
+        this.totalTimbre.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        this.addView(checkTaux, "SOUMIS_TIMBRE_FISCAL");
+        this.addView(tauxTimbre, "TAUX_TIMBRE_FISCAL");
+        this.addView(totalTimbre, "TOTAL_TIMBRE_FISCAL");
+        return panelTimbre;
     }
 
     private void setCompteServiceVisible(boolean b) {
@@ -945,10 +1054,17 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
 
     private void refreshText() {
         Number n = this.fieldTTC.getValue();
+        long totalAvoirTTC = 0;
+        long netAPayer = 0;
+        long ttc = 0;
+        if (n != null) {
+            netAPayer = n.longValue();
+            ttc = n.longValue();
+        }
+
         if (this.selAvoir.getSelectedId() > 1) {
             SQLTable tableAvoir = Configuration.getInstance().getDirectory().getElement("AVOIR_CLIENT").getTable();
             if (n != null) {
-                long ttc = n.longValue();
                 SQLRow rowAvoir = tableAvoir.getRow(this.selAvoir.getSelectedId());
                 long totalAvoir = ((Number) rowAvoir.getObject("MONTANT_TTC")).longValue();
                 totalAvoir -= ((Number) rowAvoir.getObject("MONTANT_SOLDE")).longValue();
@@ -963,23 +1079,21 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                 long l = ttc - totalAvoir;
                 if (l < 0) {
                     l = 0;
-                    this.textAvoirTTC.setValue(ttc);
+                    totalAvoirTTC = ttc;
                 } else {
-                    this.textAvoirTTC.setValue(totalAvoir);
+                    totalAvoirTTC = totalAvoir;
                 }
-                this.textTotalAvoir.setValue(l);
-
-            } else {
-                this.textTotalAvoir.setValue(0l);
+                netAPayer = l;
             }
-        } else {
-            if (n != null) {
-                this.textTotalAvoir.setValue(n.longValue());
-            } else {
-                this.textTotalAvoir.setValue(0l);
-            }
-            this.textAvoirTTC.setValue(0l);
         }
+        if (this.gestionTimbre) {
+            Long timbre = this.totalTimbre.getValue();
+            if (timbre != null) {
+                netAPayer += timbre;
+            }
+        }
+        this.textNetAPayer.setValue(netAPayer);
+        this.textAvoirTTC.setValue(totalAvoirTTC);
     }
 
     public int insert(SQLRow order) {
@@ -1181,8 +1295,6 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                 this.tableFacture.createArticle(idSaisieVF, this.getElement());
 
 
-                createDocument(rowFacture);
-
                 int idMvt = -1;
                 if (!this.checkPrevisionnelle.isSelected()) {
                     if (getMode() == Mode.MODIFICATION) {
@@ -1267,6 +1379,7 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                             doWithRow.process(rowFacture);
                         }
                     }
+                    createDocument(rowFacture);
 
                 }
             } catch (Exception e) {
@@ -1532,6 +1645,10 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
             vals.put("ID_COMMERCIAL", rowsComm.getID());
         }
 
+        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+        Double d = prefs.getDouble(GestionCommercialeGlobalPreferencePanel.TAUX_TIMBRE_FISCAL, Double.valueOf(1));
+        vals.put("TAUX_TIMBRE_FISCAL", new BigDecimal(d));
+        vals.put("TOTAL_TIMBRE_FISCAL", 0L);
         // User
         final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
         if (getTable().contains("ID_NUMEROTATION_AUTO")) {

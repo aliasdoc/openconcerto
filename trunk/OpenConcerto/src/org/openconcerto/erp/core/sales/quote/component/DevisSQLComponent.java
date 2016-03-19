@@ -31,6 +31,7 @@ import org.openconcerto.erp.core.sales.quote.report.DevisXmlSheet;
 import org.openconcerto.erp.core.sales.quote.ui.DevisItemTable;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.GestionClientPreferencePanel;
+import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.map.ui.ITextComboVilleViewer;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
@@ -292,6 +293,20 @@ public class DevisSQLComponent extends BaseSQLComponent {
         this.add(comboClient, c);
         addRequiredSQLObject(comboClient, "ID_CLIENT");
 
+        comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                int wantedID = comboClient.getWantedID();
+
+                if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                    final SQLRow rowClient = getTable().getForeignTable("ID_CLIENT").getRow(wantedID);
+                    if (!rowClient.isForeignEmpty("ID_COMMERCIAL")) {
+                        comboCommercial.setValue(rowClient.getForeignID("ID_COMMERCIAL"));
+                    }
+                }
+            }
+        });
         if (this.displayDpt) {
             c.gridx++;
             c.gridwidth = 1;
@@ -329,35 +344,39 @@ public class DevisSQLComponent extends BaseSQLComponent {
         }
 
         final ElementComboBox boxTarif = new ElementComboBox();
+            SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
+            if (prefs.getBoolean(GestionCommercialeGlobalPreferencePanel.ADDRESS_SPEC, true)) {
 
-            final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
-            final AddressChoiceUI addressUI = new AddressChoiceUI();
-            addressUI.addToUI(this, c);
-            comboClient.addModelListener("wantedID", new PropertyChangeListener() {
+                final SQLElement adrElement = getElement().getForeignElement("ID_ADRESSE");
+                final AddressChoiceUI addressUI = new AddressChoiceUI();
+                addressUI.addToUI(this, c);
+                comboClient.addModelListener("wantedID", new PropertyChangeListener() {
 
-                @Override
-                public void propertyChange(PropertyChangeEvent evt) {
-                    int wantedID = comboClient.getWantedID();
-                    System.err.println("SET WHERE ID_CLIENT = " + wantedID);
-                    if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
+                    @Override
+                    public void propertyChange(PropertyChangeEvent evt) {
+                        int wantedID = comboClient.getWantedID();
+                        System.err.println("SET WHERE ID_CLIENT = " + wantedID);
+                        if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
-                        addressUI
-                                .getComboAdrF()
-                                .getRequest()
-                                .setWhere(
-                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
-                        addressUI
-                                .getComboAdrL()
-                                .getRequest()
-                                .setWhere(
-                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
-                    } else {
-                        addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
-                        addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                            addressUI
+                                    .getComboAdrF()
+                                    .getRequest()
+                                    .setWhere(
+                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice
+                                                    .getId())));
+                            addressUI
+                                    .getComboAdrL()
+                                    .getRequest()
+                                    .setWhere(
+                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery
+                                                    .getId())));
+                        } else {
+                            addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
+                            addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
+                        }
                     }
-                }
-            });
-
+                });
+            }
             if (getTable().contains("ID_CONTACT")) {
                 // Contact Client
                 c.gridx = 0;

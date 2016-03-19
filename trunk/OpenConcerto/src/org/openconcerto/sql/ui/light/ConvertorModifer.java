@@ -13,9 +13,8 @@
  
  package org.openconcerto.sql.ui.light;
 
-import org.openconcerto.sql.PropsConfiguration;
-import org.openconcerto.ui.light.LightUIDescriptor;
+import org.openconcerto.ui.light.LightUIElement;
 
-public interface LightUIDescriptorProvider {
-    LightUIDescriptor getUIDescriptor(PropsConfiguration configuration);
+public abstract class ConvertorModifer {
+    public abstract void process(final LightUIElement element);
 }

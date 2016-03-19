@@ -143,6 +143,12 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
         this.popup.setListEnabled(b);
     }
 
+    private Where whereAdditionnal;
+
+    public void setWhere(Where w) {
+        this.whereAdditionnal = w;
+    }
+
     public void setTextEditor(final JTextComponent atext) {
         if (atext == null) {
             throw new IllegalArgumentException("null textEditor");
@@ -158,6 +164,7 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
                     // Complete si exactement la valeur souhaitée
                     updateAutoCompletion(true);
                     e.consume();
+
                 } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
                     if (ITextArticleWithCompletion.this.popup.isShowing()) {
                         ITextArticleWithCompletion.this.popup.selectNext();
@@ -280,6 +287,9 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
             Where wMatchingCode = new Where(this.tableArticle.getField("CODE"), "=", aText);
             wMatchingCode = wMatchingCode.or(new Where(this.tableArticle.getField("NOM"), "=", aText));
             wMatchingCode = wMatchingCode.or(new Where(this.tableArticle.getField("CODE_BARRE"), "=", aText));
+            if (this.whereAdditionnal != null) {
+                wMatchingCode = wMatchingCode.and(this.whereAdditionnal);
+            }
             selMatchingCode.setWhere(wMatchingCode);
             listSel.add(selMatchingCode);
 
@@ -293,13 +303,16 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
             Where wContains = new Where(this.tableArticle.getField("CODE"), "LIKE", "%" + aText + "%");
             wContains = wContains.or(new Where(this.tableArticle.getField("NOM"), "LIKE", "%" + aText + "%"));
             wContains = wContains.or(new Where(this.tableArticle.getField("CODE_BARRE"), "LIKE", "%" + aText + "%"));
+            if (this.whereAdditionnal != null) {
+                wContains = wContains.and(this.whereAdditionnal);
+            }
             selContains.setWhere(wContains.and(wMatchingCode.not()));
             selContains.setLimit(SQL_RESULT_LIMIT);
             listSel.add(selContains);
 
             // CODE ARTICLE = aText
-            final Where wNotSync = new Where(this.tableArticleFournisseur.getField("ID_ARTICLE"), "IS", (Object) null).or(new Where(this.tableArticleFournisseur.getField("ID_ARTICLE"), "=",
-                    this.tableArticleFournisseur.getUndefinedID()));
+            final Where wNotSync = new Where(this.tableArticleFournisseur.getField("ID_ARTICLE"), "IS", (Object) null)
+                    .or(new Where(this.tableArticleFournisseur.getField("ID_ARTICLE"), "=", this.tableArticleFournisseur.getUndefinedID()));
 
             SQLSelect selMatchingCodeF = new SQLSelect();
             // selMatchingCodeF.addSelectStar(this.tableArticleFournisseur);
@@ -389,6 +402,7 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
                     l = new ArrayList<IComboSelectionItem>(0);
                     e.printStackTrace();
                 }
+
                 // On cache la popup si le nombre de ligne change afin que sa taille soit correcte
                 if (l.size() != model.getSize() && l.size() <= ITextWithCompletionPopUp.MAXROW) {
                     hidePopup();
@@ -403,28 +417,33 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
                     hidePopup();
                 }
                 SQLRowAccessor newRow = selectedRow;
+                IComboSelectionItem newSelectedItem = null;
                 boolean found = false;
                 for (Iterator<IComboSelectionItem> iter = l.iterator(); iter.hasNext();) {
                     IComboSelectionItem element = iter.next();
-                    if (element.getLabel().toLowerCase().contains(t.toLowerCase()) && autoselectIfMatch) {
+
+                    if ((element.getRow().getString("CODE_BARRE").toLowerCase().equals(t.toLowerCase()) || element.getRow().getString("CODE").toLowerCase().equals(t.toLowerCase()))
+                            && autoselectIfMatch) {
                         newRow = element.getRow();
+                        newSelectedItem = element;
                         hidePopup();
                         found = true;
                         break;
                     }
                 }
                 if (selectAuto && found && !CompareUtils.equals(newRow, selectedRow)) {
-                    selectedRow = newRow;
+                    final IComboSelectionItem selectedItem = newSelectedItem;
                     SwingUtilities.invokeLater(new Runnable() {
                         public void run() {
-                            ITextArticleWithCompletion.this.fireSelectionRow(ITextArticleWithCompletion.this.getSelectedRow());
+                            itemSelected(selectedItem);
                         }
                     });
                 }
                 if (!found) {
                     selectedRow = null;
-                    fireSelectionRow(null);
+                    itemSelected(null);
                 }
+
             }
         };
         worker.execute();
@@ -504,7 +523,6 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
             throw new IllegalStateException("Not in Swing!");
         }
         setCompletionEnabled(false);
-
         this.text.setText(label);
         if (label != null) {
             this.text.setCaretPosition(label.length());
@@ -526,6 +544,7 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
 
     private void fireSelectionRow(SQLRowAccessor row) {
         if (!this.isDispatching) {
+
             this.isDispatching = true;
             for (Iterator<SelectionRowListener> iter = this.listeners.iterator(); iter.hasNext();) {
                 SelectionRowListener element = iter.next();
@@ -550,7 +569,6 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
     }
 
     public Object getText() {
-
         return this.text.getText();
     }
 

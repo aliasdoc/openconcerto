@@ -13,15 +13,21 @@
  
  package org.openconcerto.ui.light;
 
-import org.openconcerto.utils.io.JSONconverter;
-import org.openconcerto.utils.io.Transferable;
+import java.io.Externalizable;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 
-public class LightControler implements Transferable {
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+import net.minidev.json.JSONObject;
+
+public class LightControler implements Externalizable, Transferable {
     /**
      * 
      */
     private static final long serialVersionUID = 5894135825924339012L;
-    private final String type, src, dest;
+    private String type, src, dest;
     public static final String TYPE_ACTIVATION_ON_SELECTION = "activationOnSelection";
     public static final String TYPE_ADD_DEFAULT = "addDefault";
     public static final String TYPE_INSERT_DEFAULT = "insertDefault";
@@ -30,7 +36,15 @@ public class LightControler implements Transferable {
     public static final String TYPE_UP = "up";
     public static final String TYPE_DOWN = "down";
 
-    public LightControler(String type, String src, String dest) {
+    public LightControler() {
+        // Serialization
+    }
+
+    public LightControler(final JSONObject json) {
+        this.fromJSON(json);
+    }
+
+    public LightControler(final String type, final String src, final String dest) {
         this.type = type;
         this.src = src;
         this.dest = dest;
@@ -54,14 +68,33 @@ public class LightControler implements Transferable {
     }
 
     @Override
-    public String toJSON() {
-        final StringBuilder result = new StringBuilder("{");
-        
-        result.append("\"type\":" + JSONconverter.getJSON(this.type) + ",");
-        result.append("\"src\":" + JSONconverter.getJSON(this.src) + ",");
-        result.append("\"dest\":" + JSONconverter.getJSON(this.dest));
-        
-        result.append("}");
-        return result.toString();
+    public JSONObject toJSON() {
+        final JSONObject result = new JSONObject();
+        result.put("class", "LightControler");
+        result.put("type", this.type);
+        result.put("src", this.src);
+        result.put("dest", this.dest);
+        return result;
+    }
+
+    @Override
+    public void fromJSON(final JSONObject json) {
+        this.type = (String) JSONConverter.getParameterFromJSON(json, "type", String.class);
+        this.src = (String) JSONConverter.getParameterFromJSON(json, "src", String.class);
+        this.dest = (String) JSONConverter.getParameterFromJSON(json, "dest", String.class);
+    }
+
+    @Override
+    public void writeExternal(ObjectOutput out) throws IOException {
+        out.writeUTF(this.type);
+        out.writeUTF(this.src);
+        out.writeUTF(this.dest);
+    }
+
+    @Override
+    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+        this.type = in.readUTF();
+        this.src = in.readUTF();
+        this.dest = in.readUTF();
     }
 }

@@ -21,6 +21,15 @@
 		</field>
 	</element>
 
+	<element location="B5" type="fill">
+		<field base="Common" table="SOCIETE_COMMON" name="TYPE"/>
+		<field base="Common" table="SOCIETE_COMMON" name="CAPITAL" prefix=" au capital de " suffix="€"/>
+	</element>
+
+	<element location="B6" type="fill">
+		<field base="Common" table="SOCIETE_COMMON" name="NUM_SIRET" prefix="N° de SIREN "/>
+	</element>
+
 	<element location="B7" type="replace" replacePattern="_">
 		<field base="Common" table="SOCIETE_COMMON" name="NUM_NII" />
 	</element>

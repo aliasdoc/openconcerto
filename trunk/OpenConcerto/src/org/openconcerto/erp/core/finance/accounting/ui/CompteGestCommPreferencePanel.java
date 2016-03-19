@@ -41,7 +41,7 @@ import javax.swing.JPanel;
 public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
 
     private ISQLCompteSelector selCompteTVAIntraComm, selCompteFourn, selCompteAchat, selCompteClient, selCompteVenteProduits, selCompteVenteService, selCompteTVACol, selCompteTVADed,
-            selCompteTVAImmo, selCompteAchatIntra, selCompteFactor;
+            selCompteTVAImmo, selCompteAchatIntra, selCompteFactor, selComptePortSoumis, selComptePortNonSoumis;
     private ElementComboBox selJrnlFactor;
     private final static SQLBase base = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete();
     private static final SQLTable tablePrefCompte = base.getTable("PREFS_COMPTE");
@@ -189,6 +189,40 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
         this.selJrnlFactor.init(Configuration.getInstance().getDirectory().getElement("JOURNAL"));
         this.add(this.selJrnlFactor, c);
 
+        /**
+         * Frais de port sur vente
+         */
+
+        c.gridy++;
+        c.gridx = 0;
+        TitledSeparator sepPort = new TitledSeparator("Ports sur vente");
+        c.insets = separatorInsets;
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        this.add(sepPort, c);
+        c.insets = normalInsets;
+        c.gridwidth = 1;
+
+        // Compte TVA Collectee
+        c.gridy++;
+        c.weightx = 0;
+        this.add(new JLabel("Compte Port soumis à TVA"), c);
+        c.weightx = 1;
+        c.gridx++;
+        this.selComptePortSoumis = new ISQLCompteSelector();
+        this.selComptePortSoumis.init();
+        this.add(this.selComptePortSoumis, c);
+
+        // Compte TVA Deductible
+        c.gridy++;
+        c.weightx = 0;
+        c.gridx = 0;
+        this.add(new JLabel("Compte Port non soumis à TVA)"), c);
+        c.weightx = 1;
+        c.gridx++;
+        this.selComptePortNonSoumis = new ISQLCompteSelector();
+        this.selComptePortNonSoumis.init();
+        this.add(this.selComptePortNonSoumis, c);
+
         /*******************************************************************************************
          * TVA
          ******************************************************************************************/
@@ -268,6 +302,8 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
         this.rowPrefCompteVals.put("ID_COMPTE_PCE_TVA_VENTE", this.selCompteTVACol.getValue());
         this.rowPrefCompteVals.put("ID_COMPTE_PCE_TVA_INTRA", this.selCompteTVAIntraComm.getValue());
         this.rowPrefCompteVals.put("ID_COMPTE_PCE_TVA_IMMO", this.selCompteTVAImmo.getValue());
+        this.rowPrefCompteVals.put("ID_COMPTE_PCE_PORT_SOUMIS", this.selComptePortSoumis.getValue());
+        this.rowPrefCompteVals.put("ID_COMPTE_PCE_PORT_NON_SOUMIS", this.selComptePortNonSoumis.getValue());
         DefaultNXProps.getInstance().setProperty("HideCompteClient", String.valueOf(this.checkHideCompteClient.isSelected()));
         DefaultNXProps.getInstance().setProperty("HideCompteFacture", String.valueOf(this.checkHideCompteFacture.isSelected()));
         DefaultNXProps.getInstance().setProperty("HideAnalytique", String.valueOf(this.checkHideAnalytique.isSelected()));
@@ -322,6 +358,16 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
             value = ComptePCESQLElement.getId(compte);
             this.selCompteClient.setValue(value);
 
+            // Port
+            compte = ComptePCESQLElement.getComptePceDefault("PortVenteSoumisTVA");
+            value = ComptePCESQLElement.getId(compte);
+            this.selComptePortSoumis.setValue(value);
+
+            // Port non soumis
+            compte = ComptePCESQLElement.getComptePceDefault("PortVenteNonSoumisTVA");
+            value = ComptePCESQLElement.getId(compte);
+            this.selComptePortNonSoumis.setValue(value);
+
             // TVA Coll
             compte = ComptePCESQLElement.getComptePceDefault("TVACollectee");
             value = ComptePCESQLElement.getId(compte);
@@ -370,7 +416,8 @@ public class CompteGestCommPreferencePanel extends DefaultPreferencePanel {
 
             setComboValues(selCompteFourn, "ID_COMPTE_PCE_FOURNISSEUR", "Fournisseurs");
             setComboValues(selCompteClient, "ID_COMPTE_PCE_CLIENT", "Clients");
-
+            setComboValues(selComptePortSoumis, "ID_COMPTE_PCE_PORT_SOUMIS", "PortVenteSoumisTVA");
+            setComboValues(selComptePortNonSoumis, "ID_COMPTE_PCE_PORT_NON_SOUMIS", "PortVenteNonSoumisTVA");
             setComboValues(selCompteTVACol, "ID_COMPTE_PCE_TVA_VENTE", "TVACollectee");
             setComboValues(selCompteTVADed, "ID_COMPTE_PCE_TVA_ACHAT", "TVADeductible");
             setComboValues(selCompteTVAIntraComm, "ID_COMPTE_PCE_TVA_INTRA", "TVAIntraComm");

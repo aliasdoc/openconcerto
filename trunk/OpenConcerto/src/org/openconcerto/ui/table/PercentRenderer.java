@@ -35,6 +35,9 @@ public class PercentRenderer extends JPanel {
     }
 
     public void setValue(Number value) {
+        if (value == null) {
+            value = Integer.valueOf(0);
+        }
         v = value.intValue();
         final String text = v + " %";
         l1.setText(text);

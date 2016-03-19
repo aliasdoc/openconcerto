@@ -586,7 +586,7 @@ public final class FileUtils {
         write(s, f, null, false);
     }
 
-    public static void write(String s, File f, String charset, boolean append) throws IOException {
+    public static void write(String s, File f, Charset charset, boolean append) throws IOException {
         final FileOutputStream fileStream = new FileOutputStream(f, append);
         final OutputStreamWriter out = charset == null ? new OutputStreamWriter(fileStream) : new OutputStreamWriter(fileStream, charset);
         final BufferedWriter w = new BufferedWriter(out);

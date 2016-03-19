@@ -16,6 +16,7 @@
 import org.openconcerto.erp.core.common.ui.TotalCalculator;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.JournalSQLElement;
+import org.openconcerto.erp.generationDoc.SheetXml;
 import org.openconcerto.erp.generationEcritures.provider.AccountingRecordsProvider;
 import org.openconcerto.erp.generationEcritures.provider.AccountingRecordsProviderManager;
 import org.openconcerto.erp.model.PrixTTC;
@@ -62,7 +63,8 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
         this.idSaisieVenteFacture = idSaisieVenteFacture;
         this.useComptePCEVente = useComptePCEVente;
         this.genereReglement = genereReglement;
-        new Thread(GenerationMvtSaisieVenteFacture.this).start();
+        // Submit in sheetxml queue in order to get the good paiement in document
+        SheetXml.submitInQueue(GenerationMvtSaisieVenteFacture.this);
     }
 
     public GenerationMvtSaisieVenteFacture(int idSaisieVenteFacture, int idMvt, boolean useComptePCEVente) {
@@ -269,7 +271,7 @@ public class GenerationMvtSaisieVenteFacture extends GenerationEcritures impleme
                     long l = ((Number) saisieRow.getObject("T_AVOIR_TTC")).longValue();
                     prixTTC = new PrixTTC(((Long) saisieRow.getObject("T_TTC")).longValue() - l);
                 }
-                prixTTC = new PrixTTC(prixTTC.getLongValue() - montantAcompteTTC);
+                prixTTC = new PrixTTC(saisieRow.getLong("NET_A_PAYER"));
                 if (prixTTC.getLongValue() > 0) {
                     new GenerationReglementVenteNG(label, clientRow, prixTTC, this.date, modeRegl, saisieRow, mvtTable.getRow(idMvt));
                 }

@@ -88,6 +88,8 @@ public class ArticleTarifTable extends RowValuesTablePanel {
         this.tarif.setEditable(false);
         list.add(this.tarif);
 
+        list.add(new SQLTableElement(e.getTable().getField("QTE")));
+
         // Prix de vente HT de la métrique 1
         final SQLField field = e.getTable().getField("PRIX_METRIQUE_VT_1");
         final DeviseNumericHTConvertorCellEditor editorPVHT = new DeviseNumericHTConvertorCellEditor(field);

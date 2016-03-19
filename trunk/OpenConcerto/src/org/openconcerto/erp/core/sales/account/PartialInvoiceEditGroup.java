@@ -20,7 +20,7 @@ public class PartialInvoiceEditGroup extends Group {
 
     public PartialInvoiceEditGroup() {
         super("sales.invoice.partial");
-        final Group g = new Group("sales.invoice.partial.identifier");       
+        final Group g = new Group("sales.invoice.partial.identifier");
         g.addItem("sales.invoice.number");
         g.addItem("DATE");
         g.addItem("NOM", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
@@ -28,6 +28,8 @@ public class PartialInvoiceEditGroup extends Group {
         g.addItem("sales.invoice.partial.amount");
 
         this.add(g);
+        final Group gAdd = new Group("sales.invoice.partial.additionalElementFields");
+        this.add(gAdd);
 
         final Group gCustomer = new Group("sales.invoice.customer");
         gCustomer.addItem("sales.invoice.customer", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);

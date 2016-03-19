@@ -20,6 +20,7 @@ public class LayoutHints {
     private final boolean visible;
     private final boolean largeWidth;
     private final boolean largeHeight;
+    private boolean foldable = false;
 
     private final boolean showLabel;
     // true if the layouted element (group or label+editor) is visually separated from the others
@@ -71,6 +72,7 @@ public class LayoutHints {
         this.fillHeight = localHint.fillHeight;
         this.split = localHint.split;
         this.visible = localHint.visible;
+        this.foldable = localHint.foldable;
     }
 
     public final LayoutHintsBuilder getBuilder() {
@@ -78,6 +80,14 @@ public class LayoutHints {
                 .setVisible(this.visible);
     }
 
+    public boolean isFoldable() {
+        return this.foldable;
+    }
+    
+    public void setFoldable(final boolean foldable) {
+        this.foldable = foldable;
+    }
+    
     public boolean largeWidth() {
         return this.largeWidth;
     }

@@ -13,20 +13,50 @@
  
  package org.openconcerto.ui.light;
 
-import org.openconcerto.utils.io.JSONconverter;
-import org.openconcerto.utils.io.Transferable;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
 
 public class TableContent implements Transferable {
     private static final long serialVersionUID = 3648381615123520834L;
+    private String tableId;
     private List<Row> rows;
-    private RowSpec spec;
 
     public TableContent() {
         // Serialization
+    }
+
+    public TableContent(final String tableId) {
+        this.init(tableId, null);
+    }
+
+    public TableContent(final String tableId, final List<Row> rows) {
+        this.init(tableId, rows);
+    }
+
+    public TableContent(final JSONObject json) {
+        this.fromJSON(json);
+    }
+
+    private void init(final String tableId, final List<Row> rows) {
+        this.tableId = tableId;
+        if (rows != null) {
+            this.rows = rows;
+        } else {
+            this.rows = new ArrayList<Row>();
+        }
+    }
+
+    public String getTableId() {
+        return this.tableId;
+    }
+
+    public void setTableId(final String tableId) {
+        this.tableId = tableId;
     }
 
     public List<Row> getRows() {
@@ -37,27 +67,29 @@ public class TableContent implements Transferable {
         this.rows = rows;
     }
 
-    public RowSpec getSpec() {
-        return this.spec;
-    }
-
-    public void setSpec(RowSpec spec) {
-        this.spec = spec;
-    }
-
     @Override
     public String toString() {
-        return "TableContent of " + this.spec.getTableId() + " columns: " + new ArrayList<String>(Arrays.asList(this.spec.getIds())) + " : " + getRows().size() + " lines";
+        return "TableContent of " + this.tableId + " lines count : " + getRows().size();
     }
 
     @Override
-    public String toJSON() {
-        final StringBuilder result = new StringBuilder("{");
+    public JSONObject toJSON() {
+        final JSONObject result = new JSONObject();
+        result.put("class", "TableContent");
+        result.put("table-id", this.tableId);
+        result.put("rows", JSONConverter.getJSON(this.rows));
+        return result;
+    }
 
-        result.append("\"rows\":" + JSONconverter.getJSON(this.rows) + ",");
-        result.append("\"spec\":" + JSONconverter.getJSON(this.spec));
-
-        result.append("}");
-        return result.toString();
+    @Override
+    public void fromJSON(final JSONObject json) {
+        this.tableId = (String) JSONConverter.getParameterFromJSON(json, "table-id", String.class);
+        final JSONArray jsonRows = (JSONArray) JSONConverter.getParameterFromJSON(json, "rows", JSONArray.class);
+        if (jsonRows != null) {
+            this.rows = new ArrayList<Row>();
+            for (final Object o : jsonRows) {
+                this.rows.add(new Row((JSONObject) JSONConverter.getObjectFromJSON(o, JSONObject.class)));
+            }
+        }
     }
 }

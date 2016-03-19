@@ -39,6 +39,8 @@ public class PaiementRemainedProvider implements SpreadSheetCellValueProvider {
     }
 
     public static void register() {
+        SpreadSheetCellValueProviderManager.put("invoice.payment.remained", new PaiementRemainedProvider(Type.REMAINED));
+        SpreadSheetCellValueProviderManager.put("invoice.payment.done", new PaiementRemainedProvider(Type.DONE));
         SpreadSheetCellValueProviderManager.put("invoice.paiement.remained", new PaiementRemainedProvider(Type.REMAINED));
         SpreadSheetCellValueProviderManager.put("invoice.paiement.done", new PaiementRemainedProvider(Type.DONE));
     }

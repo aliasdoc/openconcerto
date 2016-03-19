@@ -34,12 +34,14 @@ import java.awt.event.MouseListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.Calendar;
+import java.util.Date;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JProgressBar;
@@ -187,8 +189,19 @@ public class EditionFichePayePanel extends JPanel implements MouseListener {
                     // props.setProperty("AnneeEditionPaye", textAnnee.getText());
                     props.store();
 
-                    java.sql.Date du = new java.sql.Date(dateDeb.getDate().getTime());
-                    java.sql.Date au = new java.sql.Date(dateFin.getDate().getTime());
+                    final Date dateStart = dateDeb.getDate();
+
+                    if (dateStart == null) {
+                        JOptionPane.showMessageDialog(EditionFichePayePanel.this, "Date de début manquante.");
+                        return;
+                    }
+                    java.sql.Date du = new java.sql.Date(dateStart.getTime());
+                    final Date dateEnd = dateFin.getDate();
+                    if (dateEnd == null) {
+                        JOptionPane.showMessageDialog(EditionFichePayePanel.this, "Date de fin manquante.");
+                        return;
+                    }
+                    java.sql.Date au = new java.sql.Date(dateEnd.getTime());
 
                     // model.validationFiche(textAnnee.getText(), selMois.getSelectedId(), du, au);
                     model.validationFiche(textAnnee.getValue().toString(), selMois.getSelectedId(), du, au);
