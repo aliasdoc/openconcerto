@@ -22,8 +22,8 @@ import org.openconcerto.sql.sqlobject.JUniqueTextField;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.ListMap;
 
 public class ProjectSQLElement extends ComptaSQLConfElement {
 
@@ -52,8 +52,8 @@ public class ProjectSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override

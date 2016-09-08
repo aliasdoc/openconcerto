@@ -8,6 +8,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,12 @@ public class ProjectHistory {
         return this.listPanel;
     }
 
+    private static Map<String, List<String>> moduleTab = new HashMap<String, List<String>>();
+
+    public static void addTab(String tabName, List<String> table) {
+        moduleTab.put(tabName, table);
+    }
+
     public ProjectHistory() {
 
         final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
@@ -45,10 +52,13 @@ public class ProjectHistory {
         mapList.put("Bons de commande", Arrays.asList("COMMANDE_CLIENT"));
         mapList.put("Factures", Arrays.asList("SAISIE_VENTE_FACTURE"));
         mapList.put("Avoirs", Arrays.asList("AVOIR_CLIENT"));
+        mapList.put("Achats", Arrays.asList("SAISIE_ACHAT"));
 
         if (Configuration.getInstance().getRoot().findTable("AFFAIRE_TEMPS") != null) {
             mapList.put("Temps", Arrays.asList("AFFAIRE_TEMPS"));
         }
+
+        mapList.putAll(moduleTab);
 
         final ComboSQLRequest request = new org.openconcerto.sql.request.ComboSQLRequest(b.getTable("AFFAIRE"), Arrays.asList("NUMERO", "ID_CLIENT"));
         request.setUndefLabel("Toutes les affaires");
