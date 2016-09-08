@@ -15,7 +15,7 @@ import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.group.Group;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 public class ProjectTimeTrackingSQLElement extends ComptaSQLConfElement {
     public static final String ELEMENT_CODE = "affaires.temps";
@@ -48,8 +48,8 @@ public class ProjectTimeTrackingSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override

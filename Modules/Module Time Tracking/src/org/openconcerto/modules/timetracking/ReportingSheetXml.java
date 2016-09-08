@@ -23,8 +23,6 @@ public class ReportingSheetXml extends AbstractListeSheetXml {
 
     private final static SQLTable tableAffTemps = base.getTable("AFFAIRE_TEMPS");
 
-    private final static DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM);
-
     protected int id;
 
     private final SQLRow rowMonth;
@@ -86,7 +84,7 @@ public class ReportingSheetXml extends AbstractListeSheetXml {
     }
 
     protected void createListeValues() {
-
+        final DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM);
         final SQLRowValues vals = new SQLRowValues(tableAffTemps);
 
         vals.putRowValues("ID_USER_COMMON").put("NOM", null);
