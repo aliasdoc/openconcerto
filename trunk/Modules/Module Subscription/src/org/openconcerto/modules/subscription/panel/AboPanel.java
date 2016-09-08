@@ -16,8 +16,6 @@ import java.util.Map;
 import javax.swing.AbstractAction;
 import javax.swing.JPanel;
 
-import org.openconcerto.erp.core.sales.quote.report.DevisXmlSheet;
-import org.openconcerto.erp.panel.ListeFastPrintFrame;
 import org.openconcerto.modules.subscription.SubscriptionChecker;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
@@ -87,8 +85,7 @@ public class AboPanel extends JPanel {
                     validItem(sqlRowAccessor);
                 }
 
-                ListeFastPrintFrame frame = new ListeFastPrintFrame(list, DevisXmlSheet.class);
-                frame.setVisible(true);
+
             }
         }, true, "subscription.validate");
         this.actionValid.setPredicate(IListeEvent.getNonEmptySelectionPredicate());
