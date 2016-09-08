@@ -4,6 +4,8 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -37,7 +39,11 @@ public class OvhPreferencePanel extends DefaultLocalPreferencePanel {
         c.fill = GridBagConstraints.NONE;
         c.anchor = GridBagConstraints.WEST;
         final JImage img = new JImage(OvhPreferencePanel.class.getResource("ovh.png"));
-        img.setHyperLink("http://www.ovh.com/fr/telephonie/");
+        try {
+            img.setHyperLink(new URI("http://www.ovh.com/fr/telephonie/"));
+        } catch (URISyntaxException e2) {
+            e2.printStackTrace();
+        }
         this.add(img, c);
 
         // Account
