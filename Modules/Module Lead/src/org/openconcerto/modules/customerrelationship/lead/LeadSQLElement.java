@@ -8,7 +8,7 @@ import org.openconcerto.erp.modules.ModuleElement;
 import org.openconcerto.sql.element.GlobalMapper;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.ui.group.Group;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 public class LeadSQLElement extends ModuleElement {
     public static final String ELEMENT_CODE = "customerrelationship.lead";
@@ -48,8 +48,8 @@ public class LeadSQLElement extends ModuleElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override
