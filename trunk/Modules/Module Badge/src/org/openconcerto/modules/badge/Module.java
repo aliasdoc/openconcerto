@@ -53,8 +53,8 @@ import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.PanelFrame;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.FileUtils;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.PrefType;
 import org.openconcerto.utils.cc.IClosure;
 
@@ -185,8 +185,8 @@ public final class Module extends AbstractModule {
             }
 
             @Override
-            public CollectionMap<String, String> getShowAs() {
-                return CollectionMap.singleton(null, getComboFields());
+            public ListMap<String, String> getShowAs() {
+                return ListMap.singleton(null, getComboFields());
             }
 
             @Override
@@ -303,7 +303,7 @@ public final class Module extends AbstractModule {
     }
 
     public static void main(String[] args) throws IOException {
-        final File propsFile = new File("gestionModule.properties");
+        final File propsFile = new File("module.properties");
 
         final ModuleFactory factory = new RuntimeModuleFactory(propsFile);
 

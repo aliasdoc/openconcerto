@@ -18,7 +18,7 @@ import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JTime;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 public class PlageHoraireSQLElement extends ComptaSQLConfElement {
 
@@ -41,8 +41,8 @@ public class PlageHoraireSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override
