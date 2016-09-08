@@ -18,6 +18,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElementDirectory;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.view.list.IListeAction;
 import org.openconcerto.utils.ExceptionHandler;
@@ -37,13 +38,13 @@ public class CloudNASListAction implements IListeAction {
     @Override
     public PopupBuilder getPopupContent(PopupEvent evt) {
         final PopupBuilder actions = new PopupBuilder(this.getClass().getPackage().getName());
-        final List<SQLRowAccessor> rows = evt.getSelectedRows();
+        final List<SQLRowValues> rows = evt.getSelectedRows();
         final JMenuItem createCallAction = createAction("Envoyer sur Cloud NAS", rows);
         actions.addItem(createCallAction);
         return actions;
     }
 
-    private JMenuItem createAction(final String label, final List<SQLRowAccessor> rows) {
+    private JMenuItem createAction(final String label, final List<SQLRowValues> rows) {
         return new JMenuItem(new AbstractAction(label) {
             @Override
             public void actionPerformed(ActionEvent e) {

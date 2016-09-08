@@ -75,7 +75,7 @@ public final class Module extends AbstractModule {
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 
         System.setProperty(ConnexionPanel.QUICK_LOGIN, "true");
-        final File propsFile = new File("gestionModule.properties");
+        final File propsFile = new File("module.properties");
 
         final ModuleFactory factory = new RuntimeModuleFactory(propsFile);
 
