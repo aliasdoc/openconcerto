@@ -13,7 +13,6 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
 import org.openconcerto.modules.extensionbuilder.Extension;
-import org.openconcerto.modules.extensionbuilder.menu.mainmenu.MenuDescriptor;
 import org.openconcerto.modules.extensionbuilder.translation.LocaleSelector;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.group.Item;
