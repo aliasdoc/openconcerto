@@ -21,7 +21,7 @@ import org.openconcerto.sql.element.SQLElementDirectory;
 import org.openconcerto.sql.element.UISQLComponent;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.utils.SQLCreateTable;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.PrefType;
 
 public final class ModuleCard extends AbstractModule {
@@ -71,8 +71,8 @@ public final class ModuleCard extends AbstractModule {
             }
 
             @Override
-            public CollectionMap<String, String> getShowAs() {
-                return CollectionMap.singleton(null, getComboFields());
+            public ListMap<String, String> getShowAs() {
+                return ListMap.singleton(null, getComboFields());
             }
 
             @Override
