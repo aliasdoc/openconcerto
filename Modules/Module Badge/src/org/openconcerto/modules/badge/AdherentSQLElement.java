@@ -24,7 +24,7 @@ import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 public class AdherentSQLElement extends ComptaSQLConfElement {
     public AdherentSQLElement() {
@@ -61,8 +61,8 @@ public class AdherentSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override

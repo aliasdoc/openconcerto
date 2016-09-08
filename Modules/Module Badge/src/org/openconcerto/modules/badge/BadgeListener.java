@@ -20,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 
 import javax.swing.ImageIcon;
@@ -43,16 +44,25 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.preferences.SQLPreferences;
 import org.openconcerto.sql.preferences.UserProps;
 import org.openconcerto.sql.sqlobject.IComboSelectionItem;
+import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.i18n.TranslationManager;
 
 public class BadgeListener implements Runnable {
     private static final int UDP_PORT = 1470;
-    private String ip;
+    private String doorIp;
     private int relai;
 
     protected TrayIcon trayIcon;
 
     public BadgeListener() {
+
+    }
+
+    public void init(String id) {
+
+        TranslationManager.getInstance().addTranslationStreamFromClass(BadgeListener.class);
+        TranslationManager.getInstance().setLocale(Locale.FRANCE);
         final ComptaPropsConfiguration conf = ComptaPropsConfiguration.create(true);
         if (conf == null) {
             ServerFinderPanel.main(new String[0]);
@@ -60,6 +70,7 @@ public class BadgeListener implements Runnable {
         }
 
         Configuration.setInstance(conf);
+        UserManager.getInstance().setCurrentUser(2);
 
         try {
             conf.getBase();
@@ -80,6 +91,14 @@ public class BadgeListener implements Runnable {
         }
 
         int selectedSociete = UserProps.getInstance().getLastSocieteID();
+        if (id != null) {
+            try {
+                selectedSociete = Integer.valueOf(id);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
         if (selectedSociete < SQLRow.MIN_VALID_ID) {
             final SQLElement elem = conf.getDirectory().getElement(conf.getRoot().getTable("SOCIETE_COMMON"));
             final List<IComboSelectionItem> comboItems = elem.getComboRequest().getComboItems();
@@ -88,8 +107,8 @@ public class BadgeListener implements Runnable {
             else
                 throw new IllegalStateException("No " + elem + " found");
         }
+        System.err.println("BadgeListener.init() societe " + selectedSociete);
         conf.setUpSocieteDataBaseConnexion(selectedSociete);
-
     }
 
     private PopupMenu createTrayMenu() {
@@ -102,13 +121,7 @@ public class BadgeListener implements Runnable {
 
         ActionListener executeListener = new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                Relai r = new Relai(ip, relai);
-                try {
-                    r.pulse(2);
-                    trayIcon.displayMessage("Ouverture", "Ouverture de la porte OK", TrayIcon.MessageType.INFO);
-                } catch (Throwable ex) {
-                    trayIcon.displayMessage("Erreur", ex.getMessage(), TrayIcon.MessageType.ERROR);
-                }
+                openDoor(4);
             }
         };
 
@@ -155,17 +168,20 @@ public class BadgeListener implements Runnable {
             @Override
             public void run() {
                 if (!SystemTray.isSupported()) {
-                    JOptionPane.showMessageDialog(new JFrame(), "System tray not supported on this platform");
-                    System.exit(1);
-                }
-                try {
-                    final SystemTray sysTray = SystemTray.getSystemTray();
-                    trayIcon = createTrayIcon();
-                    sysTray.add(trayIcon);
-                    trayIcon.displayMessage("Service de badge", "Ecoute sur port " + UDP_PORT, TrayIcon.MessageType.NONE);
-                } catch (AWTException e) {
-                    System.out.println("Unable to add icon to the system tray");
-                    System.exit(1);
+                    try {
+                        JOptionPane.showMessageDialog(new JFrame(), "System tray not supported on this platform");
+                    } catch (Exception e) {
+                        System.out.println("System tray not supported on this platform");
+                    }
+                } else {
+                    try {
+                        final SystemTray sysTray = SystemTray.getSystemTray();
+                        trayIcon = createTrayIcon();
+                        sysTray.add(trayIcon);
+                        displayMessage("Service de badge", "Ecoute sur port " + UDP_PORT);
+                    } catch (AWTException e) {
+                        System.out.println("Unable to add icon to the system tray");
+                    }
                 }
 
             }
@@ -180,7 +196,7 @@ public class BadgeListener implements Runnable {
         try {
             final FileInputStream inStream = new FileInputStream(file);
             props.load(inStream);
-            this.ip = props.getProperty("ip");
+            this.doorIp = props.getProperty("ip").trim();
             this.relai = Integer.parseInt(props.getProperty("relai", "1"));
             inStream.close();
         } catch (FileNotFoundException e) {
@@ -188,7 +204,9 @@ public class BadgeListener implements Runnable {
         } catch (IOException e) {
             JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
         }
+        System.err.println("BadgeListener.readConfiguration() door ip : " + doorIp + ", index :" + relai);
 
+        init(props.getProperty("idSociete"));
     }
 
     @Override
@@ -204,21 +222,11 @@ public class BadgeListener implements Runnable {
                     final DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                     serverSocket.receive(receivePacket);
                     final String sentence = new String(receivePacket.getData()).trim();
-                    System.out.println(sentence);
-                    if (isBadgeAllowed(sentence)) {
-                        final Relai r = new Relai(ip, relai);
-                        try {
-                            r.pulse(2);
-                        } catch (Throwable ex) {
-                            trayIcon.displayMessage("Erreur", ex.getMessage(), TrayIcon.MessageType.ERROR);
-                        }
-                    } else {
-                        trayIcon.displayMessage("Carte refusée", "Carte " + sentence + " non acceptée", TrayIcon.MessageType.INFO);
-                    }
+                    cardIdReceived(sentence);
                 }
             } catch (Throwable e) {
                 e.printStackTrace();
-                trayIcon.displayMessage("Erreur", (e == null) ? "" : e.getMessage(), TrayIcon.MessageType.ERROR);
+                displayError("Erreur", (e == null) ? "" : e.getMessage());
             } finally {
                 if (serverSocket != null) {
                     serverSocket.close();
@@ -231,6 +239,38 @@ public class BadgeListener implements Runnable {
                 System.err.println(e.getMessage());
             }
         }
+    }
+
+    public void cardIdReceived(final String sentence) {
+        System.err.println("BadgeListener.cardIdReceived() " + sentence);
+        if (isBadgeAllowed(sentence)) {
+            boolean b = openDoor(4);
+            if (b) {
+                displayMessage("Ouverture", "Ouverture de la porte OK");
+            } else {
+                displayError("Erreur", "Impossible d'ouvrir la porte");
+            }
+
+        } else {
+            displayMessage("Carte refusée", "Carte " + sentence + " non acceptée");
+        }
+    }
+
+    public void displayMessage(String title, String txt) {
+        if (trayIcon != null) {
+            trayIcon.displayMessage(title, txt, TrayIcon.MessageType.INFO);
+        } else {
+            System.out.println("[INFO]  " + title + " : " + txt);
+        }
+    }
+
+    public void displayError(String title, String txt) {
+        if (trayIcon != null) {
+            trayIcon.displayMessage(title, txt, TrayIcon.MessageType.ERROR);
+        } else {
+            System.out.println("[ERROR] " + title + " : " + txt);
+        }
+
     }
 
     public boolean isBadgeAllowed(String cardNumber) {
@@ -355,4 +395,17 @@ public class BadgeListener implements Runnable {
         return allow;
     }
 
+    public boolean openDoor(int seconds) {
+        final Relai r = new Relai(doorIp, relai);
+        try {
+            r.pulse(seconds);
+            return true;
+        } catch (Throwable ex) {
+            return false;
+        }
+    }
+
+    public String getDoorIp() {
+        return doorIp;
+    }
 }
