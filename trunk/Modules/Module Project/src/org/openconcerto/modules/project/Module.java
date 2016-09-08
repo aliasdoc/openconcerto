@@ -57,6 +57,7 @@ import org.openconcerto.sql.model.SQLTableEvent;
 import org.openconcerto.sql.model.SQLTableEvent.Mode;
 import org.openconcerto.sql.model.SQLTableModifiedListener;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.utils.SQLCreateTable;
 import org.openconcerto.sql.view.EditFrame;
@@ -289,6 +290,93 @@ public final class Module extends AbstractModule {
 
         NumerotationAutoSQLElement.addClass(ProjectSQLElement.class, PROJECT_TABLENAME);
 
+        for (String tableName : this.listTableAffaire) {
+            if (!tableName.equalsIgnoreCase("DEVIS")) {
+                final SQLElement elt = dir.getElement(tableName);
+                RowAction action = new RowAction(new AbstractAction("Historique affaire") {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        ProjectHistory histo = new ProjectHistory();
+                        histo.getHistoriquePanel().selectIDinJList(IListe.get(e).getSelectedRow().getForeignID("ID_AFFAIRE"));
+                        histo.getFrame().setVisible(true);
+                    }
+                }, false) {
+                    @Override
+                    public boolean enabledFor(IListeEvent evt) {
+                        if (evt.getSelectedRows().size() == 1) {
+                            SQLRowAccessor r = evt.getSelectedRow();
+                            return !r.isForeignEmpty("ID_AFFAIRE");
+                        }
+                        return false;
+                    }
+                };
+
+                elt.getRowActions().add(action);
+                elt.addListColumn(new BaseSQLTableModelColumn("Affaire", String.class) {
+
+                    @Override
+                    protected Object show_(SQLRowAccessor r) {
+                        if (!r.isForeignEmpty("ID_AFFAIRE") && r.getForeign("ID_AFFAIRE") != null) {
+                            return r.getForeign("ID_AFFAIRE").getString("NUMERO");
+                        } else {
+                            return "";
+                        }
+                    }
+
+                    @Override
+                    public Set<FieldPath> getPaths() {
+                        SQLTable table = elt.getTable();
+                        Path p = new Path(table).add(table.getField("ID_AFFAIRE"));
+                        return CollectionUtils.createSet(new FieldPath(p, "NUMERO"));
+                    }
+                });
+            }
+        }
+
+        final SQLElement elt = dir.getElement("DEVIS");
+        RowAction action = new RowAction(new AbstractAction("Historique affaire") {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                ProjectHistory histo = new ProjectHistory();
+                SQLRowAccessor selectedRow = IListe.get(e).getSelectedRow();
+                Collection<? extends SQLRowAccessor> l = selectedRow.getReferentRows(selectedRow.getTable().getTable("AFFAIRE"));
+                histo.getHistoriquePanel().selectIDinJList(l.iterator().next().getID());
+                histo.getFrame().setVisible(true);
+            }
+        }, false) {
+            @Override
+            public boolean enabledFor(IListeEvent evt) {
+                if (evt.getSelectedRows().size() == 1) {
+                    SQLRowAccessor r = evt.getSelectedRow();
+                    Collection<? extends SQLRowAccessor> l = r.getReferentRows(r.getTable().getTable("AFFAIRE"));
+                    return l.size() > 0;
+                }
+                return false;
+            }
+        };
+
+        elt.getRowActions().add(action);
+
+        elt.addListColumn(new BaseSQLTableModelColumn("Affaire", String.class) {
+
+            @Override
+            protected Object show_(SQLRowAccessor r) {
+                Collection<? extends SQLRowAccessor> rows = r.getReferentRows(elt.getTable().getTable("AFFAIRE"));
+                if (rows.size() == 1) {
+                    return rows.iterator().next().getString("NUMERO");
+                } else {
+                    return "";
+                }
+            }
+
+            @Override
+            public Set<FieldPath> getPaths() {
+                SQLTable table = elt.getTable();
+                Path p = new Path(table).add(table.getTable("AFFAIRE"), Direction.REFERENT);
+                return CollectionUtils.createSet(new FieldPath(p, "NUMERO"));
+            }
+        });
+
         new QuoteToOrderSQLInjector();
         new QuoteToInvoiceSQLInjector();
         new OrderToInvoiceSQLInjector();
@@ -401,7 +489,6 @@ public final class Module extends AbstractModule {
                 try {
                     rowVals.update();
                 } catch (SQLException e1) {
-                    // TODO Auto-generated catch block
                     e1.printStackTrace();
                 }
                 selectedRow.getTable().fireTableModified(selectedRow.getID());
