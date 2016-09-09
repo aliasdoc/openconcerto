@@ -72,7 +72,7 @@ public class EditFrame extends JFrame implements IListener, EditPanelListener, D
      * @param e the element to display.
      */
     public EditFrame(SQLElement e) {
-        this(e, EditPanel.CREATION);
+        this(e, e.isPrivate() ? EditPanel.READONLY : EditPanel.CREATION);
     }
 
     public EditFrame(SQLElement e, EditMode mode) {

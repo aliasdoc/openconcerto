@@ -68,4 +68,9 @@ public class TextAreaTicketPrinter extends JTextArea implements TicketPrinter {
     public void addToBuffer(TicketLine line) {
         addToBuffer(line.getText(), TicketPrinter.NORMAL);
     }
+
+    @Override
+    public void clearBuffer() {
+        this.clear();
+    }
 }

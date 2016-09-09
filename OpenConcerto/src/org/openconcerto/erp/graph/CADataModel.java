@@ -19,117 +19,42 @@ import org.openconcerto.sql.element.SQLElementDirectory;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
-import org.openconcerto.utils.RTInterruptedException;
 
-import java.util.Calendar;
 import java.util.Date;
 
-import org.jopenchart.DataModel1D;
-import org.jopenchart.barchart.VerticalBarChart;
+public class CADataModel extends MonthDataModel {
 
-public class CADataModel extends DataModel1D {
-
-    private Thread thread;
-    private int year;
-    private int total;
-
-    public CADataModel(final VerticalBarChart chart, final int year, boolean cumul) {
-
-        loadYear(year, cumul);
+    public CADataModel(int year, boolean cumul) {
+        super(year, cumul);
     }
 
     @Override
-    public int getSize() {
-        return 12;
-    }
-
-    public synchronized void loadYear(Object value, final boolean cumul) {
-        if (!(value instanceof Number)) {
-            return;
+    public long computeValue(Date d1, Date d2) {
+        final SQLElementDirectory directory = Configuration.getInstance().getDirectory();
+        final SQLTable tableEcr = directory.getElement("ECRITURE").getTable();
+        final SQLTable tableCpt = directory.getElement("COMPTE_PCE").getTable();
+        final SQLSelect sel = new SQLSelect();
+        sel.addSelect(tableEcr.getField("DEBIT"), "SUM");
+        sel.addSelect(tableEcr.getField("CREDIT"), "SUM");
+        final Where w = new Where(tableEcr.getField("DATE"), d1, d2);
+        final Where w2 = new Where(tableEcr.getField("ID_COMPTE_PCE"), "=", tableCpt.getKey());
+        final Where w3 = new Where(tableCpt.getField("NUMERO"), "LIKE", "70%");
+        final Where w4 = new Where(tableEcr.getField("NOM"), "LIKE", "Fermeture%");
+        sel.setWhere(w.and(w2).and(w3).and(w4));
+        final SommeCompte sommeCompte = new SommeCompte();
+        float vCA = 0;
+        final Object[] o = tableEcr.getBase().getDataSource().executeA1(sel.asString());
+        if (o != null && o[0] != null && o[1] != null && (Long.valueOf(o[0].toString()) != 0 || Long.valueOf(o[1].toString()) != 0)) {
+            final long deb = Long.valueOf(o[0].toString());
+            final long cred = Long.valueOf(o[1].toString());
+            final long tot = deb - cred;
+            vCA = sommeCompte.soldeCompteDebiteur(700, 708, true, d1, d2) - sommeCompte.soldeCompteDebiteur(709, 709, true, d1, d2);
+            vCA = tot - vCA;
+        } else {
+            vCA = sommeCompte.soldeCompteCrediteur(700, 708, true, d1, d2) - sommeCompte.soldeCompteCrediteur(709, 709, true, d1, d2);
         }
-        if (thread != null) {
-            thread.interrupt();
-        }
-        year = ((Number) value).intValue();
 
-        thread = new Thread() {
-
-            @Override
-            public void run() {
-                setState(LOADING);
-                // Clear
-                CADataModel.this.clear();
-                fireDataModelChanged();
-                SommeCompte sommeCompte = new SommeCompte();
-                total = 0;
-                try {
-                    for (int i = 0; i < 12; i++) {
-                        if (isInterrupted()) {
-                            break;
-                        }
-                        Calendar c = Calendar.getInstance();
-                        c.set(year, i, 1);
-                        Date d1 = new Date(c.getTimeInMillis());
-                        c.set(Calendar.DATE, c.getActualMaximum(Calendar.DATE));
-                        Date d2 = new Date(c.getTimeInMillis());
-                        Thread.yield();
-                        float vCA = 0;
-
-                        final SQLElementDirectory directory = Configuration.getInstance().getDirectory();
-                        SQLTable tableEcr = directory.getElement("ECRITURE").getTable();
-                        SQLTable tableCpt = directory.getElement("COMPTE_PCE").getTable();
-                        SQLSelect sel = new SQLSelect();
-                        sel.addSelect(tableEcr.getField("DEBIT"), "SUM");
-                        sel.addSelect(tableEcr.getField("CREDIT"), "SUM");
-                        Where w = new Where(tableEcr.getField("DATE"), d1, d2);
-                        Where w2 = new Where(tableEcr.getField("ID_COMPTE_PCE"), "=", tableCpt.getKey());
-                        Where w3 = new Where(tableCpt.getField("NUMERO"), "LIKE", "70%");
-                        Where w4 = new Where(tableEcr.getField("NOM"), "LIKE", "Fermeture%");
-                        sel.setWhere(w.and(w2).and(w3).and(w4));
-
-                        Object[] o = tableEcr.getBase().getDataSource().executeA1(sel.asString());
-                        if (o != null && o[0] != null && o[1] != null && (Long.valueOf(o[0].toString()) != 0 || Long.valueOf(o[1].toString()) != 0)) {
-                            long deb = Long.valueOf(o[0].toString());
-                            long cred = Long.valueOf(o[1].toString());
-                            long tot = deb - cred;
-                            vCA = sommeCompte.soldeCompteDebiteur(700, 708, true, d1, d2) - sommeCompte.soldeCompteDebiteur(709, 709, true, d1, d2);
-                            vCA = tot - vCA;
-                        } else {
-                            vCA = sommeCompte.soldeCompteCrediteur(700, 708, true, d1, d2) - sommeCompte.soldeCompteCrediteur(709, 709, true, d1, d2);
-                        }
-
-                        final int value = Math.round(vCA / 100);
-                        total += value;
-                        if (((int) value) != 0) {
-                            CADataModel.this.setValueAt(i, cumul ? total : value);
-                            fireDataModelChanged();
-                            Thread.sleep(20);
-                        }
-
-                    }
-                    if (!isInterrupted()) {
-                        setState(LOADED);
-                        fireDataModelChanged();
-                    }
-                } catch (InterruptedException e) {
-                    // Thread stopped because of year changed
-                } catch (RTInterruptedException e) {
-                    // Thread stopped because of year changed
-                }
-
-            }
-        };
-
-        thread.setPriority(Thread.MIN_PRIORITY);
-        thread.start();
-
-    }
-
-    public int getYear() {
-        return year;
-    }
-
-    public int getTotal() {
-        return total;
+        final int value = Math.round(vCA / 100);
+        return value;
     }
 }

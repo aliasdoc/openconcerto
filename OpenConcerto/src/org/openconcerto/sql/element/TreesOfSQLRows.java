@@ -14,32 +14,41 @@
  package org.openconcerto.sql.element;
 
 import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.Log;
 import org.openconcerto.sql.TM;
 import org.openconcerto.sql.element.SQLElement.ReferenceAction;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
+import org.openconcerto.sql.model.FieldRef;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowMode;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValues.CreateMode;
 import org.openconcerto.sql.model.SQLRowValuesCluster;
 import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLSelect.LockStrength;
 import org.openconcerto.sql.model.SQLTable;
-import org.openconcerto.sql.model.SQLTable.VirtualFields;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Link;
+import org.openconcerto.sql.model.graph.Link.Direction;
+import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.request.SQLFieldTranslator;
+import org.openconcerto.utils.CollectionMap2.Mode;
+import org.openconcerto.utils.CollectionMap2Itf.ListMapItf;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.ListMap;
-import org.openconcerto.utils.SetMap;
 import org.openconcerto.utils.Tuple3;
+import org.openconcerto.utils.cc.CustomEquals;
+import org.openconcerto.utils.cc.CustomEquals.ProxyItf;
+import org.openconcerto.utils.cc.HashingStrategy;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -60,23 +69,45 @@ public final class TreesOfSQLRows {
 
     public static final TreesOfSQLRows createFromIDs(final SQLElement elem, final Collection<? extends Number> ids) {
         final List<SQLRow> rows = new ArrayList<SQLRow>(ids.size());
-        for (final Number id : ids)
-            rows.add(elem.getTable().getRow(id.intValue()));
+        for (final Number id : ids) {
+            // don't access the DB here, expand() will do it once for all rows
+            rows.add(new SQLRow(elem.getTable(), id.intValue()));
+        }
         return new TreesOfSQLRows(elem, rows);
     }
 
-    private static String createRestrictDesc(SQLElement refElem, SQLRowAccessor refVals, Link fk) {
+    private static String createRestrictDesc(SQLElement refElem, SQLRowAccessor refVals, SQLElementLink elemLink) {
         final String rowDesc = refElem != null ? refElem.getDescription(refVals.asRow()) : refVals.asRow().toString();
-        final String fieldLabel = Configuration.getTranslator(fk.getSource()).getLabelFor(fk.getLabel());
-        final String fieldS = fieldLabel != null ? fieldLabel : fk.getLabel().getName();
+        final String fieldS = getLabel(elemLink, null);
         // la tâche du 26/05 ne peut perdre son champ UTILISATEUR
         return TM.getTM().trM("sqlElement.linkCantBeCut", CollectionUtils.createMap("row", refVals.asRow(), "rowDesc", rowDesc, "fieldLabel", fieldS));
     }
 
+    private static String getLabel(SQLElementLink elemLink, Path p) {
+        final SQLFieldTranslator translator = Configuration.getInstance().getTranslator();
+        final SQLTable table;
+        final String itemName;
+        if (elemLink != null) {
+            assert p == null || elemLink.getPath().equals(p);
+            table = elemLink.getPath().getFirst();
+            itemName = elemLink.getName();
+        } else {
+            assert p.length() == 1 : "Joins should have an Element : " + p;
+            assert p.getDirection() == Direction.FOREIGN;
+            final SQLField singleField = p.getStep(0).getSingleField();
+            table = singleField.getTable();
+            itemName = singleField.getName();
+        }
+        final String fieldLabel = translator.getDescFor(table, itemName).getLabel();
+        return fieldLabel != null ? fieldLabel : itemName;
+    }
+
     private final SQLElement elem;
-    private final Map<SQLRow, SQLRowValues> trees;
-    private final Set<SQLRow> mainRows;
-    private SetMap<SQLField, SQLRow> externReferences;
+    private final Set<SQLRow> originalRoots;
+    private Map<SQLRow, SQLRowValues> trees;
+    private Set<SQLRow> mainRows;
+    private Map<SQLRow, SQLRowValues> allRows;
+    private LinksToCut externReferences;
 
     public TreesOfSQLRows(final SQLElement elem, SQLRow row) {
         this(elem, Collections.singleton(row));
@@ -85,13 +116,13 @@ public final class TreesOfSQLRows {
     public TreesOfSQLRows(final SQLElement elem, final Collection<? extends SQLRowAccessor> rows) {
         super();
         this.elem = elem;
-        this.trees = new HashMap<SQLRow, SQLRowValues>(rows.size());
-        // check each row and remove duplicates (i.e. this.trees might be smaller than rows)
+        this.originalRoots = new HashSet<SQLRow>();
+        this.trees = null;
+        // check each row and remove duplicates (i.e. this.originalRoots might be smaller than rows)
         for (final SQLRowAccessor r : rows) {
             this.elem.check(r);
-            this.trees.put(r.asRow(), null);
+            this.originalRoots.add(r.asRow());
         }
-        this.mainRows = new HashSet<SQLRow>();
         this.externReferences = null;
     }
 
@@ -99,23 +130,87 @@ public final class TreesOfSQLRows {
         return this.elem;
     }
 
+    /**
+     * The unique rows that were passed to the constructor. NOTE : the rows that do not exist or are
+     * archived won't be in {@link #getTrees()}.
+     * 
+     * @return a set of rows.
+     */
     public final Set<SQLRow> getRows() {
-        return this.trees.keySet();
+        return this.originalRoots;
     }
 
-    public final Map<SQLRow, SQLRowValues> getTrees() throws SQLException {
-        if (this.externReferences == null) {
-            final Tuple3<Rows, Rows, SetMap<SQLField, SQLRow>> expand = this.expand();
-            assert expand.get0().vals.keySet().equals(this.trees.keySet());
-            // replace nulls by actual SQLRowValues
-            this.trees.putAll(expand.get0().vals);
-            this.mainRows.addAll(expand.get1().vals.keySet());
-            this.externReferences = expand.get2();
-        }
-        return Collections.unmodifiableMap(this.trees);
+    public final Set<SQLRow> getMainRows() {
+        return this.mainRows;
     }
 
-    public final Set<SQLRowValuesCluster> getClusters() throws SQLException {
+    public final Set<SQLRow> getAllRows() {
+        return this.allRows.keySet();
+    }
+
+    /**
+     * Whether the passed trees are contained in this. NOTE : only mains rows are considered, not
+     * private ones.
+     * 
+     * @param o other trees.
+     * @return <code>true</code> if all {@link #getMainRows() main rows} of <code>o</code> are in
+     *         this and all {@link #getExternReferences() links to cut} as well.
+     */
+    public final boolean containsAll(final TreesOfSQLRows o) {
+        if (this == o)
+            return true;
+        return this.getMainRows().containsAll(o.getMainRows()) && this.getExternReferences().containsAll(o.getExternReferences());
+    }
+
+    public final boolean isFetched() {
+        return this.externReferences != null;
+    }
+
+    private final void checkFetched() {
+        if (!this.isFetched())
+            throw new IllegalStateException("Not yet fetched");
+    }
+
+    /**
+     * Fetch the rows.
+     * 
+     * @param ls how to lock rows.
+     * @return the rows to archive indexed by their roots (a subset of {@link #getRows()}).
+     * @throws SQLException if an error occurs.
+     */
+    public final Map<SQLRow, SQLRowValues> fetch(final LockStrength ls) throws SQLException {
+        if (this.isFetched())
+            throw new IllegalStateException("Already fetched");
+
+        final Tuple3<Map<SQLRow, SQLRowValues>, Rows, LinksToCut> expand = this.expand(ls);
+        this.trees = Collections.unmodifiableMap(expand.get0());
+        this.mainRows = Collections.unmodifiableSet(expand.get1().mainRows);
+        this.allRows = Collections.unmodifiableMap(expand.get1().vals);
+        this.externReferences = expand.get2();
+
+        if (hasFetchedLess())
+            Log.get().fine("Some rows are missing : " + this.trees.keySet() + "\n" + this.getRows());
+        return this.getTrees();
+    }
+
+    public final boolean hasFetchedLess() {
+        final Set<SQLRow> rowsFetched = this.trees.keySet();
+        assert this.getRows().containsAll(rowsFetched);
+        // archived or deleted (or never existed)
+        return !rowsFetched.equals(this.getRows());
+    }
+
+    /**
+     * The trees of rows to archive.
+     * 
+     * @return the rows to archive indexed by their roots (a subset of {@link #getRows()}).
+     */
+    public final Map<SQLRow, SQLRowValues> getTrees() {
+        checkFetched();
+        return this.trees;
+    }
+
+    public final Set<SQLRowValuesCluster> getClusters() {
         final Set<SQLRowValuesCluster> res = Collections.newSetFromMap(new IdentityHashMap<SQLRowValuesCluster, Boolean>());
         for (final SQLRowValues r : this.getTrees().values()) {
             // trees can be linked together
@@ -124,55 +219,42 @@ public final class TreesOfSQLRows {
         return res;
     }
 
-    private final Tuple3<Rows, Rows, SetMap<SQLField, SQLRow>> expand() throws SQLException {
+    // the root rows linked to their privates and descendant, all visited main rows, the rows
+    // pointing to visited rows
+    private final Tuple3<Map<SQLRow, SQLRowValues>, Rows, LinksToCut> expand(final LockStrength ls) throws SQLException {
+        // root rows (linked to their privates if any) indexed by ID
         final Map<Integer, SQLRowValues> valsMap = new HashMap<Integer, SQLRowValues>();
         final Rows hasBeen = new Rows();
-        final SetMap<SQLField, SQLRow> toCut = new SetMap<SQLField, SQLRow>();
+        final LinksToCutMutable toCut = new LinksToCutMutable();
+        final Map<SQLRow, SQLRowValues> res = new HashMap<SQLRow, SQLRowValues>();
 
         // fetch privates of root rows
-        final SQLRowValues privateGraph = this.getElem().getPrivateGraph(EnumSet.of(VirtualFields.FOREIGN_KEYS));
-        final Privates privates;
-        if (privateGraph.getGraph().size() > 1) {
-            privates = new Privates(hasBeen, toCut);
-            final Set<Number> ids = new HashSet<Number>();
-            for (final SQLRow r : this.getRows()) {
-                ids.add(r.getIDNumber());
+        final SQLRowValues privateGraph = this.getElem().getPrivateGraph(ArchivedGraph.ARCHIVE_AND_FOREIGNS, false, true);
+        final NextRows privates = new NextRows(hasBeen, toCut);
+        // always fetch to have up to date values, and behave the same way whether the element has
+        // privates or not
+        final Set<Number> ids = new HashSet<Number>();
+        for (final SQLRow r : this.getRows()) {
+            ids.add(r.getIDNumber());
+        }
+        final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(privateGraph);
+        fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+            @Override
+            public SQLSelect transformChecked(SQLSelect input) {
+                input.setLockStrength(ls);
+                input.addLockedTable(privateGraph.getTable().getName());
+                return input.andWhere(new Where(privateGraph.getTable().getKey(), ids));
             }
-            final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(privateGraph);
-            fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
-                @Override
-                public SQLSelect transformChecked(SQLSelect input) {
-                    return input.andWhere(new Where(privateGraph.getTable().getKey(), ids));
-                }
-            });
-            final Set<SQLRow> rowsFetched = new HashSet<SQLRow>();
-            for (final SQLRowValues newVals : fetcher.fetch()) {
-                valsMap.put(newVals.getID(), newVals);
-                rowsFetched.add(newVals.asRow());
-                privates.collect(newVals);
-            }
-            if (!rowsFetched.equals(this.getRows()))
-                throw new IllegalStateException("Some rows are missing : " + rowsFetched + "\n" + this.getRows());
-        } else {
-            privates = null;
+        });
+        for (final SQLRowValues newVals : fetcher.fetch()) {
+            final SQLRow r = newVals.asRow();
+            valsMap.put(newVals.getID(), newVals);
+            privates.collect(newVals);
+            res.put(r, newVals);
         }
 
-        final Rows res = new Rows();
-        for (final SQLRow r : this.getRows()) {
-            SQLRowValues vals = valsMap.get(r.getID());
-            // when there's no private to fetch
-            if (vals == null) {
-                assert privates == null;
-                vals = r.createUpdateRow();
-                valsMap.put(r.getID(), vals);
-            }
-            hasBeen.put(r, vals);
-            res.put(r, vals);
-        }
-        expand(getElem().getTable(), valsMap, hasBeen, toCut, false);
-        if (privates != null)
-            privates.expand();
-        return Tuple3.create(res, hasBeen, toCut);
+        privates.expand(ls);
+        return Tuple3.create(res, hasBeen, new LinksToCut(toCut.getMap()));
     }
 
     // NOTE using a collection of vals changed the time it took to archive a site (736 01) from 225s
@@ -184,133 +266,183 @@ public final class TreesOfSQLRows {
      * @param valsMap the values to expand, eg {3=>LOCAL(3)->BAT(4), 12=>LOCAL(12)->BAT(4)}.
      * @param hasBeen the rows already expanded, eg {BAT[4], LOCAL[3], LOCAL[12]}.
      * @param toCut the links to cut, eg {|BAT.ID_PRECEDENT|=> [BAT[2]]}.
-     * @param ignorePrivateParentRF <code>true</code> if
-     *        {@link SQLElement#getPrivateParentReferentFields() private links} should be ignored.
+     * @param ignorePrivateParentRF <code>true</code> if {@link LinkType#COMPOSITION private links}
+     *        to <code>t</code> should be ignored.
+     * @param ls how to lock rows.
      * @throws SQLException if a link is {@link ReferenceAction#RESTRICT}.
      */
-    private final void expand(final SQLTable t, final Map<Integer, SQLRowValues> valsMap, final Rows hasBeen, final SetMap<SQLField, SQLRow> toCut, final boolean ignorePrivateParentRF)
+    private final void expand(final SQLTable t, final Map<Integer, SQLRowValues> valsMap, final Rows hasBeen, final LinksToCutMutable toCut, final boolean ignorePrivateParentRF, final LockStrength ls)
             throws SQLException {
         if (valsMap.size() == 0)
             return;
 
-        final Privates privates = new Privates(hasBeen, toCut);
-        final Set<SQLField> privateParentRF = ignorePrivateParentRF ? this.getElem().getElement(t).getPrivateParentReferentFields() : null;
+        final SQLElement elem = getElem().getElement(t);
+
+        final Set<Link> ownedLinks = new HashSet<Link>();
+        for (final SQLElementLink elemLink : elem.getOwnedLinks().getByPath().values()) {
+            if (elemLink.isJoin())
+                ownedLinks.add(elemLink.getPath().getStep(0).getSingleLink());
+        }
+        final Map<Link, SQLElementLink> links = new HashMap<Link, SQLElementLink>();
+        for (final SQLElementLink elemLink : elem.getLinksOwnedByOthers().getByPath().values()) {
+            links.put(elemLink.getPath().getStep(-1).getSingleLink(), elemLink);
+        }
+
+        final NextRows privates = new NextRows(hasBeen, toCut);
         for (final Link link : t.getDBSystemRoot().getGraph().getReferentLinks(t)) {
-            if (ignorePrivateParentRF && privateParentRF.contains(link.getLabel())) {
+            // all owned links are fetched alongside the main row
+            if (ownedLinks.contains(link))
+                continue;
+            final SQLElementLink elemLink = links.get(link);
+            if (elemLink == null)
+                throw new IllegalStateException("Referent link " + link + " missing from " + links);
+            final Path elemPath = elemLink.getPath();
+            assert elemLink.getOwned() == elem;
+            assert elemPath.getLast() == t;
+            final Link foreignLink = elemPath.getStep(-1).getSingleLink();
+
+            if (ignorePrivateParentRF && elemLink.getLinkType().equals(LinkType.COMPOSITION)) {
                 // if we did fetch the referents rows, they would be contained in hasBeen
                 continue;
             }
             // eg "ID_LOCAL"
-            final String ffName = link.getLabel().getName();
-            final SQLElement refElem = this.elem.getElementLenient(link.getSource());
-            // play it safe
-            final ReferenceAction action = refElem != null ? refElem.getActions().get(link) : ReferenceAction.RESTRICT;
+            final String ffName = foreignLink.getSingleField().getName();
+            final SQLElement refElem = elemLink.getOwner();
+            final Path pathToTableWithFK = elemPath.minusLast();
+            final ReferenceAction action = elemLink.getAction();
             if (action == null) {
-                throw new IllegalStateException("Null action for " + refElem + " " + ffName);
+                throw new IllegalStateException("Null action for " + refElem + " " + elemPath);
             }
-            final Map<Integer, SQLRowValues> next = new HashMap<Integer, SQLRowValues>();
             final SQLRowValues graphToFetch;
             if (action == ReferenceAction.CASCADE) {
                 // otherwise we would need to find and expand the parent rows of referents
-                if (refElem.getPrivateParentReferentFields().size() > 0)
-                    throw new UnsupportedOperationException("Cannot cascade to private element " + refElem + " from " + link);
-                graphToFetch = refElem.getPrivateGraph(EnumSet.of(VirtualFields.FOREIGN_KEYS));
+                if (refElem.isPrivate())
+                    throw new UnsupportedOperationException("Cannot cascade to private element " + refElem + " from " + elemPath);
+                graphToFetch = refElem.getPrivateGraph(ArchivedGraph.ARCHIVE_AND_FOREIGNS, false, true);
             } else {
-                graphToFetch = new SQLRowValues(link.getSource()).putNulls(link.getCols());
+                graphToFetch = new SQLRowValues(pathToTableWithFK.getFirst());
             }
+            // add the foreign fields pointing to the rows to expand
+            graphToFetch.assurePath(pathToTableWithFK).putNulls(foreignLink.getCols());
             final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(graphToFetch);
             fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
                 @Override
                 public SQLSelect transformChecked(SQLSelect input) {
+                    input.setLockStrength(ls);
+                    input.addLockedTable(graphToFetch.getTable().getName());
+                    return input;
+                }
+            });
+            final ListMap<Path, SQLRowValuesListFetcher> fetchers = fetcher.getFetchers(pathToTableWithFK);
+            if (fetchers.allValues().size() != 1)
+                throw new IllegalStateException("Fetcher which references " + t + " not found : " + fetchers);
+            fetchers.allValues().iterator().next().appendSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+                @Override
+                public SQLSelect transformChecked(SQLSelect input) {
+                    final FieldRef refField = input.getAlias(pathToTableWithFK.getLast()).getField(ffName);
                     // eg where RECEPTEUR.ID_LOCAL in (3,12)
-                    return input.andWhere(new Where(link.getLabel(), valsMap.keySet()));
+                    return input.andWhere(new Where(refField, valsMap.keySet()));
                 }
             });
             for (final SQLRowValues newVals : fetcher.fetch()) {
                 final SQLRow r = newVals.asRow();
                 final boolean already = hasBeen.contains(r);
+                // a row might reference the same linked row multiple times
+                final Collection<SQLRowValues> rowsWithFK = newVals.followPath(pathToTableWithFK, CreateMode.CREATE_NONE, false);
                 switch (action) {
                 case RESTRICT:
-                    throw new SQLException(createRestrictDesc(refElem, newVals, link));
+                    throw new SQLException(createRestrictDesc(refElem, newVals, elemLink));
                 case CASCADE:
                     if (!already) {
                         // walk before linking to existing graph
                         privates.collect(newVals);
                         // link with existing graph, eg RECEPTEUR(235)->LOCAL(3)
-                        newVals.put(ffName, valsMap.get(newVals.getInt(ffName)));
-                        hasBeen.put(r, newVals);
-                        next.put(newVals.getID(), newVals);
+                        for (final SQLRowValues rowWithFK : rowsWithFK) {
+                            rowWithFK.putForeign(foreignLink, hasBeen.getValues(rowWithFK.getForeign(foreignLink).asRow()));
+                        }
                     }
                     break;
                 case SET_EMPTY:
                     // if the row should be archived no need to cut any of its links
                     if (!already)
-                        toCut.add(link.getLabel(), r);
+                        toCut.add(elemLink, rowsWithFK);
                     break;
                 }
                 // if already expanded just link and do not add to next
                 if (already) {
-                    hasBeen.getValues(r).put(ffName, valsMap.get(newVals.getInt(ffName)));
+                    // now link the new join row or the existing row
+                    for (final SQLRowValues joinRow : rowsWithFK) {
+                        final boolean linked = hasBeen.tryToLink(joinRow, foreignLink);
+                        if (!linked)
+                            throw new IllegalStateException("Join row not found : " + joinRow);
+                    }
                 }
             }
-
-            expand(fetcher.getGraph().getTable(), next, hasBeen, toCut, false);
         }
-        privates.expand();
-        // if the row has been added to the graph (by another link) no need to cut any of its links
-        final Iterator<Entry<SQLField, Set<SQLRow>>> iter = toCut.entrySet().iterator();
-        while (iter.hasNext()) {
-            final Entry<SQLField, Set<SQLRow>> e = iter.next();
-            final String fieldName = e.getKey().getName();
-            final Iterator<SQLRow> iter2 = e.getValue().iterator();
-            while (iter2.hasNext()) {
-                final SQLRow rowToCut = iter2.next();
-                final SQLRowValues inGraphRowToCut = hasBeen.getValues(rowToCut);
-                if (inGraphRowToCut != null) {
-                    // remove from toCut
-                    iter2.remove();
-                    // add link
-                    final SQLRowValues dest = hasBeen.getValues(rowToCut.getForeignRow(fieldName, SQLRowMode.NO_CHECK));
-                    if (dest == null)
-                        throw new IllegalStateException("destination of link to cut " + fieldName + " not found for " + rowToCut);
-                    inGraphRowToCut.put(fieldName, dest);
-                }
-            }
-            if (e.getValue().isEmpty())
-                iter.remove();
-        }
+        privates.expand(ls);
     }
 
-    private final class Privates {
+    private final class NextRows {
         private final Rows hasBeen;
-        private final SetMap<SQLField, SQLRow> toCut;
+        private final LinksToCutMutable toCut;
+        private final Map<SQLTable, Map<Integer, SQLRowValues>> mainRows;
+        // only contains private rows (no main or join rows)
         private final Map<SQLTable, Map<Integer, SQLRowValues>> privateRows;
 
-        public Privates(final Rows hasBeen, final SetMap<SQLField, SQLRow> toCut) {
+        public NextRows(final Rows hasBeen, final LinksToCutMutable toCut) {
             this.hasBeen = hasBeen;
             this.toCut = toCut;
+            this.mainRows = new HashMap<SQLTable, Map<Integer, SQLRowValues>>();
             this.privateRows = new HashMap<SQLTable, Map<Integer, SQLRowValues>>();
         }
 
-        // main row linked to its private graph
+        /**
+         * Record all private rows of the passed graph.
+         * 
+         * @param mainRow main row linked to its private graph. NOTE : the main row can itself be a
+         *        private.
+         */
         private void collect(final SQLRowValues mainRow) {
             for (final SQLRowValues privateVals : mainRow.getGraph().getItems()) {
-                if (privateVals != mainRow) {
-                    // since newVals isn't in, its privates can't
-                    assert !this.hasBeen.contains(privateVals.asRow());
-                    Map<Integer, SQLRowValues> map = this.privateRows.get(privateVals.getTable());
+                // since newVals isn't in, its privates can't
+                assert !this.hasBeen.contains(privateVals.asRow());
+                final SQLElement rowElem = getElem().getElement(privateVals.getTable());
+                final Map<SQLTable, Map<Integer, SQLRowValues>> m;
+                final boolean isMainRow = privateVals == mainRow;
+                if (isMainRow) {
+                    assert !(rowElem instanceof JoinSQLElement);
+                    m = this.mainRows;
+                } else {
+                    if (rowElem.isPrivate()) {
+                        m = this.privateRows;
+                    } else {
+                        assert rowElem instanceof JoinSQLElement;
+                        m = null;
+                    }
+                }
+                this.hasBeen.put(privateVals.asRow(), privateVals, isMainRow);
+                if (m != null) {
+                    Map<Integer, SQLRowValues> map = m.get(privateVals.getTable());
                     if (map == null) {
                         map = new HashMap<Integer, SQLRowValues>();
-                        this.privateRows.put(privateVals.getTable(), map);
+                        m.put(privateVals.getTable(), map);
                     }
                     map.put(privateVals.getID(), privateVals);
                 }
             }
         }
 
-        private void expand() throws SQLException {
-            for (final Entry<SQLTable, Map<Integer, SQLRowValues>> e : this.privateRows.entrySet()) {
-                TreesOfSQLRows.this.expand(e.getKey(), e.getValue(), this.hasBeen, this.toCut, true);
+        private void expand(final LockStrength ls) throws SQLException {
+            this.expand(this.mainRows, false, ls);
+            this.expand(this.privateRows, true, ls);
+            // if the row has been added to the graph (by another link) no need to cut any of its
+            // links
+            this.toCut.restoreLinks(this.hasBeen);
+        }
+
+        private void expand(final Map<SQLTable, Map<Integer, SQLRowValues>> m, final boolean privateRows, final LockStrength ls) throws SQLException {
+            for (final Entry<SQLTable, Map<Integer, SQLRowValues>> e : m.entrySet()) {
+                TreesOfSQLRows.this.expand(e.getKey(), e.getValue(), this.hasBeen, this.toCut, privateRows, ls);
             }
         }
     }
@@ -319,9 +451,11 @@ public final class TreesOfSQLRows {
     static private final class Rows {
 
         private final Map<SQLRow, SQLRowValues> vals;
+        private final Set<SQLRow> mainRows;
 
         private Rows() {
             this.vals = new HashMap<SQLRow, SQLRowValues>();
+            this.mainRows = new HashSet<SQLRow>();
         }
 
         private boolean contains(final SQLRow r) {
@@ -332,10 +466,67 @@ public final class TreesOfSQLRows {
             return this.vals.get(r);
         }
 
-        private void put(final SQLRow r, final SQLRowValues newVals) {
+        private void put(final SQLRow r, final SQLRowValues newVals, final boolean isMainRow) {
             assert newVals.asRow().equals(r);
             if (this.vals.put(r, newVals) != null)
                 throw new IllegalStateException("Row already in : " + newVals);
+            if (isMainRow)
+                this.mainRows.add(r);
+        }
+
+        // link rowWithFK if it is already contained in this
+        private boolean tryToLink(final SQLRowValues rowWithFK, final Link l) {
+            final SQLRowValues inGraphRow = this.getValues(rowWithFK.asRow());
+            final boolean linked = inGraphRow != null;
+            if (linked) {
+                // add link
+                final SQLRowValues dest = this.getValues(rowWithFK.getForeign(l).asRow());
+                if (dest == null)
+                    throw new IllegalStateException("destination of " + l + " not found for " + rowWithFK);
+                inGraphRow.putForeign(l, dest);
+            }
+            return linked;
+        }
+
+    }
+
+    static private final class LinksToCutMutable {
+
+        // use List to avoid comparing SQLRowValues instances
+        private final ListMap<SQLElementLink, SQLRowValues> toCut;
+
+        private LinksToCutMutable() {
+            this.toCut = new ListMap<SQLElementLink, SQLRowValues>(32, Mode.NULL_FORBIDDEN, false);
+        }
+
+        private void add(SQLElementLink link, Collection<SQLRowValues> rowsWithFK) {
+            assert !this.toCut.containsKey(link) || !CollectionUtils.containsAny(this.toCut.get(link), rowsWithFK) : "some rows (and their optional joins) already added : " + link + " " + rowsWithFK;
+            // a row might reference the same row multiple times
+            this.toCut.addAll(link, rowsWithFK);
+        }
+
+        private final ListMap<SQLElementLink, SQLRowValues> getMap() {
+            return this.toCut;
+        }
+
+        private final void restoreLinks(final Rows hasBeen) {
+            final Iterator<Entry<SQLElementLink, List<SQLRowValues>>> iter = this.getMap().entrySet().iterator();
+            while (iter.hasNext()) {
+                final Entry<SQLElementLink, List<SQLRowValues>> e = iter.next();
+                final SQLElementLink elemLink = e.getKey();
+                final Link linkToCut = elemLink.getPath().getStep(-1).getSingleLink();
+
+                final Iterator<SQLRowValues> iter2 = e.getValue().iterator();
+                while (iter2.hasNext()) {
+                    final SQLRowValues rowWithFK = iter2.next();
+                    if (hasBeen.tryToLink(rowWithFK, linkToCut)) {
+                        // remove from toCut
+                        iter2.remove();
+                    }
+                }
+                if (e.getValue().isEmpty())
+                    iter.remove();
+            }
         }
     }
 
@@ -345,15 +536,14 @@ public final class TreesOfSQLRows {
      * Put all the main (i.e. non private) rows of the trees (except the roots) in a map by table.
      * 
      * @return the descendants by table.
-     * @throws SQLException if the trees could not be fetched.
      */
-    public final Map<SQLTable, List<SQLRowAccessor>> getDescendantsByTable() throws SQLException {
+    public final Map<SQLTable, List<SQLRowAccessor>> getDescendantsByTable() {
         final ListMap<SQLTable, SQLRowAccessor> res = new ListMap<SQLTable, SQLRowAccessor>();
         final Set<SQLRow> roots = this.getRows();
         for (final SQLRowValuesCluster c : this.getClusters()) {
             for (final SQLRowValues v : c.getItems()) {
                 final SQLRow r = v.asRow();
-                if (!roots.contains(r) && this.mainRows.contains(r))
+                if (!roots.contains(r) && this.getMainRows().contains(r))
                     res.add(v.getTable(), v);
             }
         }
@@ -362,28 +552,117 @@ public final class TreesOfSQLRows {
 
     // * extern
 
+    static final class LinkToCut implements Comparable<LinkToCut> {
+        private final SQLElementLink link;
+        private final String label;
+
+        protected LinkToCut(final SQLElementLink link) {
+            super();
+            if (link == null)
+                throw new NullPointerException("Null link");
+            this.link = link;
+            this.label = TreesOfSQLRows.getLabel(this.link, null);
+        }
+
+        public final Path getPath() {
+            return this.link.getPath();
+        }
+
+        public final SQLTable getTable() {
+            return this.getPath().getFirst();
+        }
+
+        public final String getItem() {
+            return this.link.getName();
+        }
+
+        public final String getLabel() {
+            return this.label;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            return prime + this.link.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            final LinkToCut other = (LinkToCut) obj;
+            return this.link.equals(other.link);
+        }
+
+        @Override
+        public int compareTo(LinkToCut o) {
+            final int compareTable = CompareUtils.compareList(this.getTable().getSQLName().asList(), o.getTable().getSQLName().asList());
+            if (compareTable != 0)
+                return compareTable;
+            else
+                return this.getItem().compareTo(o.getItem());
+        }
+    }
+
+    static public final class LinksToCut {
+
+        private final ListMapItf<SQLElementLink, SQLRowValues> toCut;
+
+        private LinksToCut(final ListMapItf<SQLElementLink, SQLRowValues> map) {
+            map.removeAllEmptyCollections();
+            this.toCut = ListMap.unmodifiableMap(map);
+        }
+
+        public final ListMapItf<SQLElementLink, SQLRowValues> getMap() {
+            return this.toCut;
+        }
+
+        public final SortedMap<LinkToCut, Integer> countByLink() {
+            final SortedMap<LinkToCut, Integer> res = new TreeMap<LinkToCut, Integer>();
+            for (final Entry<SQLElementLink, List<SQLRowValues>> e : this.getMap().entrySet()) {
+                final SQLElementLink elemLink = e.getKey();
+                res.put(new LinkToCut(elemLink), e.getValue().size());
+            }
+            return res;
+        }
+
+        boolean containsAll(final LinksToCut o) {
+            if (this == o)
+                return true;
+            if (!this.getMap().keySet().containsAll(o.getMap().keySet()))
+                return false;
+            final HashingStrategy<SQLRowAccessor> strategy = SQLRowAccessor.getRowStrategy();
+            for (final Entry<SQLElementLink, ? extends Collection<SQLRowValues>> e : this.getMap().entrySet()) {
+                final List<SQLRowValues> otherRows = o.getMap().get(e.getKey());
+                // cannot be empty, see constructor
+                if (otherRows != null) {
+                    /*
+                     * each row can be a graph : it's always the row with the foreign key, so in
+                     * case of a join there's also the main row attached. Don't bother comparing the
+                     * all values, just use the IDs.
+                     */
+                    final Set<ProxyItf<SQLRowValues>> thisVals = CustomEquals.createSet(strategy, e.getValue());
+                    final Set<ProxyItf<SQLRowValues>> otherVals = CustomEquals.createSet(strategy, otherRows);
+                    assert thisVals.size() == e.getValue().size() && otherVals.size() == o.getMap().get(e.getKey()).size() : "There were duplicates";
+                    if (!thisVals.containsAll(otherVals))
+                        return false;
+                }
+            }
+            return true;
+        }
+    }
+
     /**
      * Return the rows that point to these trees.
      * 
      * @return the rows by referent field.
-     * @throws SQLException if the trees could not be fetched.
      */
-    public final Map<SQLField, Set<SQLRow>> getExternReferences() throws SQLException {
-        // force compute
-        getTrees();
+    public final LinksToCut getExternReferences() {
+        checkFetched();
         return this.externReferences;
-    }
-
-    public final SortedMap<SQLField, Integer> getExternReferencesCount() throws SQLException {
-        final SortedMap<SQLField, Integer> res = new TreeMap<SQLField, Integer>(new Comparator<SQLField>() {
-            @Override
-            public int compare(SQLField o1, SQLField o2) {
-                return o1.getSQLName().toString().compareTo(o2.getSQLName().toString());
-            }
-        });
-        for (final Map.Entry<SQLField, Set<SQLRow>> e : this.getExternReferences().entrySet()) {
-            res.put(e.getKey(), e.getValue().size());
-        }
-        return res;
     }
 }

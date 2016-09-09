@@ -140,7 +140,11 @@ public class ImportEcriturePanel extends JPanel {
                                             DateFormat format = new SimpleDateFormat("dd/MM/yyyy");
                                             importData(new File(fd.getDirectory(), fd.getFile()), "Import " + format.format(new Date()), frame);
                                         } catch (Exception exn) {
-                                            ExceptionHandler.handle("Erreur pendant l'importation", exn);
+                                            if (exn.getMessage().toLowerCase().contains("file format")) {
+                                                JOptionPane.showMessageDialog(ImportEcriturePanel.this, "Mauvais format de fichier");
+                                            } else {
+                                                ExceptionHandler.handle("Erreur pendant l'importation", exn);
+                                            }
                                         }
                                         return null;
                                     }

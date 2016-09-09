@@ -95,6 +95,9 @@ public abstract class AbstractLocalTemplateProvider implements TemplateProvider 
             throw new NullPointerException("null templateId");
         }
         final File file = getFileTemplateConfiguration(templateId, language, type);
+        if (!file.exists()) {
+            return null;
+        }
         return getInputStream(file);
     }
 

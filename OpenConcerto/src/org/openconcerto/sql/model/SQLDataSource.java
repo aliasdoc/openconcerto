@@ -22,6 +22,7 @@ import org.openconcerto.utils.ExceptionUtils;
 import org.openconcerto.utils.RTInterruptedException;
 import org.openconcerto.utils.ThreadFactory;
 import org.openconcerto.utils.cache.CacheResult;
+import org.openconcerto.utils.cache.ICacheSupport;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -48,9 +49,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 
-import net.jcip.annotations.GuardedBy;
-import net.jcip.annotations.ThreadSafe;
-
 import org.apache.commons.dbcp.AbandonedConfig;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.commons.dbcp.ConnectionFactory;
@@ -73,6 +71,9 @@ import org.apache.commons.pool.ObjectPool;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.postgresql.util.GT;
 import org.postgresql.util.PSQLException;
+
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
 
 /**
  * Une source de donnée SQL.
@@ -311,21 +312,45 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
 
     private synchronized void updateCache() {
         if (this.cache != null)
-            this.cache.clear();
-        this.cache = createCache(this);
+            this.cache.getSupp().die();
+        this.cache = createCache(null);
         for (final HandlersStack s : this.handlers.values()) {
             s.updateCache();
         }
     }
 
-    synchronized SQLCache<List<?>, Object> createCache(final Object o) {
+    // the cache for committed data
+    synchronized final SQLCache<List<?>, Object> getCommittedCache() {
+        return this.cache;
+    }
+
+    final SQLCache<List<?>, Object> getCache() {
+        // transactions are isolated from one another, so their caches should be too
+        final HandlersStack stack = getHandlersStack();
+        if (stack != null && stack.hasTransaction())
+            return stack.getCache();
+        else
+            return this.getCommittedCache();
+    }
+
+    synchronized SQLCache<List<?>, Object> createCache(final TransactionPoint o) {
         final SQLCache<List<?>, Object> res;
-        if (this.isCacheEnabled() && this.tables.size() > 0)
+        if (this.isCacheEnabled() && this.tables.size() > 0) {
             // the general cache should wait for transactions to end, but the cache of transactions
             // must not.
-            res = new SQLCache<List<?>, Object>(30, 120, "results of " + o.getClass().getSimpleName(), o == this);
-        else
+            final boolean committedCache = o == null;
+            final Object desc = committedCache ? this : o;
+            final ICacheSupport<SQLData> cacheSupp = committedCache ? null : this.cache.getSupp();
+            res = new SQLCache<List<?>, Object>(cacheSupp, 30, 30, "results of " + desc.toString(), o) {
+                @Override
+                protected String getCacheSuppName(String cacheName) {
+                    assert committedCache : "Creating extra ICacheSupport";
+                    return SQLDataSource.this.toString();
+                }
+            };
+        } else {
             res = null;
+        }
         return res;
     }
 
@@ -525,6 +550,10 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         return this.execute(query, rsh, false, c);
     }
 
+    final List<Object> getCacheKey(final String query, final ResultSetHandler rsh) {
+        return query.startsWith("SELECT") ? Arrays.asList(new Object[] { query, rsh }) : null;
+    }
+
     /**
      * Execute <code>query</code> within <code>c</code>, passing the result set to <code>rsh</code>.
      * 
@@ -547,27 +576,25 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         }
 
         final IResultSetHandler irsh = rsh instanceof IResultSetHandler ? (IResultSetHandler) rsh : null;
-        final SQLCache<List<?>, Object> cache;
-        synchronized (this) {
-            // transactions are isolated from one another, so their caches should be too
-            final HandlersStack handlersStack = getHandlersStack();
-            if (handlersStack != null && handlersStack.getCache() != null)
-                cache = handlersStack.getCache();
-            else
-                cache = this.cache;
-        }
-        final List<Object> key = cache != null && query.startsWith("SELECT") ? Arrays.asList(new Object[] { query, rsh }) : null;
-        if (key != null && (irsh == null || irsh.readCache())) {
-            final CacheResult<Object> l = cache.check(key);
-            if (l.getState() == CacheResult.State.INTERRUPTED)
+        final boolean readCache = irsh == null || irsh.readCache();
+        final boolean canWriteCache = irsh == null || irsh.canWriteCache();
+        final SQLCache<List<?>, Object> cache = !readCache && !canWriteCache ? null : this.getCache();
+        final List<Object> key = cache == null ? null : getCacheKey(query, rsh);
+        final CacheResult<Object> cacheRes;
+        if (key != null) {
+            final Set<? extends SQLData> data = irsh == null || irsh.getCacheModifiers() == null ? this.tables : irsh.getCacheModifiers();
+            cacheRes = cache.check(key, readCache, canWriteCache, data);
+            if (cacheRes.getState() == CacheResult.State.INTERRUPTED)
                 throw new RTInterruptedException("interrupted while waiting for the cache");
-            else if (l.getState() == CacheResult.State.VALID) {
+            else if (cacheRes.getState() == CacheResult.State.VALID) {
                 // cache actif
                 if (State.DEBUG)
                     State.INSTANCE.addCacheHit();
                 SQLRequestLog.log(query, "En cache.", timeMs, time);
-                return l.getRes();
+                return cacheRes.getRes();
             }
+        } else {
+            cacheRes = null;
         }
 
         Object result = null;
@@ -604,7 +631,7 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
                 // if key was added to the cache
                 if (key != null) {
                     synchronized (this) {
-                        putInCache(cache, irsh, key, result, true);
+                        putInCache(cache, irsh, cacheRes, result);
                     }
                 }
                 info.releaseConnection();
@@ -615,8 +642,8 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         } catch (RuntimeException e) {
             // for each #check() there must be a #removeRunning()
             // let the cache know we ain't gonna tell it the result
-            if (cache != null && key != null)
-                cache.removeRunning(key);
+            if (cacheRes != null)
+                cache.removeRunning(cacheRes);
             if (info != null)
                 info.releaseConnection(e);
             throw e;
@@ -627,13 +654,11 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         return result;
     }
 
-    private synchronized void putInCache(final SQLCache<List<?>, Object> cache, final IResultSetHandler irsh, final List<Object> key, Object result, final boolean removeRunning) {
-        if (irsh != null && irsh.writeCache()) {
-            cache.put(key, result, irsh.getCacheModifiers() == null ? this.tables : irsh.getCacheModifiers());
-        } else if (irsh == null && IResultSetHandler.shouldCache(result)) {
-            cache.put(key, result, this.tables);
-        } else if (removeRunning) {
-            cache.removeRunning(key);
+    private synchronized void putInCache(final SQLCache<List<?>, Object> cache, final IResultSetHandler irsh, final CacheResult<Object> cacheRes, Object result) {
+        if (irsh != null && irsh.writeCache() || irsh == null && IResultSetHandler.shouldCache(result)) {
+            cache.put(cacheRes, result);
+        } else {
+            cache.removeRunning(cacheRes);
         }
     }
 
@@ -828,39 +853,44 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
                 }
             }
             h = new HandlersStack(this, conn, handler);
-            this.handlers.put(Thread.currentThread(), h);
+            this.handlers.put(h.getThread(), h);
         } else if (handler.canRestoreState()) {
             h = this.getHandlersStack().push(handler);
         } else
             throw new IllegalStateException("this thread has already called useConnection() and thus expect its state, but the passed handler cannot restore state: " + handler);
 
         Connection conn = null;
-        Exception exn = null;
+        // before or after compute, RuntimeException or SQLException
+        Exception beforeExn = null, afterExn = null;
+        // X or SQLException
+        Exception computeExn = null;
         try {
             conn = h.getConnection();
             h.setChangeAllowed(true);
             handler.setup(conn);
             h.setChangeAllowed(false);
-            handler.compute(this);
+            try {
+                handler.compute(this);
+            } catch (Exception e) {
+                computeExn = e;
+            }
         } catch (Exception e) {
             h.setChangeAllowed(false);
-            exn = e;
+            beforeExn = e;
         }
 
         // in all cases (thanks to the above catch), try to restore the state
         // if conn is null setup() was never called
         boolean pristineState = conn == null;
-        if (!pristineState && handler.canRestoreState()) {
+        // don't bother trying to restore state if the connection has been invalidated (by a
+        // recursive call)
+        if (!pristineState && h.hasValidConnection() && handler.canRestoreState()) {
             h.setChangeAllowed(true);
             try {
                 handler.restoreState(conn);
                 pristineState = true;
             } catch (Exception e) {
-                if (exn == null)
-                    exn = e;
-                else
-                    // the original exn as the source
-                    exn = new SQLException("could not restore state: " + ExceptionUtils.getStackTrace(e), exn);
+                afterExn = e;
             }
             h.setChangeAllowed(false);
         }
@@ -871,26 +901,35 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
             this.handlers.remove(Thread.currentThread());
             if (connOutsidePool) {
                 conn.close();
-            } else if (pristineState)
-                this.returnConnection(conn);
-            else
-                this.closeConnection(conn);
+            } else if (pristineState) {
+                this.returnConnection(h.getConnection());
+            } else {
+                this.closeConnection(h.invalidConnection());
+            }
         } else {
             assert !connOutsidePool;
             // connection is still used
             if (!pristineState) {
-                h.invalidConnection();
-                this.closeConnection(conn);
+                this.closeConnection(h.invalidConnection());
             }
             // else the top handler will release the connection
         }
-        if (exn != null)
-            if (exn instanceof RuntimeException)
-                throw (RuntimeException) exn;
-            else
-                throw (SQLException) exn;
-        else
+        if (beforeExn != null) {
+            assert computeExn == null : "Compute shouldn't be attempted if setup fails : " + beforeExn + " " + computeExn;
+            if (afterExn != null) {
+                throw new SQLException("could not restore state after failed setup : " + ExceptionUtils.getStackTrace(afterExn), beforeExn);
+            } else {
+                throw ExceptionUtils.throwExn(beforeExn, SQLException.class, RuntimeException.class);
+            }
+        } else if (afterExn != null) {
+            if (computeExn != null) {
+                throw new SQLException("could not restore state after successful setup : " + ExceptionUtils.getStackTrace(afterExn), computeExn);
+            } else {
+                throw ExceptionUtils.throwExn(afterExn, SQLException.class, RuntimeException.class);
+            }
+        } else {
             return handler.get();
+        }
     }
 
     // this method create a Statement, don't forget to close it when you're done
@@ -1185,7 +1224,7 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
     private synchronized void noConnectionIsOpen() {
         assert this.connectionPool == null || (this.connectionPool.getNumIdle() + this.getBorrowedConnectionCount()) == 0;
         if (this.cache != null)
-            this.cache.clear();
+            this.cache.getSupp().die();
     }
 
     /**
@@ -1313,7 +1352,8 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
     }
 
     private Connection getRawConnection(final boolean retry) throws NoSuchElementException {
-        assert !Thread.holdsLock(this) : "super.getConnection() might block (see setWhenExhaustedAction()), and since return/closeConnection() need this lock, this method cannot wait while holding the lock";
+        assert !Thread.holdsLock(
+                this) : "super.getConnection() might block (see setWhenExhaustedAction()), and since return/closeConnection() need this lock, this method cannot wait while holding the lock";
         Connection result = null;
         try {
             result = super.getConnection();
@@ -1451,7 +1491,7 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
                 if (this.autoCommit)
                     // some delegates of the super implementation might have already called our
                     // commit(), but in this case, the following commit will be a no-op
-                    handlersStack.commit();
+                    handlersStack.commit(null);
                 else
                     handlersStack.addTxPoint(new TransactionPoint(this));
             }
@@ -1460,18 +1500,17 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         @Override
         public synchronized void commit() throws SQLException {
             super.commit();
+            assert !this.autoCommit;
             final HandlersStack handlersStack = getNonNullHandlersStack();
-            handlersStack.commit();
-            handlersStack.addTxPoint(new TransactionPoint(this));
+            handlersStack.commit(new TransactionPoint(this));
         }
 
         @Override
         public synchronized void rollback() throws SQLException {
             super.rollback();
-            final HandlersStack handlersStack = getNonNullHandlersStack();
-            handlersStack.rollback();
             assert !this.autoCommit;
-            handlersStack.addTxPoint(new TransactionPoint(this));
+            final HandlersStack handlersStack = getNonNullHandlersStack();
+            handlersStack.rollback(new TransactionPoint(this));
         }
 
         @Override
@@ -1501,8 +1540,8 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
 
         @Override
         public synchronized void releaseSavepoint(Savepoint savepoint) throws SQLException {
-            // don't bother merging TransactionPoint
             super.releaseSavepoint(savepoint);
+            getNonNullHandlersStack().releaseSavepoint(savepoint);
         }
     }
 
@@ -1812,6 +1851,7 @@ public final class SQLDataSource extends BasicDataSource implements Cloneable {
         return (String) this.execute(q, SCALAR_HANDLER, c);
     }
 
+    @Override
     public String toString() {
         return this.getUrl();
     }

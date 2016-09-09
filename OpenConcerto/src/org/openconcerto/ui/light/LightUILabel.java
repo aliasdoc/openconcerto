@@ -29,54 +29,53 @@ package org.openconcerto.ui.light;
 import net.minidev.json.JSONObject;
 
 public class LightUILabel extends LightUIElement {
-    boolean isTitle = false;
-
     // Init from json constructor
     public LightUILabel(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
     // Clone constructor
     public LightUILabel(final LightUILabel labelElement) {
         super(labelElement);
-        this.isTitle = labelElement.isTitle;
     }
 
     public LightUILabel(final String id) {
+        super(id);
         this.setType(TYPE_LABEL);
-        this.setId(id);
     }
 
-    public LightUILabel(final String id, final boolean isTitle) {
+    public LightUILabel(final String id, final boolean isBold) {
+        super(id);
         this.setType(TYPE_LABEL);
-        this.setId(id);
-        this.isTitle = isTitle;
+        this.setFontBold(isBold);
     }
 
     public LightUILabel(final String id, final String label) {
+        super(id);
         this.setType(TYPE_LABEL);
+
         this.setLabel(label);
-        this.setId(id);
     }
 
-    public LightUILabel(final String id, final String label, final boolean title) {
+    public LightUILabel(final String id, final String label, final boolean isBold) {
+        super(id);
         this.setType(TYPE_LABEL);
         this.setLabel(label);
-        this.setId(id);
-        this.isTitle = title;
+        this.setFontBold(isBold);
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUILabel(json);
+            }
+        };
     }
 
     @Override
     public LightUIElement clone() {
         return new LightUILabel(this);
-    }
-
-    @Override
-    public JSONObject toJSON() {
-        final JSONObject json = super.toJSON();
-        if (this.isTitle) {
-            json.put("title", true);
-        }
-        return json;
     }
 }

@@ -17,6 +17,7 @@ import org.openconcerto.erp.core.common.component.AdresseSQLComponent;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseClientItemTable;
 import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
+import org.openconcerto.erp.preferences.ModeReglementDefautPrefPanel;
 import org.openconcerto.erp.utils.TM;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.ElementSQLObject;
@@ -99,6 +100,18 @@ public class CustomerSQLComponent extends GroupSQLComponent {
 
         SQLRowValues rowVals = new SQLRowValues(getTable());
         rowVals.put("CODE", NumerotationAutoSQLElement.getNextNumero(getElement().getClass()));
+        // Mode de règlement par defaut
+        try {
+            SQLRow r = ModeReglementDefautPrefPanel.getDefaultRow(true);
+            SQLElement eltModeReglement = Configuration.getInstance().getDirectory().getElement("MODE_REGLEMENT");
+            if (r.getID() > 1) {
+                SQLRowValues rowValsMR = eltModeReglement.createCopy(r, null);
+                rowVals.put("ID_MODE_REGLEMENT", rowValsMR);
+            }
+        } catch (SQLException e) {
+            System.err.println("Impossible de sélectionner le mode de règlement par défaut du client.");
+            e.printStackTrace();
+        }
         return rowVals;
     }
 
@@ -141,8 +154,7 @@ public class CustomerSQLComponent extends GroupSQLComponent {
         } else if (id.equals("customerrelationship.customer.addresses")) {
             return createAdressesComponent();
         } else if (id.equals("NOM")) {
-            final JTextField t = (JTextField) super.createEditor(id);
-            return t;
+            return super.createEditor(id);
         }
         if (id.equals("CODE")) {
 

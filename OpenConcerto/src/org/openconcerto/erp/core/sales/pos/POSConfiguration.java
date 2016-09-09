@@ -20,8 +20,6 @@ import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.JournalSQLElement;
 import org.openconcerto.erp.core.finance.payment.element.TypeReglementSQLElement;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
-import org.openconcerto.erp.core.sales.pos.io.ESCSerialPrinter;
-import org.openconcerto.erp.core.sales.pos.io.JPOSTicketPrinter;
 import org.openconcerto.erp.core.sales.pos.io.TicketPrinter;
 import org.openconcerto.erp.core.sales.pos.model.Article;
 import org.openconcerto.erp.core.sales.pos.model.Paiement;
@@ -41,9 +39,9 @@ import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLSelectHandlerBuilder;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.users.UserManager;
@@ -69,15 +67,118 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.input.SAXBuilder;
-import org.jdom.output.Format;
-import org.jdom.output.XMLOutputter;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.input.SAXBuilder;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
 
-public class Caisse {
+public class POSConfiguration {
     private static final String POS_CONFIGURATION_FILENAME = "pos.xml";
-    private static Document document;
+    private static POSConfiguration instance;
+    private int screenWidth, screenHeight;
+    private TicketPrinterConfiguration ticketPrinterConf1, ticketPrinterConf2;
+    private int userID = 2;
+    private int companyID = 42;
+    private int posID = 2;
+    private int scanDelay = 80;
+
+    private List<TicketLine> headerLines = new ArrayList<TicketLine>();
+    private List<TicketLine> footerLines = new ArrayList<TicketLine>();
+    // Terminal CB
+    private String creditCardPort = "";
+    // LCD
+    private String LCDSerialPort = "";
+    private String LCDLine1 = "Bienvenue";
+    private String LCDLine2 = "ILM Informatique";
+
+    public static synchronized POSConfiguration getInstance() {
+        if (instance == null) {
+            instance = new POSConfiguration();
+            instance.loadConfiguration();
+        }
+        return instance;
+    }
+
+    private POSConfiguration() {
+        ticketPrinterConf1 = new TicketPrinterConfiguration();
+        ticketPrinterConf2 = new TicketPrinterConfiguration();
+        // Desactivate second printer by default
+        ticketPrinterConf2.setCopyCount(0);
+    }
+
+    public TicketPrinterConfiguration getTicketPrinterConfiguration1() {
+        return ticketPrinterConf1;
+    }
+
+    public TicketPrinterConfiguration getTicketPrinterConfiguration2() {
+        return ticketPrinterConf2;
+    }
+
+    public boolean isConfigurationFileCreated() {
+        File file = getConfigFile();
+        if (file == null) {
+            return false;
+        }
+        return file.exists();
+    }
+
+    // Screen
+    public int getScreenWidth() {
+        return screenWidth;
+    }
+
+    public int getScreenHeight() {
+        return screenHeight;
+    }
+
+    // Database connection
+    public int getUserID() {
+        return userID;
+    }
+
+    public void setUserID(int userID) {
+        this.userID = userID;
+    }
+
+    public int getCompanyID() {
+        return companyID;
+    }
+
+    public void setCompanyID(int companyID) {
+        this.companyID = companyID;
+    }
+
+    // POS id
+    public int getPosID() {
+        return posID;
+    }
+
+    public void setPosID(int posID) {
+        this.posID = posID;
+    }
+
+    public int getScanDelay() {
+        return scanDelay;
+    }
+
+    /**
+     * Set barcode scanner delay
+     */
+    public void setScanDelay(int ms) {
+        this.scanDelay = ms;
+    }
+
+    public String getCreditCardPort() {
+        return creditCardPort;
+    }
+
+    /**
+     * Set the serial port of the credit card device
+     */
+    public void setCreditCardPort(String creditCardPort) {
+        this.creditCardPort = creditCardPort;
+    }
 
     public static File getConfigFile(final String appName, final File wd) {
         final File wdFile = new File(wd + "/Configuration", POS_CONFIGURATION_FILENAME);
@@ -94,36 +195,11 @@ public class Caisse {
         return confFile;
     }
 
-    private static Document getDocument() {
-        if (document != null) {
-            return document;
-        }
-
-        final SAXBuilder constructeur = new SAXBuilder();
-        // lecture du contenu d'un fichier XML avec JDOM
-        File file = getConfigFile();
-        document = new Document();
-
-        if (!file.exists()) {
-            System.err.println("Erreur le fichier " + file.getAbsolutePath() + " n'existe pas!");
-            document.setRootElement(new Element("config"));
-            return document;
-        }
-
-        try {
-            System.out.println("Loading:" + file.getAbsolutePath());
-            document = constructeur.build(file);
-        } catch (Exception e) {
-            document.setRootElement(new Element("config"));
-        }
-        return document;
-    }
-
     public static File getConfigFile() {
         return getConfigFile(ComptaPropsConfiguration.APP_NAME, new File("."));
     }
 
-    public static void createConnexion() {
+    public void createConnexion() {
         final ComptaPropsConfiguration conf = ComptaPropsConfiguration.create();
         TranslationManager.getInstance().addTranslationStreamFromClass(MainFrame.class);
         TranslationManager.getInstance().setLocale(Locale.getDefault());
@@ -138,15 +214,15 @@ public class Caisse {
         try {
             UserManager.getInstance().setCurrentUser(getUserID());
             final ComptaPropsConfiguration comptaPropsConfiguration = ((ComptaPropsConfiguration) Configuration.getInstance());
-            comptaPropsConfiguration.setUpSocieteDataBaseConnexion(getSocieteID());
+            comptaPropsConfiguration.setUpSocieteDataBaseConnexion(getCompanyID());
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(new JFrame(), "Impossible de configurer la connexion à la base de donnée.\n ID société: " + getSocieteID() + " \n ID utilisateur: " + getUserID());
+            JOptionPane.showMessageDialog(new JFrame(), "Impossible de configurer la connexion à la base de donnée.\n ID société: " + getCompanyID() + " \n ID utilisateur: " + getUserID());
             e.printStackTrace();
             System.exit(2);
         }
     }
 
-    public static void commitAll(final List<Ticket> tickets) {
+    public void commitAll(final List<Ticket> tickets) {
         // createConnexion();
         try {
             SQLUtils.executeAtomic(Configuration.getInstance().getSystemRoot().getDataSource(), new SQLUtils.SQLFactory<Object>() {
@@ -168,7 +244,7 @@ public class Caisse {
                             SQLRowValues rowVals = new SQLRowValues(elt.getTable());
                             rowVals.put("NUMERO", ticket.getCode());
                             rowVals.put("DATE", ticket.getCreationDate());
-                            rowVals.put("ID_CAISSE", getID());
+                            rowVals.put("ID_CAISSE", getPosID());
 
                             TotalCalculator calc = new TotalCalculator("T_PA_HT", "T_PV_HT", null);
 
@@ -182,11 +258,11 @@ public class Caisse {
                                 final Article article = item.getFirst();
                                 final Integer nb = item.getSecond();
                                 rowValsElt.put("QTE", nb);
-                                rowValsElt.put("PV_HT", article.getPriceHTInCents());
+                                rowValsElt.put("PV_HT", article.getPriceWithoutTax());
                                 Float tauxFromId = TaxeCache.getCache().getTauxFromId(article.getIdTaxe());
                                 BigDecimal tauxTVA = new BigDecimal(tauxFromId).movePointLeft(2).add(BigDecimal.ONE);
 
-                                final BigDecimal valueHT = article.getPriceHTInCents().multiply(new BigDecimal(nb), DecimalUtils.HIGH_PRECISION);
+                                final BigDecimal valueHT = article.getPriceWithoutTax().multiply(new BigDecimal(nb), DecimalUtils.HIGH_PRECISION);
 
                                 rowValsElt.put("T_PV_HT", valueHT);
                                 rowValsElt.put("T_PV_TTC", valueHT.multiply(tauxTVA, DecimalUtils.HIGH_PRECISION));
@@ -254,9 +330,10 @@ public class Caisse {
                                     long montant = sqlRow.getLong("MONTANT");
                                     PrixTTC ttc = new PrixTTC(montant);
                                     totalEnc += montant;
-                                    new GenerationReglementVenteNG("Règlement " + sqlRow.getForeignRow("ID_MODE_REGLEMENT").getForeignRow("ID_TYPE_REGLEMENT").getString("NOM") + " Ticket "
-                                            + rowFinal.getString("NUMERO"), getClientCaisse(), ttc, sqlRow.getDate("DATE").getTime(), sqlRow.getForeignRow("ID_MODE_REGLEMENT"), rowFinal, rowFinal
-                                            .getForeignRow("ID_MOUVEMENT"), false);
+                                    new GenerationReglementVenteNG(
+                                            "Règlement " + sqlRow.getForeignRow("ID_MODE_REGLEMENT").getForeignRow("ID_TYPE_REGLEMENT").getString("NOM") + " Ticket " + rowFinal.getString("NUMERO"),
+                                            getClientCaisse(), ttc, sqlRow.getDate("DATE").getTime(), sqlRow.getForeignRow("ID_MODE_REGLEMENT"), rowFinal, rowFinal.getForeignRow("ID_MOUVEMENT"),
+                                            false);
                                 }
                                 if (totalEnc > longValueTotal) {
                                     final SQLTable table = Configuration.getInstance().getDirectory().getElement("TYPE_REGLEMENT").getTable();
@@ -264,8 +341,9 @@ public class Caisse {
                                     if (idComptePceCaisse == table.getUndefinedID()) {
                                         idComptePceCaisse = ComptePCESQLElement.getId(ComptePCESQLElement.getComptePceDefault("VenteEspece"));
                                     }
-                                    new GenerationMvtVirement(idComptePceCaisse, getClientCaisse().getInt("ID_COMPTE_PCE"), 0, totalEnc - longValueTotal, "Rendu sur règlement " + " Ticket "
-                                            + rowFinal.getString("NUMERO"), new Date(), JournalSQLElement.CAISSES, " Ticket " + rowFinal.getString("NUMERO")).genereMouvement();
+                                    new GenerationMvtVirement(idComptePceCaisse, getClientCaisse().getInt("ID_COMPTE_PCE"), 0, totalEnc - longValueTotal,
+                                            "Rendu sur règlement " + " Ticket " + rowFinal.getString("NUMERO"), new Date(), JournalSQLElement.CAISSES, " Ticket " + rowFinal.getString("NUMERO"))
+                                                    .genereMouvement();
                                 }
                             } catch (Exception exn) {
                                 exn.printStackTrace();
@@ -310,15 +388,16 @@ public class Caisse {
 
     }
 
-    private static SQLRow rowClient = null;
+    private SQLRow rowClient = null;
 
-    private static SQLRow getClientCaisse() throws SQLException {
+    private SQLRow getClientCaisse() throws SQLException {
         if (rowClient == null) {
             SQLElement elt = Configuration.getInstance().getDirectory().getElement("CLIENT");
             SQLSelect sel = new SQLSelect();
             sel.addSelectStar(elt.getTable());
             sel.setWhere(new Where(elt.getTable().getField("NOM"), "=", "Caisse OpenConcerto"));
-            List<SQLRow> l = (List<SQLRow>) elt.getTable().getBase().getDataSource().execute(sel.asString(), SQLRowListRSH.createFromSelect(sel));
+            @SuppressWarnings("unchecked")
+            List<SQLRow> l = (List<SQLRow>) elt.getTable().getBase().getDataSource().execute(sel.asString(), new SQLSelectHandlerBuilder(sel).createHandler());
             if (l.size() > 0) {
                 rowClient = l.get(0);
             } else {
@@ -350,33 +429,20 @@ public class Caisse {
 
     }
 
-    private static void updateStock(int id) throws SQLException {
-
-        SQLRow row = getClientCaisse().getTable().getTable("TICKET_CAISSE").getRow(id);
+    private void updateStock(int id) throws SQLException {
+        final SQLRow row = getClientCaisse().getTable().getTable("TICKET_CAISSE").getRow(id);
         StockItemsUpdater stockUpdater = new StockItemsUpdater(new StockLabel() {
             @Override
             public String getLabel(SQLRowAccessor rowOrigin, SQLRowAccessor rowElt) {
                 return "Ticket N°" + rowOrigin.getString("NUMERO");
             }
         }, row, row.getReferentRows(getClientCaisse().getTable().getTable("SAISIE_VENTE_FACTURE_ELEMENT")), TypeStockUpdate.REAL_DELIVER);
-
         stockUpdater.update();
-
     }
 
-    public static int getID() {
-        final Document d = getDocument();
-        return Integer.valueOf(d.getRootElement().getAttributeValue("caisseID", "2"));
-    }
-
-    public static void setID(int caisseId) {
-        final Document d = getDocument();
-        d.getRootElement().setAttribute("caisseID", String.valueOf(caisseId));
-    }
-
-    public static List<Ticket> allTickets() {
+    public List<Ticket> allTickets() {
         final List<Ticket> l = new ArrayList<Ticket>();
-        for (final File f : ReceiptCode.getReceiptsToImport(Caisse.getID())) {
+        for (final File f : ReceiptCode.getReceiptsToImport(getPosID())) {
             final Ticket ticket = Ticket.parseFile(f);
             if (ticket != null) {
                 l.add(ticket);
@@ -385,284 +451,218 @@ public class Caisse {
         return l;
     }
 
-    public static int getUserID() {
-        final Document d = getDocument();
-        return Integer.valueOf(d.getRootElement().getAttributeValue("userID", "2"));
+    public List<TicketLine> getHeaderLines() {
+        return headerLines;
     }
 
-    public static void setUserID(int userId) {
-        final Document d = getDocument();
-        d.getRootElement().setAttribute("userID", String.valueOf(userId));
+    public void setHeaderLines(List<TicketLine> headerLines) {
+        this.headerLines = headerLines;
     }
 
-    public static int getSocieteID() {
-        final Document d = getDocument();
-        return Integer.valueOf(d.getRootElement().getAttributeValue("societeID", "42"));
+    public List<TicketLine> getFooterLines() {
+        return footerLines;
     }
 
-    public static void setSocieteID(int societeId) {
-        final Document d = getDocument();
-        d.getRootElement().setAttribute("societeID", String.valueOf(societeId));
+    public void setFooterLines(List<TicketLine> footerLines) {
+        this.footerLines = footerLines;
     }
 
-    public static int getScanDelay() {
-        final Document d = getDocument();
-        return Integer.valueOf(d.getRootElement().getAttributeValue("scanDelay", "80"));
-    }
-
-    public static void setScanDelay(int scanDelay) {
-        final Document d = getDocument();
-        d.getRootElement().setAttribute("scanDelay", String.valueOf(scanDelay));
-    }
-
-    public static boolean isCopyActive() {
-        final Document d = getDocument();
-        return Boolean.valueOf(d.getRootElement().getAttributeValue("copyTicket", "true"));
-    }
-
-    public static void setCopyActive(boolean b) {
-        final Document d = getDocument();
-        d.getRootElement().setAttribute("copyTicket", b ? "true" : "false");
-    }
-
-    public static TicketPrinter getTicketPrinter() {
-        if (isUsingJPos()) {
-            JPOSTicketPrinter prt = new JPOSTicketPrinter(getJPosPrinter());
-            return prt;
+    private void loadConfiguration() {
+        if (!isConfigurationFileCreated()) {
+            System.err.println("POSConfiguration.loadConfigurationFromXML() configuration not loaded. " + getConfigFile().getAbsolutePath() + " missing.");
+            return;
         }
-        return new ESCSerialPrinter(getESCPPort());
-    }
 
-    public static boolean isUsingJPos() {
-        final Document d = getDocument();
-        Element child = d.getRootElement().getChild("printer");
-        if (child == null) {
-            child = new Element("printer");
-            d.getRootElement().addContent(child);
-            return false;
-        }
-        final String type = child.getAttributeValue("type");
-        return (type != null && type.equalsIgnoreCase("jpos"));
-    }
+        final SAXBuilder builder = new SAXBuilder();
+        File file = getConfigFile();
 
-    public static void setPrinterType(String type) {
-        final Document d = getDocument();
-        Element e = d.getRootElement().getChild("printer");
-        if (e == null) {
-            e = new Element("printer");
-            d.getRootElement().addContent(e);
-        }
-        e.setAttribute("type", type);
-    }
-
-    public static String getJPosPrinter() {
-        final Document d = getDocument();
-        final List<Element> children = d.getRootElement().getChildren("jpos");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getAttribute("printer") != null) {
-                    return e.getAttributeValue("printer");
+        try {
+            System.out.println("POSConfiguration.loadConfigurationFromXML() loading " + file.getAbsolutePath());
+            Document document = builder.build(file);
+            // config
+            final Element rootElement = document.getRootElement();
+            setUserID(Integer.valueOf(rootElement.getAttributeValue("userID", "2")));
+            setCompanyID(Integer.valueOf(rootElement.getAttributeValue("societeID", "42")));
+            setPosID(Integer.valueOf(rootElement.getAttributeValue("caisseID", "2")));
+            setScanDelay(Integer.valueOf(rootElement.getAttributeValue("scanDelay", "80")));
+            // screen
+            final List<Element> children = rootElement.getChildren("screen");
+            if (children != null) {
+                for (Element e : children) {
+                    this.screenWidth = Integer.valueOf(e.getAttributeValue("width", "0"));
+                    this.screenHeight = Integer.valueOf(e.getAttributeValue("height", "0"));
                 }
             }
-        }
-        return "";
-    }
-
-    public static void setJPosPrinter(String printer) {
-        final Document d = getDocument();
-        Element e = d.getRootElement().getChild("jpos");
-        if (e == null) {
-            e = new Element("jpos");
-            d.getRootElement().addContent(e);
-        }
-        e.setAttribute("printer", printer);
-    }
-
-    public static String getESCPPort() {
-        final Document d = getDocument();
-        final List<Element> children = d.getRootElement().getChildren("escp");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getAttribute("port") != null) {
-                    return e.getAttributeValue("port", "COM1:");
+            // credit card
+            final List<Element> childrenCreditCard = rootElement.getChildren("creditcard");
+            if (childrenCreditCard != null) {
+                for (Element e : childrenCreditCard) {
+                    this.creditCardPort = e.getAttributeValue("port", "");
                 }
             }
-        }
-        return "COM1:";
-    }
-
-    public static void setESCPPort(String port) {
-        final Document d = getDocument();
-        Element e = d.getRootElement().getChild("escp");
-        if (e == null) {
-            e = new Element("escp");
-            d.getRootElement().addContent(e);
-        }
-        e.setAttribute("port", port);
-    }
-
-    public static String getCardPort() {
-        final Document d = getDocument();
-        final List<Element> children = d.getRootElement().getChildren("card");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getAttribute("port") != null) {
-                    return e.getAttributeValue("port", "COM1:");
+            // credit card
+            final List<Element> childrenLCD = rootElement.getChildren("lcd");
+            if (childrenLCD != null) {
+                for (Element e : childrenLCD) {
+                    this.LCDSerialPort = e.getAttributeValue("port", "");
+                    this.LCDLine1 = e.getAttributeValue("line1", "");
+                    this.LCDLine2 = e.getAttributeValue("line2", "");
                 }
             }
-        }
-        return "";
-    }
 
-    public static void setCardPort(String port) {
-        final Document d = getDocument();
-        Element e = d.getRootElement().getChild("card");
-        if (e == null) {
-            e = new Element("card");
-            d.getRootElement().addContent(e);
-        }
-        e.setAttribute("port", port);
-    }
-
-    public static String getJPosDirectory() {
-        final Document d = getDocument();
-        final List<Element> children = d.getRootElement().getChildren("jpos");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getValue() != null) {
-                    return e.getValue();
+            // header
+            final List<Element> headers = rootElement.getChildren("header");
+            if (headers != null) {
+                for (Element header : headers) {
+                    this.headerLines.add(new TicketLine(header.getValue(), header.getAttributeValue("style")));
                 }
             }
-        }
-        return "";
-    }
-
-    public static void setJPosDirectory(String dir) {
-        final Document d = getDocument();
-        Element e = d.getRootElement().getChild("jpos");
-        if (e == null) {
-            e = new Element("jpos");
-            d.getRootElement().addContent(e);
-        }
-        e.setText(dir);
-    }
-
-    public static List<TicketLine> getHeaders() {
-        final List<TicketLine> l = new ArrayList<TicketLine>();
-        final Document d = getDocument();
-        final List<Element> list = d.getRootElement().getChildren("header");
-        if (list != null) {
-            for (Element element : list) {
-                l.add(new TicketLine(element.getValue(), element.getAttributeValue("style")));
-            }
-        }
-        return l;
-    }
-
-    public static void setLines(String type, List<TicketLine> lines) {
-        final Document d = getDocument();
-        final Element rootElement = d.getRootElement();
-        rootElement.removeChildren(type);
-        for (TicketLine ticketLine : lines) {
-            Element e = new Element(type);
-            final String style = ticketLine.getStyle();
-            if (style != null && !style.isEmpty()) {
-                e.setAttribute("style", style);
-            }
-            e.setText(ticketLine.getText());
-            rootElement.addContent(e);
-        }
-
-    }
-
-    public static List<TicketLine> getFooters() {
-        final List<TicketLine> l = new ArrayList<TicketLine>();
-        final Document d = getDocument();
-        final List<Element> list = d.getRootElement().getChildren("footer");
-        if (list != null) {
-            for (Element element : list) {
-                l.add(new TicketLine(element.getValue(), element.getAttributeValue("style")));
-            }
-        }
-        return l;
-    }
-
-    public static void setHeaders(List<TicketLine> lines) {
-        setLines("header", lines);
-    }
-
-    public static void setFooters(List<TicketLine> lines) {
-        setLines("footer", lines);
-    }
-
-    public static int getTicketWidth() {
-        final Document d = getDocument();
-        @SuppressWarnings("unchecked")
-        final List<Element> children = d.getRootElement().getChildren("printer");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getAttribute("printWidth") != null) {
-                    final String attributeValue = e.getAttributeValue("printWidth", "40");
-                    try {
-                        return Integer.parseInt(attributeValue);
-                    } catch (Exception ex) {
-                        return 20;
-                    }
+            // footer
+            final List<Element> footers = rootElement.getChildren("footer");
+            if (footers != null) {
+                for (Element header : footers) {
+                    this.footerLines.add(new TicketLine(header.getValue(), header.getAttributeValue("style")));
                 }
             }
-        }
-        return 20;
-    }
-
-    public static void setTicketWidth(String w) {
-        final Document d = getDocument();
-        Element e = d.getRootElement().getChild("printer");
-        if (e == null) {
-            e = new Element("printer");
-            d.getRootElement().addContent(e);
-        }
-        e.setAttribute("printWidth", w);
-    }
-
-    public static int getScreenWidth() {
-        final Document d = getDocument();
-        final List<Element> children = d.getRootElement().getChildren("screen");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getAttribute("width") != null) {
-                    return Integer.valueOf(e.getAttributeValue("width", "0"));
-                }
+            // ticket printers
+            final List<Element> printers = rootElement.getChildren("ticketPrinter");
+            if (printers.size() > 0) {
+                configureTicketPrinter(this.ticketPrinterConf1, printers.get(0));
             }
-        }
-        return 0;
-    }
-
-    public static int getScreenHeight() {
-        final Document d = getDocument();
-        final List<Element> children = d.getRootElement().getChildren("screen");
-        if (children != null) {
-            for (Element e : children) {
-                if (e.getAttribute("height") != null) {
-                    return Integer.valueOf(e.getAttributeValue("height", "0"));
-                }
+            if (printers.size() > 1) {
+                configureTicketPrinter(this.ticketPrinterConf2, printers.get(1));
             }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        return 0;
+
     }
 
-    public static void saveConfiguration() {
+    private void configureTicketPrinter(TicketPrinterConfiguration conf, Element element) {
+        conf.setType(element.getAttributeValue("type"));
+        conf.setName(element.getAttributeValue("name"));
+        conf.setCopyCount(Integer.parseInt(element.getAttributeValue("copyCount")));
+        conf.setTicketWidth(Integer.parseInt(element.getAttributeValue("ticketWidth")));
+        conf.setFolder(element.getAttributeValue("folder", ""));
+    }
+
+    private Element getElementFromConfiguration(TicketPrinterConfiguration conf) {
+        final Element element = new Element("ticketPrinter");
+        element.setAttribute("type", conf.getType());
+        element.setAttribute("name", conf.getName());
+        element.setAttribute("copyCount", String.valueOf(conf.getCopyCount()));
+        element.setAttribute("ticketWidth", String.valueOf(conf.getTicketWidth()));
+        element.setAttribute("folder", conf.getFolder());
+        return element;
+    }
+
+    public void saveConfiguration() {
         final File file = getConfigFile();
         final XMLOutputter outputter = new XMLOutputter(Format.getPrettyFormat());
         try {
             System.out.println("Saving:" + file.getAbsolutePath());
             final FileOutputStream fileOutputStream = new FileOutputStream(file);
-            outputter.output(getDocument(), fileOutputStream);
+            final Document doc = new Document();
+            final Element configElement = new Element("config");
+            configElement.setAttribute("userID", String.valueOf(this.userID));
+            configElement.setAttribute("societeID", String.valueOf(this.companyID));
+            configElement.setAttribute("caisseID", String.valueOf(this.posID));
+            configElement.setAttribute("scanDelay", String.valueOf(this.scanDelay));
+            doc.addContent(configElement);
+            // screen size
+            final Element screenElement = new Element("screen");
+            screenElement.setAttribute("width", String.valueOf(this.screenWidth));
+            screenElement.setAttribute("height", String.valueOf(this.screenHeight));
+            configElement.addContent(screenElement);
+            // credit card
+            final Element creditCardElement = new Element("creditcard");
+            creditCardElement.setAttribute("port", this.creditCardPort);
+            configElement.addContent(creditCardElement);
+            // LCD
+            final Element lcdElement = new Element("lcd");
+            lcdElement.setAttribute("port", this.LCDSerialPort);
+            lcdElement.setAttribute("line1", this.LCDLine1);
+            lcdElement.setAttribute("line2", this.LCDLine2);
+            configElement.addContent(lcdElement);
+
+            // header
+            for (TicketLine line : this.headerLines) {
+                Element e = new Element("header");
+                final String style = line.getStyle();
+                if (style != null && !style.isEmpty()) {
+                    e.setAttribute("style", style);
+                }
+                e.setText(line.getText());
+                configElement.addContent(e);
+            }
+            // footer
+            for (TicketLine line : this.footerLines) {
+                Element e = new Element("footer");
+                final String style = line.getStyle();
+                if (style != null && !style.isEmpty()) {
+                    e.setAttribute("style", style);
+                }
+                e.setText(line.getText());
+                configElement.addContent(e);
+            }
+            // ticket printer
+            configElement.addContent(getElementFromConfiguration(this.ticketPrinterConf1));
+            configElement.addContent(getElementFromConfiguration(this.ticketPrinterConf2));
+            outputter.output(doc, fileOutputStream);
             fileOutputStream.close();
         } catch (Exception e) {
             e.printStackTrace();
             ExceptionHandler.handle("Erreur lors de la sauvegarde de la configuration de la caisse.\n" + file.getAbsolutePath());
         }
 
+    }
+
+    public void print(Ticket ticket) {
+        print(ticket, this.ticketPrinterConf1);
+        print(ticket, this.ticketPrinterConf2);
+    }
+
+    public void print(Ticket ticket, TicketPrinterConfiguration conf) {
+        if (conf.isValid() && conf.getCopyCount() > 0) {
+            final TicketPrinter prt = conf.createTicketPrinter();
+            for (int i = 0; i < conf.getCopyCount(); i++) {
+                ticket.print(prt, conf.getTicketWidth());
+            }
+        }
+    }
+
+    public boolean isUsingJPos() {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    public List<String> getJPosDirectories() {// TODO Auto-generated method stub
+        final ArrayList<String> result = new ArrayList<String>();
+        return result;
+    }
+
+    public String getLCDSerialPort() {
+        return LCDSerialPort;
+    }
+
+    public void setLCDSerialPort(String port) {
+        this.LCDSerialPort = port;
+    }
+
+    public String getLCDLine1() {
+        return this.LCDLine1;
+    }
+
+    public void setLCDLine1(String text) {
+        this.LCDLine1 = text;
+    }
+
+    public String getLCDLine2() {
+        return this.LCDLine2;
+    }
+
+    public void setLCDLine2(String text) {
+        this.LCDLine2 = text;
     }
 
 }

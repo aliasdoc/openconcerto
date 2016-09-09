@@ -11,21 +11,26 @@ public class DataModel {
     private int state = LOADED;
 
     public void addDataModelListener(DataModelListener l) {
-        listeners.add(l);
-
+        synchronized (this.listeners) {
+            listeners.add(l);
+        }
     }
 
     public void fireDataModelChanged() {
-        for (DataModelListener listener : listeners) {
+        final List<DataModelListener> copy = new ArrayList<DataModelListener>();
+        synchronized (this.listeners) {
+            copy.addAll(this.listeners);
+        }
+        for (final DataModelListener listener : copy) {
             listener.dataChanged();
         }
     }
 
-    public void setChart(Chart chart) {
+    public synchronized void setChart(Chart chart) {
         this.chart = chart;
     }
 
-    public Chart getChart() {
+    public synchronized Chart getChart() {
         return chart;
     }
 

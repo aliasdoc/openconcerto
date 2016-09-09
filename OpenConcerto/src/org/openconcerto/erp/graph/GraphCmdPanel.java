@@ -24,6 +24,9 @@ import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.HierarchyListener;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -104,11 +107,11 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
         chart.setColors(colors);
         chart.setDimension(new Dimension(800, 400));
         // Models
-        model1 = new CmdDataModel(chart, year - 2, cumul);
+        model1 = new CmdDataModel(year - 2, cumul);
         chart.addModel(model1);
-        model2 = new CmdDataModel(chart, year - 1, cumul);
+        model2 = new CmdDataModel(year - 1, cumul);
         chart.addModel(model2);
-        model3 = new CmdDataModel(chart, year, cumul);
+        model3 = new CmdDataModel(year, cumul);
         chart.addModel(model3);
         // Range
         chart.setLowerRange(0);
@@ -172,6 +175,15 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
         model2.addDataModelListener(this);
         model3.addDataModelListener(this);
         updateTitle();
+
+        this.addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent e) {
+                model1.load();
+                model2.load();
+                model3.load();
+            }
+        });
     }
 
     private ChartPanel createYearChartPanel(int year) {
@@ -208,19 +220,19 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
         modelYear1.addDataModelListener(new DataModelListener() {
             @Override
             public void dataChanged() {
-                updateLeftAxis(chartYear, modelYear1.getMaxValue().floatValue());
+                updateLeftAxis(chartYear, modelYear1.getMaxValue().floatValue(), true);
             }
         });
         modelYear2.addDataModelListener(new DataModelListener() {
             @Override
             public void dataChanged() {
-                updateLeftAxis(chartYear, modelYear2.getMaxValue().floatValue());
+                updateLeftAxis(chartYear, modelYear2.getMaxValue().floatValue(), true);
             }
         });
         modelYear3.addDataModelListener(new DataModelListener() {
             @Override
             public void dataChanged() {
-                updateLeftAxis(chartYear, modelYear3.getMaxValue().floatValue());
+                updateLeftAxis(chartYear, modelYear3.getMaxValue().floatValue(), true);
             }
         });
 
@@ -235,6 +247,16 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
             }
         };
         panel.setOpaque(false);
+        panel.addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent e) {
+                modelYear1.load();
+                modelYear2.load();
+                modelYear3.load();
+            }
+
+        });
+
         return panel;
     }
 
@@ -242,7 +264,7 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
         model.addDataModelListener(new DataModelListener() {
             @Override
             public void dataChanged() {
-                updateLeftAxis(chart, model.getMaxValue().floatValue());
+                updateLeftAxis(chart, model.getMaxValue().floatValue(), false);
             }
         });
     }
@@ -268,30 +290,36 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
     @Override
     public void stateChanged(ChangeEvent e) {
         if (e.getSource() == s1) {
-            model1.loadYear(s1.getValue(), this.cumul);
-            if (!this.cumul)
-                modelYear1.loadYear(s1.getValue());
+            final int year1 = ((Number) s1.getValue()).intValue();
+            model1.loadYear(year1);
+            if (!this.cumul) {
+                modelYear1.loadYear(year1);
+            }
         } else if (e.getSource() == s2) {
-            model2.loadYear(s2.getValue(), this.cumul);
-            if (!this.cumul)
-                modelYear2.loadYear(s2.getValue());
+            final int year2 = ((Number) s2.getValue()).intValue();
+            model2.loadYear(year2);
+            if (!this.cumul) {
+                modelYear2.loadYear(year2);
+            }
         } else if (e.getSource() == s3) {
-            model3.loadYear(s3.getValue(), this.cumul);
-            if (!this.cumul)
-                modelYear3.loadYear(s3.getValue());
+            final int year3 = ((Number) s3.getValue()).intValue();
+            model3.loadYear(year3);
+            if (!this.cumul) {
+                modelYear3.loadYear(year3);
+            }
         }
 
     }
 
-    public float getHigherValue() {
-        float h = model1.getMaxValue().floatValue();
-        h = Math.max(h, model2.getMaxValue().floatValue());
-        h = Math.max(h, model3.getMaxValue().floatValue());
+    public float getHigherValue(boolean year) {
+        float h = (year ? modelYear1.getMaxValue().floatValue() : model1.getMaxValue().floatValue());
+        h = Math.max(h, (year ? modelYear2.getMaxValue().floatValue() : model2.getMaxValue().floatValue()));
+        h = Math.max(h, (year ? modelYear3.getMaxValue().floatValue() : model3.getMaxValue().floatValue()));
         return h;
     }
 
-    public void updateLeftAxis(final VerticalGroupBarChart chartGroup, final float maxValue) {
-        if (maxValue >= getHigherValue()) {
+    public void updateLeftAxis(final VerticalGroupBarChart chartGroup, final float maxValue, boolean year) {
+        if (maxValue >= getHigherValue(year)) {
             SwingUtilities.invokeLater(new Runnable() {
 
                 @Override
@@ -316,17 +344,18 @@ public class GraphCmdPanel extends JPanel implements ChangeListener, DataModelLi
             @Override
             public void run() {
                 updateTitle();
-
             }
         });
 
     }
 
     protected void updateTitle() {
+        DecimalFormat decFormat = new DecimalFormat("#,###,##0.##");
+
         String s = "          ";
-        s += this.s1.getValue().toString() + " : " + this.model1.getTotal() + " €     ";
-        s += this.s2.getValue().toString() + " : " + this.model2.getTotal() + " €     ";
-        s += this.s3.getValue().toString() + " : " + this.model3.getTotal() + " €";
+        s += this.s1.getValue().toString() + " : " + decFormat.format(this.model1.getTotal()) + " €     ";
+        s += this.s2.getValue().toString() + " : " + decFormat.format(this.model2.getTotal()) + " €     ";
+        s += this.s3.getValue().toString() + " : " + decFormat.format(this.model3.getTotal()) + " €";
         this.title.setText(s);
     }
 }

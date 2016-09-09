@@ -308,7 +308,6 @@ public class DateRangePlannerPanel extends JPanel {
         p.add(dateStart, c);
         c.gridx++;
         radioPeriodEndAt = new JRadioButton("Fin le");
-        radioPeriodEndAt.setSelected(true);
         p.add(radioPeriodEndAt, c);
         c.gridx++;
         dateEnd = new JDate(false, true);
@@ -367,7 +366,9 @@ public class DateRangePlannerPanel extends JPanel {
                 dateEnd.setEnabled(false);
             }
         });
-
+        // par défaut : pas de fin
+        dateEnd.setEnabled(false);
+        radioPeriodNeverEnd.setSelected(true);
         return p;
     }
 

@@ -56,7 +56,7 @@ public class AddFK extends Changer<SQLTable> {
             toInno(t);
 
         {
-            final Set<Link> foreignLinks = t.getDBSystemRoot().getGraph().getForeignLinks(t);
+            final Set<Link> foreignLinks = t.getForeignLinks();
             final Set<List<String>> realFKs = new HashSet<List<String>>();
             for (final Link link : foreignLinks) {
                 // if name is null, link is virtual

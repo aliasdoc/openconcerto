@@ -44,7 +44,8 @@ public class GrandLivreSheet extends SheetInterface {
     private static int debutFill, endFill;
     public static int MODEALL = 1;
     public static int MODELETTREE = 2;
-    public static int MODENONLETTREE = 3;
+    public static int MODENONLETTREE_PERIODE = 3;
+    public static int MODENONLETTREE_ALL = 4;
     private final static SQLTable tableEcriture = base.getTable("ECRITURE");
     private final static SQLTable tableJournal = base.getTable("JOURNAL");
     private final static SQLTable tableMvt = base.getTable("MOUVEMENT");
@@ -175,7 +176,7 @@ public class GrandLivreSheet extends SheetInterface {
                     w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "<>", o));
                     w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "!=", ""));
                 } else {
-                    if (GrandLivreSheet.this.lettrage == MODENONLETTREE) {
+                    if (GrandLivreSheet.this.lettrage == MODENONLETTREE_PERIODE) {
                         Object o = null;
                         Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
                         w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
@@ -497,7 +498,7 @@ public class GrandLivreSheet extends SheetInterface {
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "<>", o));
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "!=", ""));
         } else {
-            if (this.lettrage == MODENONLETTREE) {
+            if (this.lettrage == MODENONLETTREE_PERIODE) {
                 Object o = null;
                 Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
                 w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
@@ -557,7 +558,7 @@ public class GrandLivreSheet extends SheetInterface {
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "<>", o));
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "!=", ""));
         } else {
-            if (this.lettrage == MODENONLETTREE) {
+            if (this.lettrage == MODENONLETTREE_PERIODE) {
                 Object o = null;
                 Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
                 w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));

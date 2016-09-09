@@ -55,10 +55,10 @@ import java.util.prefs.Preferences;
 import net.jcip.annotations.GuardedBy;
 import net.jcip.annotations.ThreadSafe;
 
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.JDOMException;
-import org.jdom.input.SAXBuilder;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
 
 /**
  * Class to obtain a RowItemDesc from a table and a name.
@@ -230,7 +230,6 @@ public class SQLFieldTranslator {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static List<Element> getChildren(final Element elem) {
         return elem.getChildren();
     }

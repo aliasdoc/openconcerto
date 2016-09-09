@@ -11,22 +11,15 @@
  * When distributing the software, include this License Header Notice in each file.
  */
  
- package org.openconcerto.ui.light;
+ package org.openconcerto.erp.core.humanresources.payroll.element;
 
-public class SaveOrCancelLine extends LightUILine {
-    public SaveOrCancelLine() {
-        this.setGridAlignment(ALIGN_RIGHT);
-        final LightUIElement add = new LightUIElement();
-        add.setId("save");
-        add.setType(LightUIElement.TYPE_BUTTON_WITH_CONTEXT);
-        add.setLabel("Enregistrer les modifications");
-        add(add);
+public class ContratModaliteTempsSQLElement extends AbstractCodeCommonSQLElement {
+    public ContratModaliteTempsSQLElement() {
+        super("CONTRAT_MODALITE_TEMPS", "une modalité de temps", "modalité de temps");
+    }
 
-        final LightUIElement cancel = new LightUIElement();
-        cancel.setId("cancel");
-        cancel.setType(LightUIElement.TYPE_BUTTON_CANCEL);
-        cancel.setLabel("Annuler");
-        add(cancel);
-
+    @Override
+    protected String createCode() {
+        return "humanresources.modalite.temps.code";
     }
 }

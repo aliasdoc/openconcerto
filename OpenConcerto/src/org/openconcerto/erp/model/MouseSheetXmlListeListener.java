@@ -14,8 +14,9 @@
  package org.openconcerto.erp.model;
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.generationDoc.A4;
 import org.openconcerto.erp.generationDoc.AbstractSheetXml;
-import org.openconcerto.erp.panel.ListeFastPrintFrame;
+import org.openconcerto.erp.generationDoc.ProgressPrintingFrame;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLField;
@@ -24,19 +25,33 @@ import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.view.list.IListe;
-import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction;
-import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
 import org.openconcerto.ui.EmailComposer;
 import org.openconcerto.utils.ExceptionHandler;
 
+import java.awt.Window;
 import java.awt.event.ActionEvent;
+import java.awt.print.Paper;
+import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import javax.print.PrintService;
+import javax.print.attribute.Attribute;
+import javax.print.attribute.HashPrintRequestAttributeSet;
+import javax.print.attribute.PrintRequestAttributeSet;
+import javax.print.attribute.Size2DSyntax;
+import javax.print.attribute.standard.Copies;
+import javax.print.attribute.standard.MediaPrintableArea;
+import javax.print.attribute.standard.MediaSizeName;
+import javax.print.attribute.standard.PageRanges;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JOptionPane;
@@ -302,41 +317,106 @@ public class MouseSheetXmlListeListener {
 
         if (this.printIsVisible) {
 
+            // Impression rapide : imprime le ou les documents sélectionnés (les génère si besoin)
+            // en proposant l'interface Java d'impression
             l.add(new RowAction(new AbstractAction() {
-                public void actionPerformed(ActionEvent ev) {
-                    createAbstractSheet(IListe.get(ev).fetchSelectedRow()).fastPrintDocument();
-                }
+                public void actionPerformed(final ActionEvent ev) {
+                    //
+                    final IListe ilist = IListe.get(ev);
+                    AbstractSheetXml firstSheet = createAbstractSheet(ilist.fetchRow(IListe.get(ev).getSelectedRow().getID()));
+                    final String printerName = firstSheet.getPrinter();
+                    // Printer configuration
+                    final PrinterJob printJob = PrinterJob.getPrinterJob();
 
-            }, this.printHeader, "document.quickprint") {
+                    // Set the printer
+                    PrintService myService = null;
+                    if (printerName != null && printerName.trim().length() > 0) {
+                        final PrintService[] services = PrinterJob.lookupPrintServices();
+                        for (int i = 0; i < services.length; i++) {
+                            if (services[i].getName().equals(printerName)) {
+                                myService = services[i];
+                                break;
+                            }
+                        }
+                        if (myService != null) {
+                            try {
+                                System.err.println("MouseSheetXmlListeListener.getRowActions() set printer : " + printerName);
+                                printJob.setPrintService(myService);
+                            } catch (PrinterException e) {
+                                e.printStackTrace();
+                                JOptionPane.showMessageDialog(null, "Imprimante non compatible");
+                                return;
+                            }
+                        }
+                    }
 
-                @Override
-                public boolean enabledFor(IListeEvent evt) {
-                    return evt.getSelectedRow() != null && evt.getTotalRowCount() >= 1 && createAbstractSheet(evt.getSelectedRow().asRow()).getGeneratedFile().exists();
-                }
-            });
+                    final HashPrintRequestAttributeSet attributes = new HashPrintRequestAttributeSet();
+                    // FIXME l'impression est forcée en A4, sur OpenSuse le format est en
+                    // Letter par défaut alors que l'imprimante est en A4 dans le système
+                    final MediaSizeName media = MediaSizeName.ISO_A4;
+                    attributes.add(media);
+                    Paper paper = new A4(0, 0);
+                    double POINTS_PER_INCH = 72.0;
+                    final MediaPrintableArea printableArea = new MediaPrintableArea((float) (paper.getImageableX() / POINTS_PER_INCH), (float) (paper.getImageableY() / POINTS_PER_INCH),
+                            (float) (paper.getImageableWidth() / POINTS_PER_INCH), (float) (paper.getImageableHeight() / POINTS_PER_INCH), Size2DSyntax.INCH);
+                    attributes.add(printableArea);
+                    attributes.add(new Copies(2));
+                    boolean okToPrint = true;
+                    if (Boolean.getBoolean("org.openconcerto.oo.useODSViewer")) {
+                        okToPrint = printJob.printDialog(attributes);
+                        final Attribute attribute = attributes.get(Copies.class);
+                        if (attribute != null) {
+                            final Copies attributeCopies = (Copies) attribute;
+                            final int value = attributeCopies.getValue();
+                            printJob.setCopies(value);
+                        } else {
+                            printJob.setCopies(1);
+                        }
+                    } else {
+                        printJob.setCopies(1);
+                    }
+                    if (okToPrint) {
+                        Window w = SwingUtilities.getWindowAncestor(ilist);
+                        final ProgressPrintingFrame pFrame = new ProgressPrintingFrame(w, printJob, "Impression", "Impression en cours", 300);
+                        // Génération + impression
+                        final List<SQLRowValues> rows = IListe.get(ev).getSelectedRows();
+                        final Thread thread = new Thread() {
+                            @Override
+                            public void run() {
+                                final int size = rows.size();
+                                for (int i = 0; i < size; i++) {
+                                    final int index = i;
+                                    SwingUtilities.invokeLater(new Runnable() {
 
-            l.add(new RowAction(new AbstractAction() {
-                public void actionPerformed(ActionEvent ev) {
-                    createAbstractSheet(IListe.get(ev).fetchSelectedRow()).printDocument();
+                                        @Override
+                                        public void run() {
+                                            pFrame.setMessage("Document " + (index + 1) + "/" + size);
+                                            pFrame.setProgress((100 * (index + 1)) / size);
+                                        }
+                                    });
+                                    if (!pFrame.isCancelled()) {
+                                        SQLRowValues r = rows.get(i);
+                                        AbstractSheetXml sheet = createAbstractSheet(IListe.get(ev).fetchRow(r.getID()));
+                                        sheet.printDocument(printJob);
+                                    }
+                                }
+                            }
+                        };
+                        thread.setPriority(Thread.MIN_PRIORITY);
+                        thread.setDaemon(true);
+                        pFrame.setLocationRelativeTo(ilist);
+                        pFrame.setVisible(true);
+                        thread.start();
+
+                    }
+
                 }
             }, false, "document.print") {
                 @Override
                 public boolean enabledFor(IListeEvent evt) {
-                    return evt.getSelectedRow() != null && evt.getTotalRowCount() >= 1 && createAbstractSheet(evt.getSelectedRow().asRow()).getGeneratedFile().exists();
+                    return evt.getSelectedRow() != null && evt.getSelectedRows().size() > 0;
                 }
             });
-
-            PredicateRowAction rowAction = new PredicateRowAction(new AbstractAction() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    List<SQLRowValues> list = IListe.get(e).getSelectedRows();
-                    ListeFastPrintFrame frame = new ListeFastPrintFrame(list, clazz);
-                    frame.setVisible(true);
-                }
-            }, this.previewHeader, "document.print.all");
-            rowAction.setPredicate(IListeEvent.createSelectionCountPredicate(2, Integer.MAX_VALUE));
-
-            l.add(rowAction);
 
         }
 

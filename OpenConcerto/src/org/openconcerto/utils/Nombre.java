@@ -257,10 +257,10 @@ public class Nombre {
             nombrePredefini.put(300, "trysta");
             nombrePredefini.put(400, "czterysta");
             nombrePredefini.put(500, "pięćdziesiąt");
-            nombrePredefini.put(600, "seiscientos");
-            nombrePredefini.put(700, "setecientos");
-            nombrePredefini.put(800, "ochocientos");
-            nombrePredefini.put(900, "novecientos");
+            nombrePredefini.put(600, "sześćdziesiąt");
+            nombrePredefini.put(700, "siedemdziesiąt");
+            nombrePredefini.put(800, "osiemdziesiąt");
+            nombrePredefini.put(900, "dziewięćdziesiąt");
         }
     }
 

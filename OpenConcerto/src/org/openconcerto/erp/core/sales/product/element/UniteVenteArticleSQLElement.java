@@ -13,6 +13,12 @@
  
  package org.openconcerto.erp.core.sales.product.element;
 
+import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.sql.element.BaseSQLComponent;
+import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ListMap;
+
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
@@ -20,12 +26,6 @@ import java.util.List;
 
 import javax.swing.JLabel;
 import javax.swing.JTextField;
-
-import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
-import org.openconcerto.sql.element.BaseSQLComponent;
-import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.utils.CollectionMap;
 
 public class UniteVenteArticleSQLElement extends ComptaSQLConfElement {
 
@@ -49,10 +49,8 @@ public class UniteVenteArticleSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
-        res.putAll(null, "NOM");
-        return res;
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     /*

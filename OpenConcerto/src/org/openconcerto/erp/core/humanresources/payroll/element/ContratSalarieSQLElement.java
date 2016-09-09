@@ -18,10 +18,12 @@ import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.ui.JDate;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.swing.JLabel;
@@ -44,6 +46,11 @@ public class ContratSalarieSQLElement extends ComptaSQLConfElement {
         final List<String> l = new ArrayList<String>();
         l.add("NATURE");
         return l;
+    }
+
+    @Override
+    public boolean isPrivate() {
+        return true;
     }
 
     /*
@@ -162,6 +169,38 @@ public class ContratSalarieSQLElement extends ComptaSQLConfElement {
                 c.weightx = 1;
                 this.add(selStatutCatConv, c);
 
+                List<String> dsnFF = Arrays.asList("ID_CONTRAT_MODALITE_TEMPS", "ID_CONTRAT_REGIME_MALADIE", "ID_CONTRAT_REGIME_VIEILLESSE", "ID_CONTRAT_DETACHE_EXPATRIE",
+                        "ID_CONTRAT_DISPOSITIF_POLITIQUE");
+
+                for (String ffName : dsnFF) {
+                    JLabel labelFF = new JLabel(getLabelFor(ffName));
+                    labelFF.setHorizontalAlignment(SwingConstants.RIGHT);
+                    ElementComboBox selFF = new ElementComboBox();
+                    selFF.setInfoIconVisible(false);
+                    c.gridy++;
+                    c.gridx = 0;
+                    c.weightx = 0;
+                    this.add(labelFF, c);
+                    c.gridx++;
+                    c.weighty = 1;
+                    c.weightx = 1;
+                    this.add(selFF, c);
+                    this.addRequiredSQLObject(selFF, ffName);
+                }
+                JLabel labelFF = new JLabel(getLabelFor("ID_CONTRAT_MOTIF_RECOURS"));
+                labelFF.setHorizontalAlignment(SwingConstants.RIGHT);
+                ElementComboBox selFF = new ElementComboBox();
+                selFF.setInfoIconVisible(false);
+                c.gridy++;
+                c.gridx = 0;
+                c.weightx = 0;
+                this.add(labelFF, c);
+                c.gridx++;
+                c.weighty = 1;
+                c.weightx = 1;
+                this.add(selFF, c);
+                this.addSQLObject(selFF, "ID_CONTRAT_MOTIF_RECOURS");
+
                 // Code UGRR
                 JLabel labelCodeUGRR = new JLabel(getLabelFor("CODE_IRC_UGRR"));
                 labelCodeUGRR.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -243,7 +282,34 @@ public class ContratSalarieSQLElement extends ComptaSQLConfElement {
                 this.add(textNumRetraite, c);
                 addView(textNumRetraite, "NUMERO_RATTACHEMENT_RETRAITE");
 
-                this.addSQLObject(selCodeCatSocio, "ID_CODE_EMPLOI");
+                // JLabel labelCodeRegimeRetraite = new
+                // JLabel(getLabelFor("CODE_REGIME_RETRAITE_DSN"));
+                // labelCodeRegimeRetraite.setHorizontalAlignment(SwingConstants.RIGHT);
+                // JTextField textCodeRegimeRetraite = new JTextField();
+                // c.gridy++;
+                // c.gridx = 0;
+                // c.weightx = 0;
+                // this.add(labelCodeRegimeRetraite, c);
+                // c.gridx++;
+                // c.weighty = 1;
+                // c.weightx = 1;
+                // this.add(textCodeRegimeRetraite, c);
+                // addRequiredSQLObject(textCodeRegimeRetraite, "CODE_REGIME_RETRAITE_DSN");
+
+                JLabel labelDateFin = new JLabel(getLabelFor("DATE_PREV_FIN"));
+                labelDateFin.setHorizontalAlignment(SwingConstants.RIGHT);
+                JDate textDateFin = new JDate();
+                c.gridy++;
+                c.gridx = 0;
+                c.weightx = 0;
+                this.add(labelDateFin, c);
+                c.gridx++;
+                c.weighty = 1;
+                c.weightx = 1;
+                this.add(textDateFin, c);
+                addSQLObject(textDateFin, "DATE_PREV_FIN");
+
+                this.addRequiredSQLObject(selCodeCatSocio, "ID_CODE_EMPLOI");
                 this.addSQLObject(selContratTravail, "ID_CODE_CONTRAT_TRAVAIL");
                 this.addSQLObject(selCaractActivite, "ID_CODE_CARACT_ACTIVITE");
                 this.addSQLObject(selDroitContrat, "ID_CODE_DROIT_CONTRAT");

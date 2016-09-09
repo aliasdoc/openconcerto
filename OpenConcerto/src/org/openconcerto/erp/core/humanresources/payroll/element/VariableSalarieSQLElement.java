@@ -51,6 +51,11 @@ public class VariableSalarieSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     /*
      * (non-Javadoc)
      * 

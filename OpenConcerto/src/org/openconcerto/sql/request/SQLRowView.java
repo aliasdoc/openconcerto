@@ -15,15 +15,20 @@
 
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
+import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLSelect.LockStrength;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.SQLTableEvent;
 import org.openconcerto.sql.model.SQLTableEvent.Mode;
 import org.openconcerto.sql.model.SQLTableModifiedListener;
 import org.openconcerto.ui.SwingThreadUtils;
+import org.openconcerto.utils.cc.ITransformer;
 
 import java.awt.Component;
 import java.beans.PropertyChangeListener;
@@ -41,6 +46,8 @@ import java.util.Set;
 
 import javax.swing.SwingUtilities;
 
+import net.jcip.annotations.GuardedBy;
+
 /**
  * A view of a row as a collection of SQLRowItemView. NOTE: all methods of this class are expected
  * to be called from within the EDT (unless otherwise stated).
@@ -55,11 +62,13 @@ import javax.swing.SwingUtilities;
 public class SQLRowView extends BaseSQLRequest {
 
     // la table cible de cette requete
-    private final SQLTable table;
+    private final SQLElement element;
     private final SQLTableModifiedListener tableListener;
     // l'id affiché ou SQLRow.NONEXISTANT_ID si les valeurs affichées ne sont pas liées à une ligne
     // dans la base
     private int selectedID;
+    @GuardedBy("this")
+    private SQLRowValues lastKnownDBVals;
     // les valeurs affichées
     private final Map<String, SQLRowItemView> views;
     private final List<SQLRowItemView> viewsOrdered;
@@ -71,20 +80,21 @@ public class SQLRowView extends BaseSQLRequest {
     private final PropertyChangeSupport supp;
 
     // ne peut contenir des champs que de cette table
-    public SQLRowView(SQLTable t) {
-        if (t == null)
+    public SQLRowView(SQLElement sqlElement) {
+        if (sqlElement == null)
             throw new NullPointerException("null SQLTable");
-        else if (!t.isRowable())
-            throw new IllegalArgumentException(t + " is not rowable");
+        else if (!sqlElement.getTable().isRowable())
+            throw new IllegalArgumentException(sqlElement + " is not rowable");
 
         this.supp = new PropertyChangeSupport(this);
-        this.table = t;
+        this.element = sqlElement;
         this.views = new HashMap<String, SQLRowItemView>();
         this.viewsOrdered = new LinkedList<SQLRowItemView>();
         this.readOnly = false;
         this.filling = false;
         this.updating = false;
         this.selectedID = SQLRow.NONEXISTANT_ID;
+        this.lastKnownDBVals = null;
         this.tableListener = new SQLTableModifiedListener() {
             @Override
             public void tableModified(SQLTableEvent evt) {
@@ -124,6 +134,10 @@ public class SQLRowView extends BaseSQLRequest {
         };
     }
 
+    public final SQLElement getElement() {
+        return this.element;
+    }
+
     private synchronized void setReadOnlySelection(final boolean b) {
         if (this.readOnly != b) {
             this.readOnly = b;
@@ -147,12 +161,12 @@ public class SQLRowView extends BaseSQLRequest {
 
     public final void activate(boolean b) {
         if (b) {
-            this.table.addTableModifiedListener(this.tableListener);
+            this.getTable().addTableModifiedListener(this.tableListener);
             if (this.existsInDB())
                 // to catch up to the changes which happened while we weren't listening
                 this.select(this.getSelectedID());
         } else
-            this.table.removeTableModifiedListener(this.tableListener);
+            this.getTable().removeTableModifiedListener(this.tableListener);
     }
 
     /**
@@ -189,13 +203,31 @@ public class SQLRowView extends BaseSQLRequest {
         assert this.viewsOrdered.size() == this.views.size();
     }
 
+    public final SQLRowValues fetchRow(final int id, final LockStrength ls) {
+        if (id < SQLRow.MIN_VALID_ID)
+            return null;
+        final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(this.getElement().getPrivateGraph(null, false, true));
+        fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+            @Override
+            public SQLSelect transformChecked(SQLSelect sel) {
+                sel.setLockStrength(ls);
+                // only lock the primary table as e.g. Postgres "SELECT FOR UPDATE/SHARE cannot be
+                // applied to the nullable side of an outer join". Plus by definition privates
+                // should only be modified through the main row.
+                sel.addLockedTable(fetcher.getGraph().getTable().getName());
+                return sel;
+            }
+        });
+        return fetcher.fetchOne(id, true);
+    }
+
     /**
      * Display the passed id. As an exception, this can be called from outside the EDT
      * 
      * @param id id of the row to display.
      */
     public void select(int id) {
-        final SQLRow row = this.getTable().getRow(id);
+        final SQLRowValues row = this.fetchRow(id, LockStrength.NONE);
         SwingThreadUtils.invoke(new Runnable() {
             public void run() {
                 select(row);
@@ -226,9 +258,21 @@ public class SQLRowView extends BaseSQLRequest {
             } else {
                 if (!this.getTable().equals(r.getTable()))
                     throw new IllegalArgumentException("r is not of table " + this.getTable() + " : " + r);
+                /*
+                 * can happen for privates that weren't fetched alongside the main row, i.e.
+                 * getForeign() returned a new unfilled SQLRow, so no views are changed. TODO remove
+                 * this warning and only use the "views" parameter to choose what to change, i.e.
+                 * each SQLRowItemView should require its fields in show().
+                 */
+                if (r.getFields().isEmpty() && (views == null || !views.isEmpty()))
+                    Log.get().warning("Empty row with non-empty views : " + r);
                 // set selectedID before show() since some views might need it (eg for validation)
-                if (r.getID() != SQLRow.NONEXISTANT_ID)
+                if (r.hasID()) {
                     this.setSelectedID(r.getID());
+                    // always keep a coherent value (i.e. discard partial values)
+                    if (r.getFields().equals(r.getTable().getFieldsName()))
+                        this.setLastKnownDBVals(r.asRowValues());
+                }
                 for (final SQLRowItemView view : this.getViewsFast()) {
                     if (views == null || views.contains(view.getSQLName()))
                         view.show(r);
@@ -318,7 +362,7 @@ public class SQLRowView extends BaseSQLRequest {
     }
 
     public SQLTable getTable() {
-        return this.table;
+        return this.element.getTable();
     }
 
     public Set<SQLRowItemView> getViews() {
@@ -381,6 +425,8 @@ public class SQLRowView extends BaseSQLRequest {
 
     private void setSelectedID(int selectedID) {
         this.selectedID = selectedID;
+        if (!existsInDB())
+            this.setLastKnownDBVals(null);
         this.supp.firePropertyChange("selectedID", null, this.selectedID);
     }
 
@@ -395,6 +441,40 @@ public class SQLRowView extends BaseSQLRequest {
      */
     public final boolean existsInDB() {
         return this.getSelectedID() != SQLRow.NONEXISTANT_ID;
+    }
+
+    /**
+     * Return the last known values of the {@link #getSelectedID() selection} in the DB.
+     * 
+     * @return the last known values.
+     */
+    public synchronized final SQLRowValues getLastKnownDBVals() {
+        return this.lastKnownDBVals;
+    }
+
+    public final boolean setLastKnownDBVals(final SQLRowValues oldDBVals, final SQLRowValues newDBVals) {
+        return this.setLastKnownDBVals(oldDBVals, newDBVals, false);
+    }
+
+    private final boolean setLastKnownDBVals(final SQLRowValues lastKnownDBVals) {
+        return this.setLastKnownDBVals(null, lastKnownDBVals, true);
+    }
+
+    private final boolean setLastKnownDBVals(final SQLRowValues oldDBVals, SQLRowValues newDBVals, final boolean canChange) {
+        // oldDBVals is used to make sure this.lastKnownDBVals didn't change, but anyone can pass
+        // null
+        if (!canChange && oldDBVals == null)
+            throw new NullPointerException("Missing old value");
+        if (newDBVals != null)
+            newDBVals = newDBVals.toImmutable();
+        synchronized (this) {
+            // other classes can only change the value if it hasn't been changed (avoid that a
+            // lengthy trip to the DB overwrites a newer select())
+            final boolean change = canChange || oldDBVals == this.lastKnownDBVals;
+            if (change)
+                this.lastKnownDBVals = newDBVals;
+            return change;
+        }
     }
 
     /**

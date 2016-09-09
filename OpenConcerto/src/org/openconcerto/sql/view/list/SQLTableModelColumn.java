@@ -19,6 +19,7 @@ import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLFieldsSet;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.ui.light.LightUIColumnCellRenderer;
 import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.convertor.ValueConvertor;
 
@@ -35,6 +36,7 @@ public abstract class SQLTableModelColumn {
     private ValueConvertor converter;
     private Class convClass;
     private TableCellRenderer renderer;
+    private LightUIColumnCellRenderer lightUIrenderer;
     private IClosure<TableColumn> installer;
 
     public SQLTableModelColumn(String name) {
@@ -43,6 +45,7 @@ public abstract class SQLTableModelColumn {
         // don't call createRenderer() now as our subclass might not yet be inited
         this.renderer = null;
         this.installer = null;
+        this.lightUIrenderer = null;
     }
 
     /**
@@ -216,6 +219,14 @@ public abstract class SQLTableModelColumn {
 
     public final void setColumnInstaller(IClosure<TableColumn> installer) {
         this.installer = installer;
+    }
+
+    public LightUIColumnCellRenderer getLightUIrenderer() {
+        return lightUIrenderer;
+    }
+
+    public void setLightUIrenderer(LightUIColumnCellRenderer lightUIrenderer) {
+        this.lightUIrenderer = lightUIrenderer;
     }
 
     @Override

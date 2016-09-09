@@ -18,7 +18,7 @@ import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -52,9 +52,9 @@ public class TarifSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> map = new CollectionMap<String, String>();
-        map.put(null, "NOM");
+    public ListMap<String, String> getShowAs() {
+        final ListMap<String, String> map = new ListMap<String, String>();
+        map.putCollection(null, "NOM");
         return map;
     }
 

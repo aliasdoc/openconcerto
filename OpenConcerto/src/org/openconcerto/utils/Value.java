@@ -64,6 +64,24 @@ public abstract class Value<V> {
         public String toString() {
             return "Value <" + this.getValue() + '>';
         }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = super.hashCode();
+            result = prime * result + ((this.val == null) ? 0 : this.val.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (!super.equals(obj))
+                return false;
+            final Some<?> other = (Some<?>) obj;
+            return CompareUtils.equals(this.val, other.val);
+        }
     };
 
     /**
@@ -74,6 +92,10 @@ public abstract class Value<V> {
      */
     public static <V> Value<V> getSome(final V value) {
         return new Value.Some<V>(value);
+    }
+
+    public static final boolean hasValue(final Value<?> v) {
+        return v != null && v.hasValue();
     }
 
     /**
@@ -122,5 +144,21 @@ public abstract class Value<V> {
         if (res == null)
             throw new IllegalStateException("Null value");
         return res;
+    }
+
+    @Override
+    public int hashCode() {
+        return this.hasValue ? 1231 : 1237;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        return this.hasValue == ((Value<?>) obj).hasValue;
     }
 }

@@ -15,7 +15,6 @@
 
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.FieldExpander;
-import org.openconcerto.sql.ShowAs;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -46,12 +45,10 @@ public class ListSQLRequest extends FilteredFillSQLRequest {
         this(table, fieldss, where, null);
     }
 
-    public ListSQLRequest(SQLTable table, List fieldss, Where where, final SQLTable cutAtAncestor) {
+    public ListSQLRequest(SQLTable table, List fieldss, Where where, final FieldExpander showAs) {
         super(table, where);
         if (!this.getPrimaryTable().isOrdered())
             throw new IllegalArgumentException(table + " is not ordered.");
-        if (cutAtAncestor == table)
-            throw new IllegalArgumentException("the primaryTable: " + this.getPrimaryTable() + "is the same than cutAtAncestor");
 
         final List<SQLField> tmpList = new ArrayList<SQLField>();
         for (final Object field : fieldss) {
@@ -71,16 +68,15 @@ public class ListSQLRequest extends FilteredFillSQLRequest {
         }
         this.listFields = Collections.unmodifiableList(tmpList);
 
-        final Configuration conf = Configuration.getInstance();
-        if (conf == null) {
-            this.showAs = FieldExpander.getEmpty();
-        } else if (cutAtAncestor == null) {
-            this.showAs = conf.getShowAs();
+        if (showAs != null) {
+            this.showAs = showAs;
         } else {
-            final ShowAs tmp = new ShowAs(conf.getShowAs());
-            tmp.removeTable(cutAtAncestor);
-            tmp.show(cutAtAncestor, Collections.<String> emptyList());
-            this.showAs = tmp;
+            final Configuration conf = Configuration.getInstance();
+            if (conf == null) {
+                this.showAs = FieldExpander.getEmpty();
+            } else {
+                this.showAs = conf.getShowAs();
+            }
         }
     }
 

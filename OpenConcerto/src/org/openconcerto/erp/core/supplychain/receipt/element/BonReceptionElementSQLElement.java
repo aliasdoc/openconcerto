@@ -30,6 +30,11 @@ public class BonReceptionElementSQLElement extends ComptaSQLConfElement {
         super("BON_RECEPTION_ELEMENT", "un element de bon", "éléments de bon");
     }
 
+    @Override
+    protected String getParentFFName() {
+        return "ID_BON_RECEPTION";
+    }
+
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
         l.add("ID_STYLE");

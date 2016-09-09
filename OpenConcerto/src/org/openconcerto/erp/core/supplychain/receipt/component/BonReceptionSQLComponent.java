@@ -13,37 +13,12 @@
  
  package org.openconcerto.erp.core.supplychain.receipt.component;
 
-import java.awt.Color;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
-
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
-
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
+import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.sales.product.ui.ReliquatRowValuesTable;
 import org.openconcerto.erp.core.supplychain.receipt.ui.BonReceptionItemTable;
@@ -52,7 +27,6 @@ import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.Typ
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.generationDoc.gestcomm.BonReceptionXmlSheet;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
-import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLRow;
@@ -65,17 +39,36 @@ import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.sqlobject.JUniqueTextField;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.RowValuesTable;
-import org.openconcerto.sql.view.list.RowValuesTableModel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.JDate;
-import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.ui.preferences.DefaultProps;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.GestionDevise;
+import org.openconcerto.utils.NumberUtils;
+
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+
+import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
 public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
     private BonReceptionItemTable tableBonItem;
@@ -84,10 +77,6 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
     private ElementComboBox fournisseur;
     private JUniqueTextField textNumeroUnique;
     private final SQLTable tableNum = getTable().getBase().getTable("NUMEROTATION_AUTO");
-    private final DeviseField textTotalHT = new DeviseField();
-    private final DeviseField textTotalTVA = new DeviseField();
-    private final DeviseField textTotalTTC = new DeviseField();
-    private final JTextField textPoidsTotal = new JTextField(6);
     private final JTextField textReference = new JTextField(25);
     private PanelOOSQLComponent panelOO;
     private JDate date = new JDate(true);
@@ -101,6 +90,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         this.tableBonItem.getModel().clearRows();
         this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(getElement().getClass()));
         SQLRowValues rowVals = new SQLRowValues(getTable());
+        rowVals.put("T_DEVISE", 0L);
         if (getTable().contains("CREATE_VIRTUAL_STOCK")) {
             rowVals.put("CREATE_VIRTUAL_STOCK", Boolean.TRUE);
         }
@@ -125,10 +115,6 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
 
         c.gridy++;
         c.gridwidth = 1;
-
-        this.textTotalHT.setOpaque(false);
-        this.textTotalTVA.setOpaque(false);
-        this.textTotalTTC.setOpaque(false);
 
         this.selectCommande = new ElementComboBox();
         // Numero
@@ -247,10 +233,6 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         });
 
         c.anchor = GridBagConstraints.EAST;
-        // Totaux
-        reconfigure(this.textTotalHT);
-        reconfigure(this.textTotalTVA);
-        reconfigure(this.textTotalTTC);
 
         // Poids Total
         c.gridy++;
@@ -261,27 +243,6 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         c.gridwidth = 1;
         c.fill = GridBagConstraints.NONE;
 
-        DefaultProps props = DefaultNXProps.getInstance();
-        Boolean b = props.getBooleanValue("ArticleShowPoids");
-        if (b) {
-            JPanel panelPoids = new JPanel(new GridBagLayout());
-            GridBagConstraints c2 = new DefaultGridBagConstraints();
-            c2.fill = GridBagConstraints.NONE;
-
-            panelPoids.add(new JLabel(getLabelFor("TOTAL_POIDS")), c2);
-            // Necessaire pour ne pas avoir de saut de layout
-            DefaultGridBagConstraints.lockMinimumSize(this.textPoidsTotal);
-            this.textPoidsTotal.setEnabled(false);
-            this.textPoidsTotal.setHorizontalAlignment(JTextField.RIGHT);
-            this.textPoidsTotal.setDisabledTextColor(Color.BLACK);
-            c2.gridx++;
-            c2.weightx = 1;
-            c2.fill = GridBagConstraints.HORIZONTAL;
-            panelPoids.add(this.textPoidsTotal, c2);
-            this.add(panelPoids, c);
-
-        }
-
         c.gridx = 2;
         c.gridwidth = GridBagConstraints.REMAINDER;
         c.weightx = 0;
@@ -289,61 +250,45 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         c.anchor = GridBagConstraints.EAST;
         c.fill = GridBagConstraints.HORIZONTAL;
 
-        final GridBagConstraints cTotalPan = new DefaultGridBagConstraints();
+        DeviseField fieldHT = new DeviseField();
+        DeviseField fieldTVA = new DeviseField();
+        DeviseField fieldTTC = new DeviseField();
+        DeviseField fieldDevise = new DeviseField();
+        JTextField fieldPoids = new JTextField();
+        fieldHT.setOpaque(false);
+        fieldTVA.setOpaque(false);
+        fieldTTC.setOpaque(false);
+        addRequiredSQLObject(fieldDevise, "T_DEVISE");
+        addRequiredSQLObject(fieldHT, "TOTAL_HT");
+        addRequiredSQLObject(fieldTVA, "TOTAL_TVA");
+        addRequiredSQLObject(fieldPoids, "TOTAL_POIDS");
 
-        JPanel panelTotalHT = new JPanel();
-        panelTotalHT.setLayout(new GridBagLayout());
-        cTotalPan.gridx = 0;
-        cTotalPan.weightx = 0;
-        cTotalPan.fill = GridBagConstraints.HORIZONTAL;
-        cTotalPan.anchor = GridBagConstraints.WEST;
-        final JLabelBold labelTotalHT = new JLabelBold(getLabelFor("TOTAL_HT"));
-        panelTotalHT.add(labelTotalHT, cTotalPan);
-        cTotalPan.anchor = GridBagConstraints.EAST;
-        cTotalPan.gridx++;
-        cTotalPan.weightx = 1;
-        this.textTotalHT.setFont(labelTotalHT.getFont());
-        DefaultGridBagConstraints.lockMinimumSize(this.textTotalHT);
-        panelTotalHT.add(this.textTotalHT, cTotalPan);
-        this.add(panelTotalHT, c);
+        addRequiredSQLObject(fieldTTC, "TOTAL_TTC");
 
-        JPanel panelTotalTVA = new JPanel();
-        panelTotalTVA.setLayout(new GridBagLayout());
-        cTotalPan.gridx = 0;
-        cTotalPan.weightx = 0;
-        cTotalPan.anchor = GridBagConstraints.WEST;
-        cTotalPan.fill = GridBagConstraints.HORIZONTAL;
-        panelTotalTVA.add(new JLabelBold(getLabelFor("TOTAL_TVA")), cTotalPan);
-        cTotalPan.anchor = GridBagConstraints.EAST;
-        cTotalPan.gridx++;
-        cTotalPan.weightx = 1;
-        DefaultGridBagConstraints.lockMinimumSize(this.textTotalTVA);
-        panelTotalTVA.add(this.textTotalTVA, cTotalPan);
+        // Disable
+        this.allowEditable("TOTAL_HT", false);
+        this.allowEditable("TOTAL_TVA", false);
+        this.allowEditable("TOTAL_TTC", false);
+        this.allowEditable("TOTAL_POIDS", false);
+
+        DeviseField textRemiseHT = new DeviseField();
+        DeviseField fieldService = new DeviseField();
+        DeviseField textPortHT = new DeviseField();
+
+        final TotalPanel totalTTC = new TotalPanel(this.tableBonItem, fieldHT, fieldTVA, fieldTTC, textPortHT, textRemiseHT, fieldService, null, fieldDevise, fieldPoids, null, null);
+
+        c.gridx++;
         c.gridy++;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        this.add(panelTotalTVA, c);
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.gridheight = 2;
+        c.anchor = GridBagConstraints.NORTHEAST;
+        c.fill = GridBagConstraints.BOTH;
+        c.weighty = 0;
+        DefaultGridBagConstraints.lockMinimumSize(totalTTC);
 
-        JPanel panelTotalTTC = new JPanel();
-        panelTotalTTC.setLayout(new GridBagLayout());
-        cTotalPan.gridx = 0;
-        cTotalPan.anchor = GridBagConstraints.WEST;
-        cTotalPan.gridwidth = GridBagConstraints.REMAINDER;
-        cTotalPan.fill = GridBagConstraints.BOTH;
-        cTotalPan.weightx = 1;
-        panelTotalTTC.add(new JSeparator(), cTotalPan);
-        cTotalPan.gridwidth = 1;
-        cTotalPan.fill = GridBagConstraints.NONE;
-        cTotalPan.weightx = 0;
-        cTotalPan.gridy++;
-        panelTotalTTC.add(new JLabelBold(getLabelFor("TOTAL_TTC")), cTotalPan);
-        cTotalPan.anchor = GridBagConstraints.EAST;
-        cTotalPan.gridx++;
-        this.textTotalTTC.setFont(labelTotalHT.getFont());
-        DefaultGridBagConstraints.lockMinimumSize(this.textTotalTTC);
-        panelTotalTTC.add(this.textTotalTTC, cTotalPan);
+        this.add(totalTTC, c);
         c.gridy++;
-        // probleme de tremblement vertical
-        this.add(panelTotalTTC, c);
+        c.gridheight = 1;
         c.anchor = GridBagConstraints.WEST;
 
         if (getTable().getDBRoot().contains("RELIQUAT_BR")) {
@@ -410,30 +355,9 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
         this.addSQLObject(this.textReference, "NOM");
         this.addSQLObject(this.selectCommande, "ID_COMMANDE");
         this.addRequiredSQLObject(this.textNumeroUnique, "NUMERO");
-        this.addSQLObject(this.textPoidsTotal, "TOTAL_POIDS");
-        this.addRequiredSQLObject(this.textTotalHT, "TOTAL_HT");
-        this.addRequiredSQLObject(this.textTotalTVA, "TOTAL_TVA");
-        this.addRequiredSQLObject(this.textTotalTTC, "TOTAL_TTC");
         this.addRequiredSQLObject(this.fournisseur, "ID_FOURNISSEUR");
 
         this.textNumeroUnique.setText(NumerotationAutoSQLElement.getNextNumero(getElement().getClass()));
-
-        // Listeners
-        this.tableBonItem.getModel().addTableModelListener(new TableModelListener() {
-            public void tableChanged(TableModelEvent e) {
-
-                int columnIndexHT = BonReceptionSQLComponent.this.tableBonItem.getModel().getColumnIndexForElement(BonReceptionSQLComponent.this.tableBonItem.getPrixTotalHTElement());
-                int columnIndexTTC = BonReceptionSQLComponent.this.tableBonItem.getModel().getColumnIndexForElement(BonReceptionSQLComponent.this.tableBonItem.getPrixTotalTTCElement());
-                int columnIndexPoids = BonReceptionSQLComponent.this.tableBonItem.getModel().getColumnIndexForElement(BonReceptionSQLComponent.this.tableBonItem.getPoidsTotalElement());
-
-                if (e.getColumn() == TableModelEvent.ALL_COLUMNS || e.getColumn() == columnIndexHT || e.getColumn() == columnIndexTTC) {
-                    updateTotal();
-                }
-                if (e.getColumn() == TableModelEvent.ALL_COLUMNS || e.getColumn() == columnIndexPoids) {
-                    BonReceptionSQLComponent.this.textPoidsTotal.setText(String.valueOf(Math.round(BonReceptionSQLComponent.this.tableBonItem.getPoidsTotal() * 1000) / 1000.0));
-                }
-            }
-        });
 
         // Lock UI
         DefaultGridBagConstraints.lockMinimumSize(this.fournisseur);
@@ -468,7 +392,8 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
                     rowVals.put("BON_R_START", new Integer(val));
                     rowVals.update(2);
                 }
-                calculPHaPondere(idBon);
+                // FIXME USE A PREF
+                // calculPHaPondere(idBon);
 
                 final int idBonFinal = idBon;
                 ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
@@ -522,7 +447,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
                 } else {
                     SQLRowValues vals = map.get(foreignID);
                     if (sqlRowValues.getInt("QTE") > 0) {
-                        if (sqlRowValues.getBigDecimal("QTE_UNITAIRE").equals(BigDecimal.ONE) || sqlRowValues.getInt("QTE") > 1) {
+                        if (NumberUtils.areNumericallyEqual(sqlRowValues.getBigDecimal("QTE_UNITAIRE"), BigDecimal.ONE) || sqlRowValues.getInt("QTE") > 1) {
                             vals.put("QTE", vals.getInt("QTE") + sqlRowValues.getInt("QTE"));
                         } else {
                             vals.put("QTE_UNITAIRE", vals.getBigDecimal("QTE_UNITAIRE").add(sqlRowValues.getBigDecimal("QTE_UNITAIRE")));
@@ -537,7 +462,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
             SQLRowValues rowTR = map.get(r.getForeignID("ID_ARTICLE"));
             if (rowTR != null && !rowTR.isUndefined()) {
                 if (r.getInt("QTE") > 0) {
-                    if (r.getBigDecimal("QTE_UNITAIRE").equals(BigDecimal.ONE) || r.getInt("QTE") > 1) {
+                    if (NumberUtils.areNumericallyEqual(r.getBigDecimal("QTE_UNITAIRE"), BigDecimal.ONE) || r.getInt("QTE") > 1) {
                         this.tableBonItem.getModel().putValue(r.getInt("QTE") - rowTR.getInt("QTE"), i, "QTE");
                     } else {
                         this.tableBonItem.getModel().putValue(r.getBigDecimal("QTE_UNITAIRE").subtract(rowTR.getBigDecimal("QTE_UNITAIRE")), i, "QTE_UNITAIRE");
@@ -573,24 +498,7 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
                 @Override
                 public void run() {
                     try {
-                        // On efface les anciens mouvements de stocks
-                        SQLRow row = getTable().getRow(id);
-                        SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
-                        SQLSelect sel = new SQLSelect();
-                        sel.addSelect(eltMvtStock.getTable().getField("ID"));
-                        Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
-                        Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-                        sel.setWhere(w.and(w2));
 
-                        List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-                        if (l != null) {
-                            for (int i = 0; i < l.size(); i++) {
-                                Object[] tmp = (Object[]) l.get(i);
-
-                                eltMvtStock.archive(((Number) tmp[0]).intValue());
-
-                            }
-                        }
                         // Mise à jour du stock
                         updateStock(id);
                     } catch (Exception e) {
@@ -604,27 +512,6 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
             sheet.showPrintAndExportAsynchronous(this.panelOO.isVisualisationSelected(), this.panelOO.isImpressionSelected(), true);
 
         }
-    }
-
-    private void updateTotal() {
-        RowValuesTableModel model = this.tableBonItem.getModel();
-
-        long totalHT = 0;
-        long totalTTC = 0;
-        int columnIndexHT = model.getColumnIndexForElement(this.tableBonItem.getPrixTotalHTElement());
-        int columnIndexTTC = model.getColumnIndexForElement(this.tableBonItem.getPrixTotalTTCElement());
-
-        // columnIndexHT = model.getColumnIndexForElement(getTable().get);
-        for (int i = 0; i < model.getRowCount(); i++) {
-            BigDecimal nHT = (BigDecimal) model.getValueAt(i, columnIndexHT);
-            totalHT += nHT.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValue();
-            BigDecimal nTTC = (BigDecimal) model.getValueAt(i, columnIndexTTC);
-            totalTTC += nTTC.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValue();
-        }
-
-        this.textTotalHT.setText(GestionDevise.currencyToString(totalHT));
-        this.textTotalTVA.setText(GestionDevise.currencyToString(totalTTC - totalHT));
-        this.textTotalTTC.setText(GestionDevise.currencyToString(totalTTC));
     }
 
     /**
@@ -652,23 +539,25 @@ public class BonReceptionSQLComponent extends TransfertBaseSQLComponent {
             if (idArticle > 1) {
                 // Prix d'achat de l'article à l'origine
                 SQLRow rowArticle = eltArticle.getTable().getRow(idArticle);
-                BigDecimal prixHA = (BigDecimal) rowArticle.getObject("PRIX_METRIQUE_HA_1");
+                if (rowArticle != null) {
+                    BigDecimal prixHA = (BigDecimal) rowArticle.getObject("PRIX_METRIQUE_HA_1");
 
-                // Quantité en stock
-                int idStock = rowArticle.getInt("ID_STOCK");
-                SQLRow rowStock = eltStock.getTable().getRow(idStock);
-                BigDecimal qteStock = new BigDecimal(rowStock.getInt("QTE_REEL"));
-                if (prixHA != null && qteStock.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal qteRecue = new BigDecimal(rowEltBon.getInt("QTE"));
-                    BigDecimal prixHACmd = (BigDecimal) rowEltBon.getObject("PRIX_METRIQUE_HA_1");
-                    if (qteRecue.compareTo(BigDecimal.ZERO) > 0 && prixHACmd != null) {
-                        BigDecimal totalHARecue = qteRecue.multiply(prixHACmd, DecimalUtils.HIGH_PRECISION);
-                        BigDecimal totalHAStock = qteStock.multiply(prixHA, DecimalUtils.HIGH_PRECISION);
-                        BigDecimal totalQte = qteRecue.add(qteStock);
-                        BigDecimal prixHaPond = totalHARecue.add(totalHAStock).divide(totalQte, DecimalUtils.HIGH_PRECISION);
-                        SQLRowValues rowValsArticle = rowArticle.createEmptyUpdateRow();
-                        rowValsArticle.put("PRIX_METRIQUE_HA_1", prixHaPond);
-                        rowValsArticle.commit();
+                    // Quantité en stock
+                    int idStock = rowArticle.getInt("ID_STOCK");
+                    SQLRow rowStock = eltStock.getTable().getRow(idStock);
+                    BigDecimal qteStock = new BigDecimal(rowStock.getInt("QTE_REEL"));
+                    if (prixHA != null && qteStock.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal qteRecue = new BigDecimal(rowEltBon.getInt("QTE"));
+                        BigDecimal prixHACmd = (BigDecimal) rowEltBon.getObject("PRIX_METRIQUE_HA_1");
+                        if (qteRecue.compareTo(BigDecimal.ZERO) > 0 && prixHACmd != null) {
+                            BigDecimal totalHARecue = qteRecue.multiply(prixHACmd, DecimalUtils.HIGH_PRECISION);
+                            BigDecimal totalHAStock = qteStock.multiply(prixHA, DecimalUtils.HIGH_PRECISION);
+                            BigDecimal totalQte = qteRecue.add(qteStock);
+                            BigDecimal prixHaPond = totalHARecue.add(totalHAStock).divide(totalQte, DecimalUtils.HIGH_PRECISION);
+                            SQLRowValues rowValsArticle = rowArticle.createEmptyUpdateRow();
+                            rowValsArticle.put("PRIX_METRIQUE_HA_1", prixHaPond);
+                            rowValsArticle.commit();
+                        }
                     }
                 }
             }

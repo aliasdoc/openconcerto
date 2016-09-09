@@ -20,6 +20,7 @@ import org.openconcerto.utils.CollectionUtils;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -171,7 +172,9 @@ abstract class AbstractPath<T extends AbstractPath<T>> {
     public abstract T addForeignFields(final String... fieldsNames);
 
     public final T addForeignField(final String fieldName) {
-        return this.add(Direction.FOREIGN, fieldName, null, null, true);
+        if (fieldName == null)
+            throw new NullPointerException("Missing field name");
+        return this.add(Direction.FOREIGN, Collections.singletonList(fieldName), null, null, true);
     }
 
     public final T addReferentField(final String fieldName) {
@@ -191,14 +194,14 @@ abstract class AbstractPath<T extends AbstractPath<T>> {
      * @return an instance with the table added.
      */
     public final T addReferent(final String fieldName, final String tableName, final String rootName) {
-        return this.add(Direction.REFERENT, fieldName, tableName, rootName, true);
+        return this.add(Direction.REFERENT, fieldName == null ? null : Collections.singletonList(fieldName), tableName, rootName, true);
     }
 
     /**
      * Add a step to the path.
      * 
      * @param dir the direction of the new step.
-     * @param fieldName the field name, <code>null</code> to not use.
+     * @param fieldsNames the fields' names, <code>null</code> to not use.
      * @param tableName the name of the added table, <code>null</code> to not use.
      * @param rootName the name of the root of the added table, <code>null</code> to not use.
      * @param onlyOne <code>true</code> if one and only one link should match.
@@ -206,8 +209,8 @@ abstract class AbstractPath<T extends AbstractPath<T>> {
      * @throws IllegalStateException if <code>onlyOne</code> is <code>true</code> and not one and
      *         only one link matching.
      */
-    public final T add(final Direction dir, final String fieldName, final String tableName, final String rootName, final boolean onlyOne) {
-        final Set<Link> links = this.getLast().getDBSystemRoot().getGraph().getLinks(getLast(), dir, onlyOne, new Link.NamePredicate(getLast(), rootName, tableName, fieldName));
+    public final T add(final Direction dir, final List<String> fieldsNames, final String tableName, final String rootName, final boolean onlyOne) {
+        final Set<Link> links = this.getLast().getDBSystemRoot().getGraph().getLinks(getLast(), dir, onlyOne, new Link.NamePredicate(getLast(), rootName, tableName, fieldsNames));
         return this.add(links, dir);
     }
 

@@ -149,7 +149,9 @@ public class ClassGenerator {
         out.println("    }");
         out.println();
         out.println("    public String getDescription(SQLRow fromRow) {");
-        out.println("        return fromRow.getString(\"" + first.getName() + "\");");
+        if (first != null) {
+            out.println("        return fromRow.getString(\"" + first.getName() + "\");");
+        }
         out.println("    }");
         out.println();
         out.println("}");
@@ -204,4 +206,133 @@ public class ClassGenerator {
         }
         return b.toString();
     }
+
+    public static String generateGroup(SQLTable table, String className, String packageName) {
+        StringBuilder b = new StringBuilder();
+        b.append("import org.openconcerto.ui.group.Group;\n\n");
+
+        b.append("public class " + className + " extends Group {\n\n");
+        final List<SQLField> f = table.getOrderedFields();
+        f.remove(table.getArchiveField());
+        f.remove(table.getOrderField());
+        f.remove(table.getKey());
+        f.remove(table.getCreationDateField());
+        f.remove(table.getCreationUserField());
+        f.remove(table.getModifDateField());
+        f.remove(table.getModifUserField());
+        String name = table.getName().toLowerCase().replace('_', '.');
+        b.append("    public " + className + " () {\n");
+        b.append("        super(\"" + name + "\");\n");
+        for (SQLField sqlField : f) {
+            String n = name + "." + sqlField.getFieldName().toLowerCase().replace("id_", "").replace('_', '.');
+
+            b.append("        addItem(\"" + n + "\");\n");
+        }
+
+        b.append("    }\n\n");
+        b.append("}\n");
+        return b.toString();
+    }
+
+    public static String generateSQLConfElement(SQLTable table, String classname, String packageName) {
+        final List<SQLField> f = table.getOrderedFields();
+        f.remove(table.getArchiveField());
+        f.remove(table.getOrderField());
+        f.remove(table.getKey());
+        f.remove(table.getCreationDateField());
+        f.remove(table.getCreationUserField());
+        f.remove(table.getModifDateField());
+        f.remove(table.getModifUserField());
+
+        StringBuilder b = new StringBuilder();
+        if (packageName != null && packageName.length() > 0) {
+            b.append("package ");
+            b.append(packageName);
+            b.append(";\n");
+            b.append("\n");
+        }
+
+        b.append("import org.openconcerto.sql.element.SQLComponent;\n");
+        b.append("import org.openconcerto.sql.model.DBRoot;\n");
+        b.append("import model.AbstractModel;\n");
+
+        b.append("\n");
+        b.append("import java.util.ArrayList;\n");
+        b.append("import java.util.HashSet;\n");
+        b.append("import java.util.List;\n");
+        b.append("import java.util.Set;\n");
+        b.append("\n");
+        b.append("public class " + classname + " extends SocieteSQLElement {\n");
+        b.append("\n");
+
+        // Constructor
+        b.append("    public " + classname + "() {\n");
+        b.append("        super(\"" + table.getName() + "\", \"un " + table.getName().toLowerCase() + " \", \"" + table.getName().toLowerCase() + "s\");\n");
+        String g = StringUtils.firstUpThenLow(table.getName()) + "EditGroup";
+        b.append("        this.setDefaultGroup(new " + g + "());\n");
+
+        b.append("    }\n");
+        b.append("\n");
+
+        // List
+        b.append("    protected List<String> getListFields() {\n");
+        b.append("        final List<String> l = new ArrayList<String>();\n");
+        for (final SQLField element : f) {
+            if (!element.isPrimaryKey() && !element.getName().equals("ORDRE")) {
+                b.append("        l.add(\"" + element.getName() + "\");\n");
+            }
+        }
+        b.append("        return l;\n");
+        b.append("    }\n");
+        b.append("\n");
+
+        // Combo
+        b.append("    protected List<String> getComboFields() {\n");
+        b.append("        final List<String> l = new ArrayList<String>();\n");
+        for (final SQLField element : f) {
+            if (!element.isPrimaryKey() && !element.getName().equals("ORDRE")) {
+                b.append("        l.add(\"" + element.getName() + "\");\n");
+            }
+        }
+        b.append("        return l;\n");
+        b.append("    }\n");
+        b.append("\n");
+
+        // UI
+        b.append("    public SQLComponent createComponent() {\n");
+        b.append("        return null;\n");
+        b.append("    }\n");
+        //
+        String code = table.getName().toLowerCase().replace('_', '.');
+        b.append("    @Override\n");
+        b.append("    protected String createCode() {\n");
+        b.append("        return \"" + code + "\";\n");
+        b.append("    }\n");
+
+        b.append("\n");
+        b.append("}");
+        return b.toString();
+    }
+
+    // field mapping
+    public static String generateFieldMapping(SQLTable table, String classname, String packageName) {
+        final List<SQLField> f = table.getOrderedFields();
+        f.remove(table.getArchiveField());
+        f.remove(table.getOrderField());
+        f.remove(table.getKey());
+        f.remove(table.getCreationDateField());
+        f.remove(table.getCreationUserField());
+        f.remove(table.getModifDateField());
+        f.remove(table.getModifUserField());
+        StringBuilder b = new StringBuilder();
+        String tableId = table.getName().toLowerCase().replace('_', '.');
+        b.append("<table id=\"" + tableId + "\" name=\"" + table.getName() + "\">\n");
+        for (final SQLField sqlField : f) {
+            String n = tableId + "." + sqlField.getFieldName().toLowerCase().replace("id_", "").replace('_', '.');
+            b.append("   <field id=\"" + n + "\" name=\"" + sqlField.getName() + "\" />\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
 }

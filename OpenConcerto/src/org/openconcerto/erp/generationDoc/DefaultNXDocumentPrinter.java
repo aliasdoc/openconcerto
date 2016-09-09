@@ -13,34 +13,30 @@
  
  package org.openconcerto.erp.generationDoc;
 
+import java.awt.print.PrinterJob;
+import java.util.List;
+
 import org.jopendocument.model.OpenDocument;
 import org.jopendocument.print.DocumentPrinter;
 
 public class DefaultNXDocumentPrinter implements DocumentPrinter {
 
-    String printerName;
-    int copies;
-
     public DefaultNXDocumentPrinter() {
-        this(null, 1);
-    }
-
-    public DefaultNXDocumentPrinter(String printerName) {
-        this(printerName, 1);
-    }
-
-    public DefaultNXDocumentPrinter(String printerName, int copies) {
-        this.printerName = printerName;
-        this.copies = copies;
     }
 
     @Override
-    public void print(OpenDocument doc) {
-        ODTPrinterNX p = new ODTPrinterNX(doc);
-        try {
-            p.print(this.printerName, this.copies);
-        } catch (Exception e1) {
-            e1.printStackTrace();
+    public void print(List<OpenDocument> documents) {
+        print(documents, null);
+    }
+
+    public void print(List<OpenDocument> documents, PrinterJob job) {
+        for (OpenDocument doc : documents) {
+            ODTPrinterNX p = new ODTPrinterNX(doc);
+            try {
+                p.print(job);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
 
     }

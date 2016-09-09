@@ -31,11 +31,11 @@ public class PdfGenerator_2033B extends PdfGenerator {
         setFontRoman(8);
 
         SQLRow rowSociete = ((ComptaPropsConfiguration) Configuration.getInstance()).getRowSociete();
-        addText("NOM", rowSociete.getString("TYPE") + " " + rowSociete.getString("NOM"), 228, 827);
+        addText("NOM", rowSociete.getString("TYPE") + " " + rowSociete.getString("NOM"), 228, 808);
         setFontRoman(12);
 
-        addSplittedText("CLOS1", "08202006", 412, 809, 9.7);
-        addSplittedText("CLOS2", "08202006", 502, 809, 9.7);
+        addSplittedText("CLOS1", "08202006", 410, 790, 9.7);
+        // addSplittedText("CLOS2", "08202006", 502, 809, 9.7);
 
         // Copyright
         setFontRoman(9);
@@ -45,81 +45,89 @@ public class PdfGenerator_2033B extends PdfGenerator {
         setFontRoman(10);
         long t = 143785123456L;
         int yy = 0;
-        int y = 786;
-        for (; y > 740; y -= 18) {
+        int y = 766;
+        int cellHeight = 18;
+        final int colN = 487;
+        for (; y > 720; y -= cellHeight) {
 
             addTextRight("PRODUIT1." + yy, insertCurrencySpaces("" + t), 400, y);
-            addTextRight("PRODUIT2." + yy, insertCurrencySpaces("" + t), 491, y);
+            addTextRight("PRODUIT2." + yy, insertCurrencySpaces("" + t), colN, y);
             addTextRight("PRODUIT3." + yy, insertCurrencySpaces("" + t), 580, y);
             yy++;
         }
-        for (; y > 650; y -= 18) {
+        y += 2;
+        for (; y > 630; y -= cellHeight) {
 
-            addTextRight("PRODUIT2." + yy, insertCurrencySpaces("" + t), 491, y);
+            addTextRight("PRODUIT2." + yy, insertCurrencySpaces("" + t), colN, y);
             addTextRight("PRODUIT3." + yy, insertCurrencySpaces("" + t), 580, y);
             yy++;
         }
 
+        y += 2;
         for (int i = 0; i < 5; i++) {
-            addTextRight("CHARGES3." + yy, insertCurrencySpaces("" + t), 491, y);
+            addTextRight("CHARGES3." + yy, insertCurrencySpaces("" + t), colN, y);
             addTextRight("CHARGES4." + yy, insertCurrencySpaces("" + t), 608 - 28, y);
             yy++;
-            y -= 18;
+            y -= cellHeight;
         }
-        y += 18;
+
+        y += cellHeight;
         t = t / 100;
         yy--;
-        addTextRight("CBAIL_MO" + yy, insertCurrencySpaces("" + t), 280, y + 1);
-        addTextRight("CBAIL_IMMO" + yy, insertCurrencySpaces("" + t), 396, y + 1);
+        addTextRight("CBAIL_MO" + yy, insertCurrencySpaces("" + t), 280, y + 4);
+        addTextRight("CBAIL_IMMO" + yy, insertCurrencySpaces("" + t), 396, y + 4);
         yy++;
-        y -= 18;
+        y -= cellHeight;
+        y += 2;
         //
 
         addTextRight("CHARGES1." + yy, insertCurrencySpaces("" + t), 392, y);
-        addTextRight("CHARGES2." + yy, insertCurrencySpaces("" + t), 491, y);
+        addTextRight("CHARGES2." + yy, insertCurrencySpaces("" + t), colN, y);
         addTextRight("CHARGES3." + yy, insertCurrencySpaces("" + t), 580, y);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         // Remuneration du personnel
         for (int i = 0; i < 4; i++) {
-            addTextRight("CHARGES3." + yy, insertCurrencySpaces("" + t), 491, y);
+            addTextRight("CHARGES3." + yy, insertCurrencySpaces("" + t), colN, y);
             addTextRight("CHARGES4." + yy, insertCurrencySpaces("" + t), 608 - 28, y);
             yy++;
-            y -= 18;
+            y -= cellHeight;
         }
         //
+        y += 3;
         addTextRight("CHARGES1." + yy, insertCurrencySpaces("" + t), 392, y);
-        addTextRight("CHARGES2." + yy, insertCurrencySpaces("" + t), 491, y);
+        addTextRight("CHARGES2." + yy, insertCurrencySpaces("" + t), colN, y);
         addTextRight("CHARGES3." + yy, insertCurrencySpaces("" + t), 580, y);
         yy++;
-        y -= 18;
-        //      
+        y -= (cellHeight * 2);
+        cellHeight = 17;
+        //
         for (int i = 0; i < 9; i++) {
-            addTextRight("PCHARGES3." + yy, insertCurrencySpaces("" + t), 491, y);
+            addTextRight("PCHARGES3." + yy, insertCurrencySpaces("" + t), colN, y);
             addTextRight("PCHARGES4." + yy, insertCurrencySpaces("" + t), 580, y);
             yy++;
-            y -= 18;
+            y -= cellHeight;
         }
 
         for (int i = 0; i < 4; i++) {
-            addTextRight("REINT3." + yy, insertCurrencySpaces("" + t), 491, y);
+            addTextRight("REINT3." + yy, insertCurrencySpaces("" + t), colN, y);
             yy++;
-            y -= 18;
+            y -= cellHeight;
         }
         //
         t = t / 100;
         addTextRight("REINT1." + yy, insertCurrencySpaces("" + t), 220, y);
         addTextRight("REINT2." + yy, insertCurrencySpaces("" + t), 401, y);
-        addTextRight("REINT3." + yy, insertCurrencySpaces("" + t), 491, y);
+        addTextRight("REINT3." + yy, insertCurrencySpaces("" + t), colN, y);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         for (int i = 0; i < 2; i++) {
             addTextRight("DEDUC1." + yy, insertCurrencySpaces("" + t), 148, y);
             addTextRight("DEDUC2." + yy, insertCurrencySpaces("" + t), 275, y);
             addTextRight("DEDUC3." + yy, insertCurrencySpaces("" + t), 401, y);
 
             yy++;
-            y -= 18;
+            y -= cellHeight;
         }
         yy--;
         addTextRight("DEDUC4." + yy, insertCurrencySpaces("" + t), 580, y + 25);
@@ -131,41 +139,42 @@ public class PdfGenerator_2033B extends PdfGenerator {
         addTextRight("DEDUC4." + yy, insertCurrencySpaces("" + t), 580, y);
 
         yy++;
-        y -= 18;
+        y -= cellHeight;
         //
-        addTextRight("RES3." + yy, insertCurrencySpaces("" + t), 491, y);
+        addTextRight("RES3." + yy, insertCurrencySpaces("" + t), colN, y);
         addTextRight("RES4." + yy, insertCurrencySpaces("" + t), 580, y);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         //
-        addTextRight("DEF3." + yy, insertCurrencySpaces("" + t), 491, y);
+        addTextRight("DEF3." + yy, insertCurrencySpaces("" + t), colN, y);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         //
         addTextRight("DEF4." + yy, insertCurrencySpaces("" + t), 580, y);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         //
-        addTextRight("RES3." + yy, insertCurrencySpaces("" + t), 491, y);
+        addTextRight("RES3." + yy, insertCurrencySpaces("" + t), colN, y);
         addTextRight("RES4." + yy, insertCurrencySpaces("" + t), 580, y);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         //
         addTextRight("COT1." + yy, insertCurrencySpaces("" + t), 195, y);
         addTextRight("COT2." + yy, insertCurrencySpaces("" + t), 401, y);
         addSplittedText("COT3." + yy, "876543", 514, y, 11.5);
 
         yy++;
-        y -= 18;
+        y -= cellHeight;
+        y -= 12;
         //
-        addTextRight("T1." + yy, insertCurrencySpaces("" + t), 242, y);
+        addTextRight("T1." + yy, insertCurrencySpaces("" + t), 226, y);
         addSplittedText("T2." + yy, "88", 333, y, 14.4);
         addSplittedText("T3." + yy, "88", 406, y, 10);
         addSplittedText("T4." + yy, "88", 464, y, 10);
         yy++;
-        y -= 18;
+        y -= cellHeight;
         //
-        addTextRight("T1." + yy, insertCurrencySpaces("" + t), 242, y);
+        addTextRight("T1." + yy, insertCurrencySpaces("" + t), 226, y);
         addTextRight("T2." + yy, insertCurrencySpaces("" + t), 461, y);
 
     }

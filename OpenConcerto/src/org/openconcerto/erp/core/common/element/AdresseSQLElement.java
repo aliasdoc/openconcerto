@@ -55,4 +55,9 @@ public class AdresseSQLElement extends ComptaSQLConfElement {
     protected String createCode() {
         return "address";
     }
+
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
 }

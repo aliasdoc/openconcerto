@@ -44,14 +44,14 @@ public class RowSelectionSpec implements Externalizable, JSONAble {
     public RowSelectionSpec(String tableId, List<Long> ids) {
         this.init(tableId, ids);
     }
-    
+
     public RowSelectionSpec(String tableId) {
         this.init(tableId, null);
     }
-    
+
     private void init(final String tableId, final List<Long> ids) {
         this.tableId = tableId;
-        if(ids != null) {
+        if (ids != null) {
             this.ids = ids;
         } else {
             this.ids = new ArrayList<Long>();
@@ -116,6 +116,10 @@ public class RowSelectionSpec implements Externalizable, JSONAble {
         for (final Object jsonId : jsonIds) {
             this.ids.add((Long) JSONConverter.getObjectFromJSON(jsonId, Long.class));
         }
+    }
+
+    public void setTableId(String id) {
+        this.tableId = id;
     }
 
 }

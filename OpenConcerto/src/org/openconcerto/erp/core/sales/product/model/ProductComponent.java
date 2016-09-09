@@ -13,6 +13,7 @@
  
  package org.openconcerto.erp.core.sales.product.model;
 
+import org.openconcerto.erp.core.sales.product.model.ProductHelper.SupplierPriceField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLTable;
@@ -29,10 +30,12 @@ import java.util.List;
 public class ProductComponent {
     private final SQLRowAccessor product;
     private BigDecimal qty;
+    private final ProductHelper helper;
 
     public ProductComponent(SQLRowAccessor product, BigDecimal qty) {
         this.product = product;
         this.qty = qty;
+        this.helper = new ProductHelper(product.getTable().getDBRoot());
     }
 
     public SQLRowAccessor getProduct() {
@@ -58,24 +61,52 @@ public class ProductComponent {
      */
     public BigDecimal getPRC(Date d) {
         if (product.getTable().getDBRoot().contains("ARTICLE_PRIX_REVIENT")) {
-            SQLTable table = product.getTable().getDBRoot().getTable("ARTICLE_PRIX_REVIENT");
-            Collection<SQLRow> prcs = product.asRow().getReferentRows(table);
-
             BigDecimal result = null;
-            final List<PriceByQty> prices = new ArrayList<PriceByQty>();
-            for (SQLRow row : prcs) {
-                Calendar date = Calendar.getInstance();
-                if (row.getObject("DATE") != null) {
-                    date = row.getDate("DATE");
+            {
+                SQLTable table = product.getTable().getDBRoot().getTable("ARTICLE_PRIX_REVIENT");
+                Collection<SQLRow> prcs = product.asRow().getReferentRows(table);
+
+                Date lastDate = null;
+                final List<PriceByQty> prices = new ArrayList<PriceByQty>();
+                for (SQLRow row : prcs) {
+                    Calendar date = Calendar.getInstance();
+                    if (row.getObject("DATE") != null) {
+                        date = row.getDate("DATE");
+                        lastDate = date.getTime();
+                    }
+                    prices.add(new PriceByQty(row.getLong("QTE"), row.getBigDecimal("PRIX"), date.getTime()));
                 }
-                prices.add(new PriceByQty(row.getLong("QTE"), row.getBigDecimal("PRIX"), date.getTime()));
+
+                result = PriceByQty.getPriceForQty(qty.setScale(0, RoundingMode.HALF_UP).intValue(), prices, d);
+                if (result == null) {
+                    result = PriceByQty.getPriceForQty(qty.setScale(0, RoundingMode.HALF_UP).intValue(), prices, lastDate);
+                }
+            }
+            if (result == null) {
+                SQLTable tableATF = product.getTable().getDBRoot().getTable("ARTICLE_TARIF_FOURNISSEUR");
+                Collection<SQLRow> atfs = product.asRow().getReferentRows(tableATF);
+
+                Date lastDateATF = null;
+                final List<PriceByQty> pricesATF = new ArrayList<PriceByQty>();
+                for (SQLRow row : atfs) {
+                    Calendar date = Calendar.getInstance();
+                    if (row.getObject("DATE_PRIX") != null) {
+                        date = row.getDate("DATE_PRIX");
+                        lastDateATF = date.getTime();
+                    }
+                    pricesATF.add(new PriceByQty(row.getLong("QTE"), this.helper.getEnumPrice(row, SupplierPriceField.COEF_TRANSPORT_SIEGE), date.getTime()));
+                }
+
+                result = PriceByQty.getPriceForQty(qty.setScale(0, RoundingMode.HALF_UP).intValue(), pricesATF, d);
+                if (result == null) {
+                    result = PriceByQty.getPriceForQty(qty.setScale(0, RoundingMode.HALF_UP).intValue(), pricesATF, lastDateATF);
+                    if (result == null) {
+                        // Can occur during editing
+                        result = BigDecimal.ZERO;
+                    }
+                }
             }
 
-            result = PriceByQty.getPriceForQty(qty.setScale(0, RoundingMode.HALF_UP).intValue(), prices, d);
-            if (result == null) {
-                // Can occur during editing
-                result = BigDecimal.ZERO;
-            }
             return result;
         }
         return null;
@@ -87,7 +118,8 @@ public class ProductComponent {
 
     public static ProductComponent createFrom(SQLRowAccessor rowVals, int qteMultiple) {
 
-        final int qte = rowVals.getInt("QTE") * qteMultiple;
+        final int qteMult = (rowVals.getTable().getName().equalsIgnoreCase("BON_DE_LIVRAISON_ELEMENT") ? rowVals.getInt("QTE_LIVREE") : rowVals.getInt("QTE"));
+        final int qte = qteMult * qteMultiple;
         final BigDecimal qteUV = rowVals.getBigDecimal("QTE_UNITAIRE");
         BigDecimal qteFinal = qteUV.multiply(new BigDecimal(qte), DecimalUtils.HIGH_PRECISION);
         return new ProductComponent(rowVals.getForeign("ID_ARTICLE"), qteFinal);

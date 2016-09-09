@@ -13,22 +13,20 @@
  
  package org.openconcerto.utils.cache;
 
-import org.openconcerto.utils.ExceptionUtils;
 import org.openconcerto.utils.Log;
-import org.openconcerto.utils.SetMap;
+import org.openconcerto.utils.cache.CacheItem.RemovalType;
 import org.openconcerto.utils.cache.CacheResult.State;
-import org.openconcerto.utils.cc.Transformer;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Timer;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-
-import org.apache.commons.collections.map.LazyMap;
 
 /**
  * To keep results computed from some data. The results will be automatically invalidated after some
@@ -43,17 +41,14 @@ public class ICache<K, V, D> {
 
     private static final Level LEVEL = Level.FINEST;
 
-    // linked to fifo
-    private final LinkedHashMap<K, V> cache;
-    private final Set<K> running;
+    private final ICacheSupport<D> supp;
+    // linked to fifo, ATTN the values in this map can be invalid since clear() is called without
+    // the lock on CacheValue
+    private final LinkedHashMap<K, CacheItem<K, V, D>> cache;
+    private final Map<K, CacheItem<K, V, D>> running;
     private final int delay;
     private final int size;
-    // lazy initialization to avoid creating unnecessary threads
-    private Timer timer;
     private final String name;
-    private final Map<K, CacheTimeOut<K>> timeoutTasks;
-    private Map<D, CacheWatcher<K, D>> watchers;
-    private final SetMap<K, CacheWatcher<K, D>> watchersByKey;
 
     private ICache<K, V, D> parent;
 
@@ -78,42 +73,40 @@ public class ICache<K, V, D> {
      * @throws IllegalArgumentException if size is 0.
      */
     public ICache(int delay, int size, String name) {
-        this.running = new HashSet<K>();
+        this(null, delay, size, name);
+    }
+
+    public ICache(final ICacheSupport<D> supp, int delay, int size, String name) {
+        this.supp = supp == null ? createSupp(getCacheSuppName(name)) : supp;
+        this.running = new HashMap<K, CacheItem<K, V, D>>();
         this.delay = delay;
         if (size == 0)
             throw new IllegalArgumentException("0 size");
         this.size = size;
-        this.cache = new LinkedHashMap<K, V>(size < 0 ? 64 : size);
-        this.timer = null;
+        this.cache = new LinkedHashMap<K, CacheItem<K, V, D>>(size < 0 ? 64 : size);
         this.name = name;
-        this.timeoutTasks = new HashMap<K, CacheTimeOut<K>>();
-
-        this.watchers = null;
-        this.watchersByKey = new SetMap<K, CacheWatcher<K, D>>();
 
         this.parent = null;
     }
 
-    private final Timer getTimer() {
-        if (this.timer == null)
-            this.timer = this.name == null ? new Timer(true) : new Timer("cache for " + this.name, true);
-        return this.timer;
+    protected ICacheSupport<D> createSupp(final String name) {
+        return new ICacheSupport<D>(name);
     }
 
-    @SuppressWarnings("unchecked")
-    public final void setWatcherFactory(final CacheWatcherFactory<K, D> f) {
-        this.watchers = LazyMap.decorate(new HashMap(), new Transformer<D, CacheWatcher<K, D>>() {
+    protected String getCacheSuppName(final String cacheName) {
+        return cacheName;
+    }
 
-            @Override
-            public CacheWatcher<K, D> transformChecked(D input) {
-                try {
-                    return f.createWatcher(ICache.this, input);
-                } catch (Exception e) {
-                    throw ExceptionUtils.createExn(IllegalStateException.class, "could not create watcher for " + input, e);
-                }
-            }
-        });
+    public final ICacheSupport<D> getSupp() {
+        return this.supp;
+    }
 
+    public final int getMaximumSize() {
+        return this.size;
+    }
+
+    public final String getName() {
+        return this.name;
     }
 
     /**
@@ -149,10 +142,12 @@ public class ICache<K, V, D> {
     }
 
     private final CacheResult<V> get(K sel, final boolean checkRunning) {
+        ICache<K, V, D> parent = null;
         synchronized (this) {
-            if (this.cache.containsKey(sel)) {
+            final CacheResult<V> localRes = this.cache.containsKey(sel) ? this.cache.get(sel).getResult() : CacheResult.<V> getNotInCache();
+            if (localRes.getState() == State.VALID) {
                 log("IN cache", sel);
-                return new CacheResult<V>(this.cache.get(sel));
+                return localRes;
             } else if (checkRunning && isRunning(sel)) {
                 log("RUNNING", sel);
                 try {
@@ -164,33 +159,91 @@ public class ICache<K, V, D> {
                 return this.get(sel);
             } else if (this.parent != null) {
                 log("CALLING parent", sel);
-                return this.parent.get(sel, false);
+                parent = this.parent;
             } else {
                 log("NOT in cache", sel);
                 return CacheResult.getNotInCache();
             }
         }
+        // don't call our parent with our lock
+        return parent.get(sel, false);
     }
 
     /**
      * Tell this cache that we're in process of getting the value for key, so if someone else ask
-     * have them wait. ATTN after calling this method you MUST call put(), otherwise get() will
-     * always block for key.
+     * have them wait. ATTN after calling this method you MUST call put() or removeRunning(),
+     * otherwise get() will always block for <code>key</code>.
      * 
-     * @param key the key we're getting the value for.
+     * @param val the value that will receive the result.
+     * @return <code>true</code> if the value was added, <code>false</code> if the key was already
+     *         running.
      * @see #put(Object, Object, Set)
+     * @see #removeRunning(Object)
      */
-    public final synchronized void addRunning(K key) {
-        this.running.add(key);
+    private final synchronized boolean addRunning(final CacheItem<K, V, D> val) {
+        if (!this.isRunning(val.getKey())) {
+            // ATTN this can invalidate val
+            val.addToWatchers();
+            if (val.getRemovalType() == null) {
+                this.running.put(val.getKey(), val);
+                return true;
+            }
+        }
+        return false;
     }
 
-    public final synchronized void removeRunning(K key) {
-        this.running.remove(key);
-        this.notifyAll();
+    // return null if the item wasn't added to this
+    final CacheItem<K, V, D> getRunningValFromRes(final CacheResult<V> cacheRes) {
+        if (cacheRes.getState() != CacheResult.State.NOT_IN_CACHE)
+            throw new IllegalArgumentException("Wrong state : " + cacheRes.getState());
+        if (cacheRes.getVal() == null) {
+            // happens when check() is called and ICacheSupport is dead, i.e. this.running was not
+            // modified and CacheResult.getNotInCache() was returned
+            assert cacheRes == CacheResult.getNotInCache();
+        } else {
+            if (cacheRes.getVal().getCache() != this)
+                throw new IllegalArgumentException("Not running in this cache");
+            assert cacheRes.getVal().getState() == CacheItem.State.RUNNING || cacheRes.getVal().getState() == CacheItem.State.INVALID;
+        }
+        @SuppressWarnings("unchecked")
+        final CacheItem<K, V, D> res = (CacheItem<K, V, D>) cacheRes.getVal();
+        return res;
+    }
+
+    public final synchronized void removeRunning(final CacheResult<V> res) {
+        removeRunning(getRunningValFromRes(res));
+    }
+
+    private final synchronized void removeRunning(final CacheItem<K, V, D> val) {
+        if (val == null)
+            return;
+        final K key = val.getKey();
+        if (this.running.get(key) == val)
+            this.removeRunning(key);
+        else
+            // either val wasn't created in this cache or another value was already put in this
+            // cache
+            val.setRemovalType(RemovalType.EXPLICIT);
+        assert val.getRemovalType() != null;
+    }
+
+    private final synchronized void removeRunning(K key) {
+        final CacheItem<K, V, D> removed = this.running.remove(key);
+        if (removed != null) {
+            // if the removed value isn't in us (this happens if put() is called without passing the
+            // value returned by check()), kill it so that it stops listening to its data
+            if (this.cache.get(key) != removed)
+                removed.setRemovalType(RemovalType.EXPLICIT);
+            this.notifyAll();
+        }
     }
 
     public final synchronized boolean isRunning(K sel) {
-        return this.running.contains(sel);
+        return this.running.containsKey(sel);
+    }
+
+    public final synchronized Set<K> getRunning() {
+        return Collections.unmodifiableSet(new HashSet<K>(this.running.keySet()));
     }
 
     /**
@@ -198,13 +251,35 @@ public class ICache<K, V, D> {
      * returns <code>NOT_IN_CACHE</code>.
      * 
      * @param key the key to be checked.
-     * @return the associated value, or <code>null</code>.
+     * @return the associated value, never <code>null</code>.
      * @see #addRunning(Object)
+     * @see #removeRunning(CacheResult)
+     * @see #put(CacheResult, Object, long)
      */
-    public final synchronized CacheResult<V> check(K key) {
-        final CacheResult<V> l = this.get(key);
-        if (l.getState() == State.NOT_IN_CACHE)
-            this.addRunning(key);
+    public final CacheResult<V> check(K key) {
+        return this.check(key, Collections.<D> emptySet());
+    }
+
+    public final CacheResult<V> check(K key, final Set<? extends D> data) {
+        return this.check(key, true, true, data);
+    }
+
+    public final CacheResult<V> check(K key, final boolean readCache, final boolean willWriteToCache, final Set<? extends D> data) {
+        return this.check(key, readCache, willWriteToCache, data, this.delay * 1000);
+    }
+
+    public final synchronized CacheResult<V> check(K key, final boolean readCache, final boolean willWriteToCache, final Set<? extends D> data, final long timeout) {
+        final CacheResult<V> l = readCache ? this.get(key) : CacheResult.<V> getNotInCache();
+        if (willWriteToCache && l.getState() == State.NOT_IN_CACHE) {
+            final CacheItem<K, V, D> val = new CacheItem<K, V, D>(this, key, data);
+            if (this.addRunning(val)) {
+                val.addTimeout(timeout, TimeUnit.MILLISECONDS);
+                return new CacheResult<V>(val);
+            } else {
+                // val was never referenced so it will be garbage collected
+                assert !val.getState().isActive() : "active value : " + val;
+            }
+        }
         return l;
     }
 
@@ -213,9 +288,10 @@ public class ICache<K, V, D> {
      * 
      * @param sel the key.
      * @param res the result associated with <code>sel</code>.
+     * @return the item that was created.
      */
-    public final synchronized void put(K sel, V res) {
-        this.put(sel, res, Collections.<D> emptySet());
+    public final CacheItem<K, V, D> put(K sel, V res) {
+        return this.put(sel, res, Collections.<D> emptySet());
     }
 
     /**
@@ -224,70 +300,140 @@ public class ICache<K, V, D> {
      * @param sel the key.
      * @param res the result associated with <code>sel</code>.
      * @param data the data from which <code>res</code> is computed.
-     * @return the watchers monitoring the passed key.
+     * @return the item that was created.
      */
-    public final synchronized Set<? extends CacheWatcher<K, D>> put(K sel, V res, Set<? extends D> data) {
-        if (this.size > 0 && this.cache.size() == this.size)
-            this.clear(this.cache.keySet().iterator().next());
-        this.cache.put(sel, res);
-        this.removeRunning(sel);
+    public final CacheItem<K, V, D> put(K sel, V res, Set<? extends D> data) {
+        return this.put(sel, res, data, this.delay * 1000);
+    }
 
-        for (final D datum : data) {
-            if (this.watchers != null) {
-                final CacheWatcher<K, D> watcher = this.watchers.get(datum);
-                watcher.add(sel);
-                this.watchersByKey.add(sel, watcher);
+    public final CacheItem<K, V, D> put(K sel, V res, Set<? extends D> data, final long timeoutDelay) {
+        return this.put(sel, true, res, data, timeoutDelay);
+    }
+
+    private final CacheItem<K, V, D> put(K key, final boolean allowReplace, V res, Set<? extends D> data, final long timeoutDelay) {
+        final CacheItem<K, V, D> item = new CacheItem<K, V, D>(this, key, res, data);
+        item.addTimeout(timeoutDelay, TimeUnit.MILLISECONDS);
+        item.addToWatchers();
+        return put(item, allowReplace);
+    }
+
+    /**
+     * Assign a value to a {@link CacheItem.State#RUNNING} item.
+     * 
+     * @param cacheRes an instance obtained from <code>check()</code>.
+     * @param val the value to store.
+     * @return the item that was added, <code>null</code> if none was added.
+     * @see #check(Object, boolean, boolean, Set)
+     */
+    public final CacheItem<K, V, D> put(CacheResult<V> cacheRes, V val) {
+        final CacheItem<K, V, D> item = getRunningValFromRes(cacheRes);
+        if (item == null)
+            return null;
+        item.setValue(val);
+        return put(item, true);
+    }
+
+    private final CacheItem<K, V, D> put(final CacheItem<K, V, D> val, final boolean allowReplace) {
+        final K sel = val.getKey();
+        synchronized (this) {
+            final CacheItem.State valState = val.getState();
+            if (!valState.isActive())
+                return null;
+            else if (valState != CacheItem.State.VALID)
+                throw new IllegalStateException("Non valid : " + val);
+            final boolean replacing = this.cache.containsKey(sel) && this.cache.get(sel).getRemovalType() == null;
+            if (!allowReplace && replacing)
+                return null;
+
+            if (!replacing && this.size > 0 && this.cache.size() == this.size)
+                this.cache.values().iterator().next().setRemovalType(RemovalType.SIZE_LIMIT);
+            final CacheItem<K, V, D> prev = this.cache.put(sel, val);
+            if (replacing)
+                prev.setRemovalType(RemovalType.DATA_CHANGE);
+            assert this.size <= 0 || this.cache.size() <= this.size;
+            this.removeRunning(sel);
+        }
+        return val;
+    }
+
+    /**
+     * Get the remaining time before the passed key will be removed.
+     * 
+     * @param key the key.
+     * @return the remaining milliseconds before the removal, negative if the passed key isn't in
+     *         this.
+     * @see #getRemovalTime(Object)
+     */
+    public final long getRemainingTime(K key) {
+        final CacheItem<K, V, D> val;
+        synchronized (this) {
+            val = this.cache.get(key);
+        }
+        if (val == null)
+            return -1;
+        return val.getRemainingTimeoutDelay();
+    }
+
+    public final void putAll(final ICache<K, V, D> otherCache, final boolean allowReplace) {
+        if (otherCache == this)
+            return;
+        if (otherCache.getSupp() != this.getSupp())
+            Log.get().warning("Since both caches don't share watchers, some early events might not be notified to this cache");
+        final List<CacheItem<K, V, D>> oItems = new ArrayList<CacheItem<K, V, D>>();
+        synchronized (otherCache) {
+            oItems.addAll(otherCache.cache.values());
+        }
+        for (final CacheItem<K, V, D> oItem : oItems) {
+            final CacheItem<K, V, D> newItem = this.put(oItem.getKey(), allowReplace, oItem.getValue(), oItem.getData(), oItem.getRemainingTimeoutDelay());
+            // if oItem was changed before newItem was created or see CacheWatcher.dataChanged() :
+            // 1. if newItem was added to a watcher before the first synchronized block, it will be
+            // notified
+            // 2. if newItem was added between the synchronized blocks (during the first iteration)
+            // it will be notified by the second iteration
+            // 3. if newItem was added after the second synchronized block, oItem will already be
+            // notified
+            if (newItem != null && oItem.getRemovalType() == RemovalType.DATA_CHANGE) {
+                newItem.setRemovalType(oItem.getRemovalType());
             }
         }
+    }
 
-        final CacheTimeOut<K> timeout = new CacheTimeOut<K>(this, sel);
-        this.timeoutTasks.put(sel, timeout);
-        this.getTimer().schedule(timeout, this.delay * 1000);
-
-        return this.watchersByKey.getNonNull(sel);
+    public final ICache<K, V, D> copy(final String name, final boolean copyItems) {
+        final ICache<K, V, D> res = new ICache<K, V, D>(this.getSupp(), this.delay, this.getMaximumSize(), name);
+        if (copyItems)
+            res.putAll(this, false);
+        return res;
     }
 
     public final synchronized void clear(K select) {
         log("clear", select);
         if (this.cache.containsKey(select)) {
-            this.cache.remove(select);
-            this.timeoutTasks.remove(select).cancel();
-            final Set<CacheWatcher<K, D>> keyWatchers = this.watchersByKey.remove(select);
-            // a key can specify no watchers at all
-            if (keyWatchers != null) {
-                for (final CacheWatcher<K, D> w : keyWatchers) {
-                    w.remove(select);
-                    if (w.isEmpty()) {
-                        w.die();
-                        this.watchers.remove(w.getData());
-                    }
-                }
+            this.cache.get(select).setRemovalType(RemovalType.EXPLICIT);
+        }
+    }
+
+    final boolean clear(final CacheItem<K, V, D> val) {
+        if (val.getRemovalType() == null)
+            throw new IllegalStateException("Not yet removed : " + val);
+        final boolean toBeRemoved;
+        synchronized (this) {
+            log("clear", val);
+            this.removeRunning(val);
+            toBeRemoved = this.cache.get(val.getKey()) == val;
+            if (toBeRemoved) {
+                this.cache.remove(val.getKey());
             }
         }
+        return toBeRemoved;
     }
 
     public final synchronized void clear() {
-        if (this.size() > 0) {
-            this.cache.clear();
-            if (this.timer != null) {
-                this.timer.cancel();
-                this.timer = null;
-                this.timeoutTasks.clear();
-            }
-            if (this.watchers != null) {
-                this.watchersByKey.clear();
-                for (final CacheWatcher<K, D> w : this.watchers.values()) {
-                    // die() will call clear() but since this.cache is now empty it won't do
-                    // anything
-                    w.die();
-                }
-                this.watchers.clear();
-            }
-        }
-    }
-
-    final synchronized boolean dependsOn(D data) {
-        return this.watchers.containsKey(data);
+        for (final CacheItem<K, V, D> val : new ArrayList<CacheItem<K, V, D>>(this.cache.values()))
+            val.setRemovalType(RemovalType.EXPLICIT);
+        assert this.size() == 0;
+        for (final CacheItem<K, V, D> val : new ArrayList<CacheItem<K, V, D>>(this.running.values()))
+            val.setRemovalType(RemovalType.EXPLICIT);
+        assert this.running.size() == 0;
     }
 
     private final void log(String msg, Object subject) {
@@ -300,7 +446,20 @@ public class ICache<K, V, D> {
         return this.cache.size();
     }
 
+    @Override
     public final String toString() {
-        return this.getClass().getName() + ", keys cached: " + this.timeoutTasks.keySet();
+        return this.toString(false);
+    }
+
+    public final String toString(final boolean withKeys) {
+        final String keys;
+        if (withKeys) {
+            synchronized (this) {
+                keys = ", keys cached: " + this.cache.keySet().toString();
+            }
+        } else {
+            keys = "";
+        }
+        return this.getClass().getName() + " '" + this.getName() + "'" + keys;
     }
 }

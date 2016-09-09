@@ -100,7 +100,7 @@ public class CustomEquals {
         return CompareUtils.equals(sA, sB);
     }
 
-    static public class ProxyFull<S, E extends S> {
+    static public class ProxyFull<S, E extends S> implements ProxyItf<E> {
 
         static public final <S, E extends S> Set<ProxyFull<S, E>> createSet(final HashingStrategy<S> strategy, final Collection<E> coll) {
             return wrap(strategy, coll, new LinkedHashSet<ProxyFull<S, E>>());
@@ -113,21 +113,6 @@ public class CustomEquals {
         static public final <S, E extends S, C extends Collection<? super ProxyFull<S, E>>> C wrap(final HashingStrategy<S> strategy, final Collection<E> coll, final C res) {
             for (final E item : coll) {
                 res.add(new ProxyFull<S, E>(item, strategy));
-            }
-            return res;
-        }
-
-        static public final <T> Set<T> unwrapToSet(final Collection<? extends ProxyFull<?, T>> coll) {
-            return unwrap(coll, new LinkedHashSet<T>());
-        }
-
-        static public final <T> List<T> unwrapToList(final Collection<? extends ProxyFull<?, T>> coll) {
-            return unwrap(coll, new ArrayList<T>());
-        }
-
-        static public final <T, C extends Collection<? super T>> C unwrap(final Collection<? extends ProxyFull<?, T>> coll, final C res) {
-            for (final ProxyFull<?, T> item : coll) {
-                res.add(item.getDelegate());
             }
             return res;
         }
@@ -159,10 +144,12 @@ public class CustomEquals {
             this.strategy = strategy;
         }
 
+        @Override
         public final E getDelegate() {
             return this.delegate;
         }
 
+        @Override
         public final HashingStrategy<S> getStrategy() {
             return this.strategy;
         }
@@ -205,27 +192,47 @@ public class CustomEquals {
     }
 
     /**
+     * A proxy object which uses a {@link HashingStrategy}.
+     * 
+     * @author Sylvain
+     * @param <E> type of item
+     */
+    static public interface ProxyItf<E> {
+        public E getDelegate();
+
+        public HashingStrategy<? super E> getStrategy();
+    }
+
+    static public final <S, E extends S> Set<ProxyItf<E>> createSet(final HashingStrategy<S> strategy, final Collection<E> coll) {
+        return ProxyFull.wrap(strategy, coll, new LinkedHashSet<ProxyItf<E>>());
+    }
+
+    static public final <S, E extends S> List<ProxyItf<E>> createList(final HashingStrategy<S> strategy, final Collection<E> coll) {
+        return ProxyFull.wrap(strategy, coll, new ArrayList<ProxyItf<E>>());
+    }
+
+    static public final <T> Set<T> unwrapToSet(final Collection<? extends ProxyItf<T>> coll) {
+        return unwrap(coll, new LinkedHashSet<T>());
+    }
+
+    static public final <T> List<T> unwrapToList(final Collection<? extends ProxyItf<T>> coll) {
+        return unwrap(coll, new ArrayList<T>());
+    }
+
+    static public final <T, C extends Collection<? super T>> C unwrap(final Collection<? extends ProxyItf<T>> coll, final C res) {
+        for (final ProxyItf<T> item : coll) {
+            res.add(item.getDelegate());
+        }
+        return res;
+    }
+
+    /**
      * A simple subclass to save some typing and improve legibility.
      * 
      * @author Sylvain
      * @param <E> type of item
      */
     static public class Proxy<E> extends ProxyFull<E, E> {
-
-        static public final <T> List<Proxy<T>> createList(final HashingStrategy<T> strategy, final Collection<T> coll) {
-            return wrap(strategy, coll, new ArrayList<Proxy<T>>());
-        }
-
-        static public final <T> Set<Proxy<T>> createSet(final HashingStrategy<T> strategy, final Collection<T> coll) {
-            return wrap(strategy, coll, new LinkedHashSet<Proxy<T>>());
-        }
-
-        static public final <T, C extends Collection<? super Proxy<T>>> C wrap(final HashingStrategy<T> strategy, final Collection<T> coll, final C res) {
-            for (final T item : coll) {
-                res.add(new Proxy<T>(item, strategy));
-            }
-            return res;
-        }
 
         public Proxy(E delegate, HashingStrategy<E> strategy) {
             super(delegate, strategy);

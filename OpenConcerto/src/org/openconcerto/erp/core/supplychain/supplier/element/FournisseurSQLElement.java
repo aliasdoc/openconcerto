@@ -16,10 +16,10 @@
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.supplychain.supplier.component.FournisseurSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.request.ListSQLRequest;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class FournisseurSQLElement extends ComptaSQLConfElement {
@@ -49,22 +49,9 @@ public class FournisseurSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(getTable(), getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.grow("ID_MODE_REGLEMENT").putNulls("AJOURS", "LENJOUR", "DATE_FACTURE", "COMPTANT");
-            }
-        };
-    }
-
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_ADRESSE");
-        l.add("ID_ADRESSE_E");
-        l.add("ID_MODE_REGLEMENT");
-        return l;
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addForeignToGraphToFetch("ID_MODE_REGLEMENT", Arrays.asList("AJOURS", "LENJOUR", "DATE_FACTURE", "COMPTANT"));
     }
 
     /*

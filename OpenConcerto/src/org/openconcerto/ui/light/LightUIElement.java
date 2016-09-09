@@ -13,16 +13,33 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+
 import java.awt.Color;
 import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.openconcerto.utils.io.JSONConverter;
-import org.openconcerto.utils.io.Transferable;
 import net.minidev.json.JSONObject;
 
 public class LightUIElement implements Transferable {
+
+    public enum GlyphIcon {
+        WARNING("#warning"), PLUS("#plus"), PENCIL("#pencil"), SEARCH("#search"), REMOVE("#remove"), STAR("#star"), STAR_EMPTY("#star-empty"), USER("#user"), LOCK("#lock"), UNLOCK(
+                "#unlock"), DOWNLOAD("#download"), UPLOAD("#upload");
+
+        private final String id;
+
+        GlyphIcon(String id) {
+            this.id = id;
+        }
+
+        public String getId() {
+            return this.id;
+        }
+    };
+
     /**
      * 
      */
@@ -39,17 +56,21 @@ public class LightUIElement implements Transferable {
     public static final int TYPE_PANEL = 8;
     public static final int TYPE_TREE = 9;
     public static final int TYPE_TEXT = 10;
-    public static final int TYPE_SCROLLABLE = 11;
-    public static final int TYPE_LIST = 12;
-    public static final int TYPE_DROPDOWN_BUTTON = 13;
-    public static final int TYPE_FRAME = 14;
+    public static final int TYPE_LIST = 11;
+    public static final int TYPE_DROPDOWN_BUTTON = 12;
+    public static final int TYPE_FRAME = 13;
+    public static final int TYPE_IMAGE = 14;
+    public static final int TYPE_FILE = 15;
+    public static final int TYPE_PANEL_LINE = 16;
+    public static final int TYPE_TAB_ELEMENT = 17;
     public static final int TYPE_BUTTON = 20;
     public static final int TYPE_BUTTON_WITH_CONTEXT = 21;
     public static final int TYPE_BUTTON_CANCEL = 22;
     public static final int TYPE_BUTTON_UNMANAGED = 23;
     public static final int TYPE_BUTTON_WITH_SELECTION_CONTEXT = 24;
     public static final int TYPE_BUTTON_LINK = 25;
-
+    public static final int TYPE_RAW_HTML = 26;
+    public static final int TYPE_TEXT_AREA = 27;
     // valueType
     public static final int VALUE_TYPE_STRING = 0;
     public static final int VALUE_TYPE_INTEGER = 1;
@@ -83,40 +104,76 @@ public class LightUIElement implements Transferable {
     public static final int FONT_XLARGE = 5;
     public static final int FONT_XXLARGE = 6;
 
+    public static final int DEFAULT_GRID_HEIGHT = 1;
+    public static final int DEFAULT_GRID_WIDTH = 1;
+    public static final int DEFAULT_WEIGHT_X = 0;
+    public static final int DEFAULT_WEIGHT_Y = 0;
+
+    private int fontSize = FONT_SMALL;
+    private int gridHeight = DEFAULT_GRID_HEIGHT;
+    private int gridWidth = DEFAULT_GRID_WIDTH;
+    private int horizontalAlignment = HALIGN_LEFT;
+    private int verticalAlignment = VALIGN_TOP;
+    private int weightX = DEFAULT_WEIGHT_X;
+    private int weightY = DEFAULT_WEIGHT_Y;
+
     private Integer commitMode;
-    private Integer fontSize = FONT_SMALL;
-    private Integer gridWidth = 1;
-    private Integer horizontalAlignement = HALIGN_LEFT;
-    private Integer height = null;
+    private Integer height;
+    private Integer marginBottom;
+    private Integer marginLeft;
+    private Integer marginRight;
+    private Integer marginTop;
+    private Integer maxHeight;
+    private Integer maxWidth;
     private Integer minInputSize;
+    private Integer minHeight;
+    private Integer minWidth;
+    private Integer paddingBottom;
+    private Integer paddingLeft;
+    private Integer paddingRight;
+    private Integer paddingTop;
     private Integer type;
     private Integer valueType;
-    private Integer verticalAlignement = VALIGN_TOP;
-    private Integer width = null;
+    private Integer width;
 
+    private boolean enabled = true;
+    private boolean fillHeight = false;
+    private boolean fillWidth = false;
     private boolean foldable = false;
     private boolean folded = false;
-    private boolean fillWidth;
-    private boolean horizontallyResizable;
-    private boolean required;
-    private boolean verticallyResizable;
+    private boolean fontBold = false;
+    private boolean fontItalic = false;
+    private boolean horizontallyResizable = false;
+    private boolean readOnly = false;
+    private boolean required = false;
+    private boolean verticallyResizable = false;
+    private boolean visible = true;
 
     private String displayPrecision;// "(1,2)" means that 0.159 is shown as 0.16
     private String icon;
     private String id;
     private String label;
     private String toolTip;
+    private String UUID;
     // Values
     private String value;
     private String valuePrecision;// "(6,2)" 999999.99 is the max
     private String valueRange; // [-3.14,3.14]
 
     private Color backgroundColor;
+    private Color borderColor;
+    private Color cellBackgroundColor;
     private Color foreColor;
+
+    private LightUIElement parent;
 
     private Map<Integer, String> actions = new HashMap<Integer, String>();
 
-    public LightUIElement() {
+    public LightUIElement(final String id) {
+        this.id = id;
+        this.UUID = java.util.UUID.randomUUID().toString();
+
+        JSONToLightUIConvertorManager.getInstance().put(this.getClassName(), this.getConvertor());
     }
 
     // Init from json constructor
@@ -126,85 +183,12 @@ public class LightUIElement implements Transferable {
 
     // Clone constructor
     public LightUIElement(final LightUIElement element) {
-        this.commitMode = element.commitMode;
-        this.gridWidth = element.gridWidth;
-        this.horizontalAlignement = element.horizontalAlignement;
-        this.height = element.height;
-        this.minInputSize = element.minInputSize;
-        this.type = element.type;
-        this.valueType = element.valueType;
-        this.verticalAlignement = element.verticalAlignement;
-        this.width = element.width;
-        this.fontSize = element.fontSize;
-        this.foldable = element.foldable;
-        this.folded = element.folded;
-        this.fillWidth = element.fillWidth;
-        this.horizontallyResizable = element.horizontallyResizable;
-        this.required = element.required;
-        this.verticallyResizable = element.verticallyResizable;
-        this.displayPrecision = element.displayPrecision;
-        this.icon = element.icon;
         this.id = element.id;
-        this.label = element.label;
-        this.toolTip = element.toolTip;
-        this.value = element.value;
-        this.valuePrecision = element.valuePrecision;
-        this.valueRange = element.valueRange;
-        this.backgroundColor = element.backgroundColor;
-        this.foreColor = element.foreColor;
-        this.actions = element.actions;
-    }
+        this.parent = element.parent;
+        this.UUID = element.UUID;
+        this.type = element.type;
 
-    public int getType() {
-        return this.type;
-    }
-
-    public void setType(int type) {
-        this.type = type;
-    }
-
-    public int getGridWidth() {
-        return this.gridWidth;
-    }
-
-    public void setGridWidth(int gridWidth) {
-        this.gridWidth = gridWidth;
-    }
-
-    public boolean isFoldable() {
-        return this.foldable;
-    }
-
-    public void setFoldable(boolean foldable) {
-        this.foldable = foldable;
-    }
-    
-    public boolean isFolded() {
-        return this.folded;
-    }
-
-    public void setFolded(boolean folded) {
-        this.folded = folded;
-    }
-    
-    public boolean isFillWidth() {
-        return this.fillWidth;
-    }
-
-    public void setFillWidth(boolean fillWidth) {
-        this.fillWidth = fillWidth;
-    }
-
-    public Color getBackgroundColor() {
-        return this.backgroundColor;
-    }
-
-    public void setBackgroundColor(Color backgroundColor) {
-        this.backgroundColor = backgroundColor;
-    }
-
-    public Color getForeColor() {
-        return this.foreColor;
+        this.copy(element);
     }
 
     public int getFontSize() {
@@ -215,8 +199,284 @@ public class LightUIElement implements Transferable {
         this.fontSize = fontSize;
     }
 
+    public int getGridWidth() {
+        return this.gridWidth;
+    }
+
+    public void setGridWidth(int gridWidth) {
+        this.gridWidth = gridWidth;
+    }
+
+    public Integer getHeight() {
+        return this.height;
+    }
+
+    public void setHeight(Integer height) {
+        this.height = height;
+    }
+
+    public final int getHorizontalAlignment() {
+        return this.horizontalAlignment;
+    }
+
+    public final void setHorizontalAlignement(int horizontalAlignement) {
+        this.horizontalAlignment = horizontalAlignement;
+    }
+
+    public int getValueType() {
+        return this.valueType;
+    }
+
+    public void setValueType(int valueType) {
+        this.valueType = valueType;
+    }
+
+    public final int getVerticalAlignment() {
+        return this.verticalAlignment;
+    }
+
+    public void setVerticalAlignement(int verticalAlignement) {
+        this.verticalAlignment = verticalAlignement;
+    }
+
+    public int getWeightX() {
+        return this.weightX;
+    }
+
+    public void setWeightX(final int weightX) {
+        this.weightX = weightX;
+    }
+
+    public int getWeightY() {
+        return this.weightY;
+    }
+
+    public void setWeightY(final int weightY) {
+        this.weightY = weightY;
+    }
+
+    public Integer getCommitMode() {
+        return this.commitMode;
+    }
+
+    public void setCommitMode(int commitMode) {
+        this.commitMode = commitMode;
+    }
+
+    public Integer getMarginTop() {
+        return this.marginTop;
+    }
+
+    public void setMarginTop(Integer marginTop) {
+        this.marginTop = marginTop;
+    }
+
+    public Integer getMarginBottom() {
+        return this.marginBottom;
+    }
+
+    public void setMarginBottom(Integer marginBottom) {
+        this.marginBottom = marginBottom;
+    }
+
+    public Integer getMarginLeft() {
+        return this.marginLeft;
+    }
+
+    public void setMarginLeft(final Integer marginLeft) {
+        this.marginLeft = marginLeft;
+    }
+
+    public Integer getMarginRight() {
+        return this.marginRight;
+    }
+
+    public void setMarginRight(final Integer marginRight) {
+        this.marginRight = marginRight;
+    }
+
+    public Integer getMinInputSize() {
+        return this.minInputSize;
+    }
+
+    public Integer getMaxHeight() {
+        return this.maxHeight;
+    }
+
+    public void setMaxHeight(Integer maxHeight) {
+        this.maxHeight = maxHeight;
+    }
+
+    public Integer getMinHeight() {
+        return this.minHeight;
+    }
+
+    public void setMinHeight(Integer minHeight) {
+        this.minHeight = minHeight;
+    }
+
+    public Integer getMaxWidth() {
+        return this.maxWidth;
+    }
+
+    public void setMaxWidth(Integer maxWidth) {
+        this.maxWidth = maxWidth;
+    }
+
+    public Integer getMinWidth() {
+        return this.minWidth;
+    }
+
+    public void setMinWidth(Integer minWidth) {
+        this.minWidth = minWidth;
+    }
+
+    public void setMinInputSize(Integer minInputSize) {
+        this.minInputSize = minInputSize;
+    }
+
+    public Integer getPaddingTop() {
+        return this.paddingTop;
+    }
+
+    public void setPaddingTop(Integer paddingTop) {
+        this.paddingTop = paddingTop;
+    }
+
+    public Integer getPaddingBottom() {
+        return this.paddingBottom;
+    }
+
+    public void setPaddingBottom(Integer paddingBottom) {
+        this.paddingBottom = paddingBottom;
+    }
+
+    public Integer getPaddingLeft() {
+        return this.paddingLeft;
+    }
+
+    public void setPaddingLeft(Integer paddingLeft) {
+        this.paddingLeft = paddingLeft;
+    }
+
+    public Integer getPaddingRight() {
+        return this.paddingRight;
+    }
+
+    public void setPaddingRight(Integer paddingRight) {
+        this.paddingRight = paddingRight;
+    }
+
+    public Integer getType() {
+        return this.type;
+    }
+
+    public void setType(int type) {
+        this.type = type;
+    }
+
+    public Integer getWidth() {
+        return this.width;
+    }
+
+    public void setWidth(Integer width) {
+        this.width = width;
+    }
+
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isFoldable() {
+        return this.foldable;
+    }
+
+    public void setFoldable(boolean foldable) {
+        this.foldable = foldable;
+    }
+
+    public boolean isFolded() {
+        return this.folded;
+    }
+
+    public void setFolded(boolean folded) {
+        this.folded = folded;
+    }
+
+    public boolean isFillHeight() {
+        return this.fillHeight;
+    }
+
+    public void setFillHeight(boolean fillHeight) {
+        this.fillHeight = fillHeight;
+    }
+
+    public boolean isFillWidth() {
+        return this.fillWidth;
+    }
+
+    public void setFillWidth(boolean fillWidth) {
+        this.fillWidth = fillWidth;
+    }
+
+    public boolean isReadOnly() {
+        return this.readOnly;
+    }
+
+    public void setReadOnly(boolean readOnly) {
+        this.readOnly = readOnly;
+    }
+
+    public Color getBackgroundColor() {
+        return this.backgroundColor;
+    }
+
+    public void setBackgroundColor(Color backgroundColor) {
+        this.backgroundColor = backgroundColor;
+    }
+
+    public Color getBorderColor() {
+        return this.borderColor;
+    }
+
+    public void setBorderColor(Color borderColor) {
+        this.borderColor = borderColor;
+    }
+
+    public Color getCellBackgroundColor() {
+        return this.cellBackgroundColor;
+    }
+
+    public void setCellBackgroundColor(Color cellBackgroundColor) {
+        this.cellBackgroundColor = cellBackgroundColor;
+    }
+
+    public Color getForeColor() {
+        return this.foreColor;
+    }
+
     public void setForeColor(Color foreColor) {
         this.foreColor = foreColor;
+    }
+
+    public boolean isFontItalic() {
+        return this.fontItalic;
+    }
+
+    public void setFontBold(boolean fontBold) {
+        this.fontBold = fontBold;
+    }
+
+    public boolean isFontBold() {
+        return this.fontBold;
+    }
+
+    public void setFontItalic(boolean fontItalic) {
+        this.fontItalic = fontItalic;
     }
 
     public String getIcon() {
@@ -231,8 +491,16 @@ public class LightUIElement implements Transferable {
         return this.id;
     }
 
-    public void setId(String id) {
+    public void setId(final String id) {
         this.id = id;
+    }
+
+    public String getUUID() {
+        return this.UUID;
+    }
+
+    public void changeUUID() {
+        this.UUID = java.util.UUID.randomUUID().toString();
     }
 
     public String getLabel() {
@@ -245,14 +513,6 @@ public class LightUIElement implements Transferable {
 
     public String getValue() {
         return this.value;
-    }
-
-    public int getCommitMode() {
-        return this.commitMode;
-    }
-
-    public void setCommitMode(int commitMode) {
-        this.commitMode = commitMode;
     }
 
     public String getDisplayPrecision() {
@@ -281,38 +541,6 @@ public class LightUIElement implements Transferable {
 
     public void setValue(String value) {
         this.value = value;
-    }
-
-    public int getValueType() {
-        return this.valueType;
-    }
-
-    public void setValueType(int valueType) {
-        this.valueType = valueType;
-    }
-
-    public int getMinInputSize() {
-        return this.minInputSize;
-    }
-
-    public void setMinInputSize(int minInputSize) {
-        this.minInputSize = minInputSize;
-    }
-
-    public Integer getHeight() {
-        return this.height;
-    }
-
-    public void setHeight(Integer height) {
-        this.height = height;
-    }
-
-    public Integer getWidth() {
-        return this.width;
-    }
-
-    public void setWidth(Integer width) {
-        this.width = width;
     }
 
     public boolean isRequired() {
@@ -347,67 +575,48 @@ public class LightUIElement implements Transferable {
         this.horizontallyResizable = horizontallyResizable;
     }
 
-    public final Integer getHorizontalAlignement() {
-        return this.horizontalAlignement;
+    public final LightUIElement getParent() {
+        return this.parent;
     }
 
-    public final void setHorizontalAlignement(Integer horizontalAlignement) {
-        this.horizontalAlignement = horizontalAlignement;
+    public final <T extends LightUIContainer> T getParent(final Class<T> classExpected) {
+        LightUIElement parent = this.parent;
+        while (parent != null && !classExpected.isAssignableFrom(parent.getClass())) {
+            parent = parent.getParent();
+        }
+        return (T) parent;
     }
 
-    public final Integer getVerticalAlignement() {
-        return this.verticalAlignement;
+    public void setParent(LightUIElement parent) {
+        this.parent = parent;
     }
 
-    public final void setVerticalAlignement(Integer verticalAlignement) {
-        this.verticalAlignement = verticalAlignement;
+    public final Map<Integer, String> getActions() {
+        return this.actions;
     }
 
     public final void addAction(final Integer actionType, final String actionId) {
         this.actions.put(actionType, actionId);
     }
 
-    public void dump(PrintStream out) {
-        String type = "?";
-        if (this.type == TYPE_CHECKBOX) {
-            type = "checkbox";
-        } else if (this.type == TYPE_COMBOBOX) {
-            type = "combobox";
-        } else if (this.type == TYPE_LABEL) {
-            type = "label";
-        } else if (this.type == TYPE_TEXT_FIELD) {
-            type = "textfield";
-        } else if (this.type == TYPE_TABLE) {
-            type = "list";
-        } else if (this.type == TYPE_TABBED_UI) {
-            type = "tabs";
-        } else if (this.type == TYPE_TREE) {
-            type = "tree";
-        } else if (this.type == TYPE_BUTTON) {
-            type = "button";
-        } else if (this.type == TYPE_BUTTON_WITH_CONTEXT) {
-            type = "button with context";
-        } else if (this.type == TYPE_BUTTON_CANCEL) {
-            type = "cancel button";
-        } else if (this.type == TYPE_COMBOBOX_ELEMENT) {
-            type = "combo element";
-        } else if (this.type == TYPE_BUTTON_WITH_SELECTION_CONTEXT) {
-            type = "button with selection context";
-        }
+    public void dump(PrintStream out, final int depth) {
+        final String type = this.getTypeAsString();
         String valueType = "?";
-        if (this.valueType == VALUE_TYPE_STRING) {
-            valueType = "string";
-        } else if (this.valueType == VALUE_TYPE_INTEGER) {
-            valueType = "int";
-        } else if (this.valueType == VALUE_TYPE_REF) {
-            valueType = "ref";
-        } else if (this.valueType == VALUE_TYPE_LIST) {
-            valueType = "list";
-        } else if (this.valueType == VALUE_TYPE_DECIMAL) {
-            valueType = "decimal";
+        if (this.valueType != null) {
+            if (this.valueType == VALUE_TYPE_STRING) {
+                valueType = "string";
+            } else if (this.valueType == VALUE_TYPE_INTEGER) {
+                valueType = "int";
+            } else if (this.valueType == VALUE_TYPE_REF) {
+                valueType = "ref";
+            } else if (this.valueType == VALUE_TYPE_LIST) {
+                valueType = "list";
+            } else if (this.valueType == VALUE_TYPE_DECIMAL) {
+                valueType = "decimal";
+            }
         }
 
-        String str = "LightUIElement" + " " + type + " id:" + this.id + " w:" + this.gridWidth + " fill:" + this.fillWidth;
+        String str = "LightUIElement" + "class:" + this.getClassName() + " type:" + type + " id:" + this.id + " uuid:" + this.UUID + " w:" + this.gridWidth + " fill:" + this.fillWidth;
         str += " value:" + this.value + "(" + valueType + ")";
         if (this.valueRange != null) {
             str += "range: " + this.valueRange;
@@ -452,7 +661,7 @@ public class LightUIElement implements Transferable {
             break;
         }
 
-        switch (this.horizontalAlignement) {
+        switch (this.horizontalAlignment) {
         case HALIGN_RIGHT:
             str += " horiz-align: right";
             break;
@@ -464,7 +673,7 @@ public class LightUIElement implements Transferable {
             break;
         }
 
-        switch (this.verticalAlignement) {
+        switch (this.verticalAlignment) {
         case HALIGN_RIGHT:
             str += " vert-align: top";
             break;
@@ -475,7 +684,130 @@ public class LightUIElement implements Transferable {
             str += " vert-align: bottom";
             break;
         }
+        addSpacer(out, depth);
         out.println(str);
+
+    }
+
+    protected void addSpacer(PrintStream out, int depth) {
+        for (int i = 0; i < depth; i++) {
+            out.print("  ");
+        }
+    }
+
+    public String getTypeAsString() {
+        String type = "?";
+        if (this.type == TYPE_CHECKBOX) {
+            type = "checkbox";
+        } else if (this.type == TYPE_COMBOBOX) {
+            type = "combobox";
+        } else if (this.type == TYPE_LABEL) {
+            type = "label";
+        } else if (this.type == TYPE_TEXT_AREA) {
+            type = "textarea";
+        } else if (this.type == TYPE_TEXT_FIELD) {
+            type = "textfield";
+        } else if (this.type == TYPE_TABLE) {
+            type = "list";
+        } else if (this.type == TYPE_TABBED_UI) {
+            type = "tabs";
+        } else if (this.type == TYPE_TREE) {
+            type = "tree";
+        } else if (this.type == TYPE_BUTTON) {
+            type = "button";
+        } else if (this.type == TYPE_BUTTON_WITH_CONTEXT) {
+            type = "button with context";
+        } else if (this.type == TYPE_BUTTON_CANCEL) {
+            type = "cancel button";
+        } else if (this.type == TYPE_COMBOBOX_ELEMENT) {
+            type = "combo element";
+        } else if (this.type == TYPE_BUTTON_WITH_SELECTION_CONTEXT) {
+            type = "button with selection context";
+        } else if (this.type == TYPE_FILE) {
+            type = "file";
+        } else if (this.type == TYPE_FRAME) {
+            type = "frame";
+        } else if (this.type == TYPE_DROPDOWN_BUTTON) {
+            type = "drop down button";
+        } else if (this.type == TYPE_IMAGE) {
+            type = "image";
+        } else if (this.type == TYPE_LIST) {
+            type = "list";
+        } else if (this.type == TYPE_RAW_HTML) {
+            type = "raw html";
+        }
+
+        return type;
+    }
+
+    public String getClassName() {
+        return this.getClass().getName();
+    }
+
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIElement(json);
+            }
+        };
+    }
+
+    protected void copy(final LightUIElement element) {
+        if (element == null) {
+            throw new IllegalArgumentException("Try to copy attributes of null element in " + this.getId());
+        }
+        this.fontSize = element.fontSize;
+        this.gridHeight = element.gridHeight;
+        this.gridWidth = element.gridWidth;
+        this.horizontalAlignment = element.horizontalAlignment;
+        this.verticalAlignment = element.verticalAlignment;
+        this.weightX = element.weightX;
+
+        this.commitMode = element.commitMode;
+        this.height = element.height;
+        this.marginBottom = element.marginBottom;
+        this.marginLeft = element.marginLeft;
+        this.marginRight = element.marginRight;
+        this.marginTop = element.marginTop;
+        this.maxHeight = element.maxHeight;
+        this.maxWidth = element.maxWidth;
+        this.minInputSize = element.minInputSize;
+        this.minHeight = element.minHeight;
+        this.minWidth = element.minWidth;
+        this.paddingBottom = element.paddingBottom;
+        this.paddingLeft = element.paddingLeft;
+        this.paddingRight = element.paddingRight;
+        this.paddingTop = element.paddingTop;
+        this.valueType = element.valueType;
+        this.width = element.width;
+
+        this.enabled = element.enabled;
+        this.fillWidth = element.fillWidth;
+        this.foldable = element.foldable;
+        this.folded = element.folded;
+        this.fontBold = element.fontBold;
+        this.fontItalic = element.fontItalic;
+        this.horizontallyResizable = element.horizontallyResizable;
+        this.required = element.required;
+        this.readOnly = element.readOnly;
+        this.verticallyResizable = element.verticallyResizable;
+        this.visible = element.visible;
+
+        this.displayPrecision = element.displayPrecision;
+        this.icon = element.icon;
+        this.label = element.label;
+        this.toolTip = element.toolTip;
+        this.value = element.value;
+        this.valuePrecision = element.valuePrecision;
+        this.valueRange = element.valueRange;
+
+        this.backgroundColor = element.backgroundColor;
+        this.borderColor = element.borderColor;
+        this.cellBackgroundColor = element.cellBackgroundColor;
+        this.foreColor = element.foreColor;
+
+        this.actions = element.actions;
 
     }
 
@@ -493,17 +825,85 @@ public class LightUIElement implements Transferable {
     public JSONObject toJSON() {
         final JSONObject result = new JSONObject();
 
-        result.put("class", "LightUIElement");
-        result.put("id", this.id);
+        result.put("class-name", this.getClassName());
 
-        if (this.backgroundColor != null) {
-            result.put("background-color", JSONConverter.getJSON(this.backgroundColor));
+        if (this.fontSize != FONT_SMALL) {
+            result.put("font-size", this.fontSize);
         }
+        if (this.gridWidth != DEFAULT_GRID_WIDTH) {
+            result.put("grid-width", this.gridWidth);
+        }
+        if (this.gridHeight != DEFAULT_GRID_HEIGHT) {
+            result.put("grid-height", this.gridHeight);
+        }
+        if (this.horizontalAlignment != HALIGN_LEFT) {
+            result.put("horizontal-alignment", this.horizontalAlignment);
+        }
+        if (this.verticalAlignment != VALIGN_TOP) {
+            result.put("vertical-alignment", this.verticalAlignment);
+        }
+        if (this.weightX != DEFAULT_WEIGHT_X) {
+            result.put("weight-x", this.weightX);
+        }
+
         if (this.commitMode != null) {
             result.put("commit-mode", this.commitMode);
         }
-        if (this.displayPrecision != null) {
-            result.put("display-precision", this.displayPrecision);
+        if (this.height != null) {
+            result.put("height", this.height);
+        }
+        if (this.marginBottom != null) {
+            result.put("m-bottom", this.marginBottom);
+        }
+        if (this.marginLeft != null) {
+            result.put("m-left", this.marginLeft);
+        }
+        if (this.marginRight != null) {
+            result.put("m-right", this.marginRight);
+        }
+        if (this.marginTop != null) {
+            result.put("m-top", this.marginTop);
+        }
+        if (this.maxHeight != null) {
+            result.put("max-height", this.maxHeight);
+        }
+        if (this.maxWidth != null) {
+            result.put("max-width", this.maxWidth);
+        }
+        if (this.minInputSize != null) {
+            result.put("min-input-size", this.minInputSize);
+        }
+        if (this.minHeight != null) {
+            result.put("min-height", this.minHeight);
+        }
+        if (this.minWidth != null) {
+            result.put("min-width", this.minWidth);
+        }
+        if (this.paddingBottom != null) {
+            result.put("p-bottom", this.paddingBottom);
+        }
+        if (this.paddingLeft != null) {
+            result.put("p-left", this.paddingLeft);
+        }
+        if (this.paddingRight != null) {
+            result.put("p-right", this.paddingRight);
+        }
+        if (this.paddingTop != null) {
+            result.put("p-top", this.paddingTop);
+        }
+        result.put("type", this.type);
+        if (this.valueType != null) {
+            result.put("value-type", this.valueType);
+        }
+        if (this.width != null) {
+            result.put("width", this.width);
+        }
+
+        if (!this.enabled) {
+            result.put("enabled", false);
+        }
+        if (this.fillWidth) {
+            result.put("fill-width", true);
         }
         if (this.foldable) {
             result.put("foldable", true);
@@ -511,146 +911,125 @@ public class LightUIElement implements Transferable {
         if (this.folded) {
             result.put("folded", true);
         }
-        if (this.fillWidth) {
-            result.put("fill-width", true);
+        if (this.fontBold) {
+            result.put("bold", true);
         }
-        if (this.foreColor != null) {
-            result.put("fore-color", JSONConverter.getJSON(this.foreColor));
-        }
-        if (this.fontSize != FONT_SMALL) {
-            result.put("font-size", this.fontSize);
-        }
-        if (this.gridWidth != null) {
-            result.put("grid-width", this.gridWidth);
+        if (this.fontItalic) {
+            result.put("italic", true);
         }
         if (this.horizontallyResizable) {
             result.put("horizontally-resizable", true);
         }
+        if (this.required) {
+            result.put("required", true);
+        }
+        if (this.readOnly) {
+            result.put("read-only", true);
+        }
         if (this.verticallyResizable) {
             result.put("vertically-resizable", true);
+        }
+        if (!this.visible) {
+            result.put("visible", false);
+        }
+
+        if (this.displayPrecision != null) {
+            result.put("display-precision", this.displayPrecision);
         }
         if (this.icon != null) {
             result.put("icon", this.icon);
         }
+        result.put("id", this.id);
         if (this.label != null) {
             result.put("label", this.label);
-        }
-        if (this.minInputSize != null) {
-            result.put("min-input-size", this.minInputSize);
-        }
-        if (this.required) {
-            result.put("required", true);
         }
         if (this.toolTip != null) {
             result.put("tool-tip", this.toolTip);
         }
-        
-        result.put("type", this.type);
-        result.put("value", this.value);
-        
+        result.put("uuid", this.UUID);
+        if (this.value != null) {
+            result.put("value", this.value);
+        }
         if (this.valuePrecision != null) {
             result.put("value-precision", this.valuePrecision);
         }
         if (this.valueRange != null) {
             result.put("value-range", this.valueRange);
         }
-        if (this.valueType != null) {
-            result.put("value-type", this.valueType);
+
+        if (this.backgroundColor != null) {
+            result.put("background-color", JSONConverter.getJSON(this.backgroundColor));
         }
-        if (this.width != null) {
-            result.put("width", this.width);
+        if (this.borderColor != null) {
+            result.put("border-color", JSONConverter.getJSON(this.borderColor));
         }
-        if (this.height != null) {
-            result.put("height", this.height);
+        if (this.cellBackgroundColor != null) {
+            result.put("cell-background-color", JSONConverter.getJSON(this.cellBackgroundColor));
         }
-        if (this.horizontalAlignement != HALIGN_LEFT) {
-            result.put("horizontal-alignement", this.horizontalAlignement);
+        if (this.foreColor != null) {
+            result.put("fore-color", JSONConverter.getJSON(this.foreColor));
         }
-        if (this.verticalAlignement != VALIGN_TOP) {
-            result.put("vertical-alignement", this.verticalAlignement);
-        }
+
         if (!this.actions.isEmpty()) {
             result.put("actions", this.actions);
         }
+
         return result;
     }
 
     @Override
     public void fromJSON(final JSONObject json) {
-        this.id = (String) JSONConverter.getParameterFromJSON(json, "id", String.class);
-        this.commitMode = (Integer) JSONConverter.getParameterFromJSON(json, "commit-mode", Integer.class);
-        this.displayPrecision = (String) JSONConverter.getParameterFromJSON(json, "display-precision", String.class);
-        this.foldable = (Boolean) JSONConverter.getParameterFromJSON(json, "foldable", Boolean.class, false);
-        this.folded = (Boolean) JSONConverter.getParameterFromJSON(json, "folded", Boolean.class, false);
-        this.fillWidth = (Boolean) JSONConverter.getParameterFromJSON(json, "fill-width", Boolean.class, Boolean.FALSE);
-        this.fontSize = (Integer) JSONConverter.getParameterFromJSON(json, "font-size", Integer.class, FONT_SMALL);
-        this.gridWidth = (Integer) JSONConverter.getParameterFromJSON(json, "grid-width", Integer.class);
-        this.horizontallyResizable = (Boolean) JSONConverter.getParameterFromJSON(json, "horizontally-resizable", Boolean.class, Boolean.FALSE);
-        this.verticallyResizable = (Boolean) JSONConverter.getParameterFromJSON(json, "vertically-resizable", Boolean.class, Boolean.FALSE);
-        this.icon = (String) JSONConverter.getParameterFromJSON(json, "icon", String.class);
-        this.label = (String) JSONConverter.getParameterFromJSON(json, "label", String.class);
-        this.minInputSize = (Integer) JSONConverter.getParameterFromJSON(json, "min-input-size", Integer.class);
-        this.required = (Boolean) JSONConverter.getParameterFromJSON(json, "required", Boolean.class, Boolean.FALSE);
-        this.toolTip = (String) JSONConverter.getParameterFromJSON(json, "tool-tip", String.class);
-        this.type = (Integer) JSONConverter.getParameterFromJSON(json, "type", Integer.class);
-        this.value = (String) JSONConverter.getParameterFromJSON(json, "value", String.class);
-        this.valuePrecision = (String) JSONConverter.getParameterFromJSON(json, "value-precision", String.class);
-        this.valueRange = (String) JSONConverter.getParameterFromJSON(json, "value-range", String.class);
-        this.valueType = (Integer) JSONConverter.getParameterFromJSON(json, "value-type", Integer.class);
-        this.width = (Integer) JSONConverter.getParameterFromJSON(json, "width", Integer.class);
-        this.height = (Integer) JSONConverter.getParameterFromJSON(json, "height", Integer.class);
-        this.horizontalAlignement = (Integer) JSONConverter.getParameterFromJSON(json, "horizontal-alignement", Integer.class, HALIGN_LEFT);
-        this.verticalAlignement = (Integer) JSONConverter.getParameterFromJSON(json, "vertical-alignement", Integer.class, VALIGN_TOP);
+        this.id = JSONConverter.getParameterFromJSON(json, "id", String.class);
+        this.UUID = JSONConverter.getParameterFromJSON(json, "uuid", String.class);
+        this.displayPrecision = JSONConverter.getParameterFromJSON(json, "display-precision", String.class);
+        this.icon = JSONConverter.getParameterFromJSON(json, "icon", String.class);
+        this.label = JSONConverter.getParameterFromJSON(json, "label", String.class);
 
-        final JSONObject jsonBackgroundColor = (JSONObject) JSONConverter.getParameterFromJSON(json, "background-color", JSONObject.class);
-        if (jsonBackgroundColor != null) {
-            if (!jsonBackgroundColor.containsKey("r") || !jsonBackgroundColor.containsKey("g") || !jsonBackgroundColor.containsKey("b")) {
-                throw new IllegalArgumentException("value for 'background-color' is invalid, it must contains attribute r, g, b");
-            }
-            final int r = (Integer) JSONConverter.getParameterFromJSON(jsonBackgroundColor, "r", Integer.class);
-            final int g = (Integer) JSONConverter.getParameterFromJSON(jsonBackgroundColor, "g", Integer.class);
-            final int b = (Integer) JSONConverter.getParameterFromJSON(jsonBackgroundColor, "b", Integer.class);
-            this.backgroundColor = new Color(r, g, b);
-        }
+        this.toolTip = JSONConverter.getParameterFromJSON(json, "tool-tip", String.class);
+        this.value = JSONConverter.getParameterFromJSON(json, "value", String.class);
+        this.valuePrecision = JSONConverter.getParameterFromJSON(json, "value-precision", String.class);
+        this.valueRange = JSONConverter.getParameterFromJSON(json, "value-range", String.class);
 
-        final JSONObject jsonForeColor = (JSONObject) JSONConverter.getParameterFromJSON(json, "fore-color", JSONObject.class);
-        if (jsonForeColor != null) {
-            if (!jsonForeColor.containsKey("r") || !jsonForeColor.containsKey("g") || !jsonForeColor.containsKey("b")) {
-                throw new IllegalArgumentException("value for 'for-color' is invalid, it must contains attribute r, g, b");
-            }
-            final int r = (Integer) JSONConverter.getParameterFromJSON(jsonForeColor, "r", Integer.class);
-            final int g = (Integer) JSONConverter.getParameterFromJSON(jsonForeColor, "g", Integer.class);
-            final int b = (Integer) JSONConverter.getParameterFromJSON(jsonForeColor, "b", Integer.class);
-            this.foreColor = new Color(r, g, b);
-        }
-    }
-    
-    public static LightUIElement createUIElementFromJSON(final JSONObject jsonElement) {
-        final Integer elementType = (Integer) JSONConverter.getParameterFromJSON(jsonElement, "type", Integer.class, null);
-        if(elementType == null) {
-            throw new IllegalArgumentException("LightUIElement must contains attribute 'type'");
-        }
+        this.commitMode = JSONConverter.getParameterFromJSON(json, "commit-mode", Integer.class);
+        this.fontSize = JSONConverter.getParameterFromJSON(json, "font-size", Integer.class, FONT_SMALL);
+        this.gridWidth = JSONConverter.getParameterFromJSON(json, "grid-width", Integer.class, DEFAULT_GRID_WIDTH);
+        this.gridHeight = JSONConverter.getParameterFromJSON(json, "grid-height", Integer.class, DEFAULT_GRID_HEIGHT);
+        this.horizontalAlignment = JSONConverter.getParameterFromJSON(json, "horizontal-alignment", Integer.class, HALIGN_LEFT);
+        this.verticalAlignment = JSONConverter.getParameterFromJSON(json, "vertical-alignment", Integer.class, VALIGN_TOP);
+        this.weightX = JSONConverter.getParameterFromJSON(json, "weight-x", Integer.class, DEFAULT_WEIGHT_X);
+        this.minInputSize = JSONConverter.getParameterFromJSON(json, "min-input-size", Integer.class);
+        this.type = JSONConverter.getParameterFromJSON(json, "type", Integer.class);
+        this.valueType = JSONConverter.getParameterFromJSON(json, "value-type", Integer.class);
+        this.width = JSONConverter.getParameterFromJSON(json, "width", Integer.class);
+        this.marginTop = JSONConverter.getParameterFromJSON(json, "m-top", Integer.class);
+        this.marginBottom = JSONConverter.getParameterFromJSON(json, "m-bottom", Integer.class);
+        this.marginLeft = JSONConverter.getParameterFromJSON(json, "m-left", Integer.class);
+        this.marginRight = JSONConverter.getParameterFromJSON(json, "m-right", Integer.class);
+        this.maxWidth = JSONConverter.getParameterFromJSON(json, "max-width", Integer.class);
+        this.minWidth = JSONConverter.getParameterFromJSON(json, "min-width", Integer.class);
+        this.height = JSONConverter.getParameterFromJSON(json, "height", Integer.class);
+        this.maxHeight = JSONConverter.getParameterFromJSON(json, "max-height", Integer.class);
+        this.minHeight = JSONConverter.getParameterFromJSON(json, "min-height", Integer.class);
+        this.paddingTop = JSONConverter.getParameterFromJSON(json, "p-top", Integer.class);
+        this.paddingBottom = JSONConverter.getParameterFromJSON(json, "p-bottom", Integer.class);
+        this.paddingLeft = JSONConverter.getParameterFromJSON(json, "p-left", Integer.class);
+        this.paddingRight = JSONConverter.getParameterFromJSON(json, "p-right", Integer.class);
 
-        LightUIElement lightElement = null;
-        if (elementType == LightUIElement.TYPE_PANEL || elementType == LightUIElement.TYPE_SCROLLABLE) {
-            lightElement = new LightUIPanel(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_LIST) {
-            lightElement = new LightUIList(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_TABLE) {
-            lightElement = new LightUITable(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_LABEL) {
-            lightElement = new LightUILabel(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_DROPDOWN_BUTTON) {
-            lightElement = new LightUIDropDownButton(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_CHECKBOX) {
-            lightElement = new LightUICheckBox(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_COMBOBOX) {
-            lightElement = new LightUICombo(jsonElement);
-        } else if (elementType == LightUIElement.TYPE_TABBED_UI) {
-            lightElement = new LightUITabbed(jsonElement);
-        } else {
-            lightElement = new LightUIElement(jsonElement);
-        }
-        return lightElement;
+        this.enabled = JSONConverter.getParameterFromJSON(json, "enabled", Boolean.class, true);
+        this.foldable = JSONConverter.getParameterFromJSON(json, "foldable", Boolean.class, false);
+        this.folded = JSONConverter.getParameterFromJSON(json, "folded", Boolean.class, false);
+        this.fillWidth = JSONConverter.getParameterFromJSON(json, "fill-width", Boolean.class, false);
+        this.fontBold = JSONConverter.getParameterFromJSON(json, "bold", Boolean.class, false);
+        this.fontItalic = JSONConverter.getParameterFromJSON(json, "italic", Boolean.class, false);
+        this.horizontallyResizable = JSONConverter.getParameterFromJSON(json, "horizontally-resizable", Boolean.class, false);
+        this.verticallyResizable = JSONConverter.getParameterFromJSON(json, "vertically-resizable", Boolean.class, false);
+        this.required = JSONConverter.getParameterFromJSON(json, "required", Boolean.class, false);
+        this.readOnly = JSONConverter.getParameterFromJSON(json, "read-only", Boolean.class, false);
+        this.visible = JSONConverter.getParameterFromJSON(json, "visible", Boolean.class, true);
+
+        this.backgroundColor = JSONConverter.getParameterFromJSON(json, "background-color", Color.class);
+        this.borderColor = JSONConverter.getParameterFromJSON(json, "border-color", Color.class);
+        this.cellBackgroundColor = JSONConverter.getParameterFromJSON(json, "cell-background-color", Color.class);
+        this.foreColor = JSONConverter.getParameterFromJSON(json, "fore-color", Color.class);
     }
 }

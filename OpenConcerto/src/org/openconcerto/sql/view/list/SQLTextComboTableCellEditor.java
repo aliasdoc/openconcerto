@@ -16,6 +16,7 @@
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
@@ -23,6 +24,7 @@ import org.openconcerto.sql.view.IListFrame;
 import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.ui.list.selection.BaseListStateModel;
+import org.openconcerto.utils.cc.ITransformer;
 
 import java.awt.Color;
 import java.awt.Component;
@@ -167,6 +169,10 @@ public class SQLTextComboTableCellEditor extends AbstractCellEditor implements T
 
     public void setDynamicWhere(SQLField field) {
         this.fieldWhere = field;
+    }
+
+    public void setSelectTransformer(ITransformer<SQLSelect, SQLSelect> selTrans) {
+        this.comboBox.getRequest().setSelectTransf(selTrans);
     }
 
     public void setWhere(Where w) {

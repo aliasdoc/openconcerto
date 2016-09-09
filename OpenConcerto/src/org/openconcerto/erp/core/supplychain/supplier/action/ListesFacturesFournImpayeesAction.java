@@ -24,7 +24,7 @@ public class ListesFacturesFournImpayeesAction extends CreateFrameAbstractAction
 
     public ListesFacturesFournImpayeesAction() {
         super();
-        this.putValue(Action.NAME, "Factures fournisseurs impayées");
+        this.putValue(Action.NAME, "Factures fournisseurs non payées");
     }
 
     public JFrame createFrame() {

@@ -20,6 +20,8 @@ import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Image;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,10 +30,10 @@ import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextField;
 
 public class Tip {
     private final List<Object> items = new ArrayList<Object>();
+    private URI hyperlink = null;
 
     public void addText(String text) {
         items.add(text);
@@ -45,8 +47,17 @@ public class Tip {
         items.add(icon.getImage());
     }
 
+    private void addImage(ImageIcon icon, String hyperlink) throws URISyntaxException {
+        items.add(icon.getImage());
+        this.hyperlink = new URI(hyperlink);
+    }
+
     public void addImage(URL url) {
         addImage(new ImageIcon(url));
+    }
+
+    public void addImage(URL url, String hyperlink) throws URISyntaxException {
+        addImage(new ImageIcon(url), hyperlink);
     }
 
     public void addImage(JComponent component) {
@@ -67,7 +78,11 @@ public class Tip {
             } else if (item instanceof JComponent) {
                 panel.add((JComponent) item, contraint);
             } else if (item instanceof Image) {
-                panel.add(new JImage((Image) item), contraint);
+                final JImage jImage = new JImage((Image) item);
+                if (this.hyperlink != null) {
+                    jImage.setHyperLink(this.hyperlink);
+                }
+                panel.add(jImage, contraint);
             } else {
                 throw new IllegalStateException(item + " cannot be added");
             }
@@ -80,4 +95,5 @@ public class Tip {
         panel.add(comp, contraint);
         return panel;
     }
+
 }

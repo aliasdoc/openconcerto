@@ -36,7 +36,7 @@ import java.util.List;
 public class StockItem {
 
     public enum TypeStockMouvement {
-        REEL, THEORIQUE, REEL_THEORIQUE
+        REEL, THEORIQUE, REEL_THEORIQUE, RETOUR
     };
 
     private double realQty, virtualQty, receiptQty, deliverQty;
@@ -80,14 +80,10 @@ public class StockItem {
         double real = comp.getItem().getRealQty() == 0 ? 0 : Math.ceil(comp.getItem().getRealQty() / (comp.getQty() * comp.getQtyUnit().doubleValue()));
         double virtual = comp.getItem().getVirtualQty() == 0 ? 0 : Math.ceil(comp.getItem().getVirtualQty() / (comp.getQty() * comp.getQtyUnit().doubleValue()));
         for (StockItemComponent stockItemComponent : components) {
-            real = Math.min(
-                    real,
-                    stockItemComponent.getItem().getRealQty() == 0 ? 0 : Math.ceil(stockItemComponent.getItem().getRealQty()
-                            / (stockItemComponent.getQty() * stockItemComponent.getQtyUnit().doubleValue())));
-            virtual = Math.min(
-                    virtual,
-                    stockItemComponent.getItem().getVirtualQty() == 0 ? 0 : Math.ceil(stockItemComponent.getItem().getVirtualQty()
-                            / (stockItemComponent.getQty() * stockItemComponent.getQtyUnit().doubleValue())));
+            real = Math.min(real, stockItemComponent.getItem().getRealQty() == 0 ? 0
+                    : Math.ceil(stockItemComponent.getItem().getRealQty() / (stockItemComponent.getQty() * stockItemComponent.getQtyUnit().doubleValue())));
+            virtual = Math.min(virtual, stockItemComponent.getItem().getVirtualQty() == 0 ? 0
+                    : Math.ceil(stockItemComponent.getItem().getVirtualQty() / (stockItemComponent.getQty() * stockItemComponent.getQtyUnit().doubleValue())));
 
         }
         // La quantité du kit ne peut être négative
@@ -135,26 +131,30 @@ public class StockItem {
      */
     public void updateQty(double qty, TypeStockMouvement t, boolean archive) {
 
-        if (t == TypeStockMouvement.REEL || t == TypeStockMouvement.REEL_THEORIQUE) {
+        if (t == TypeStockMouvement.REEL || t == TypeStockMouvement.REEL_THEORIQUE || t == TypeStockMouvement.RETOUR) {
             final double qteNvlle;
             final double qteOrigin = this.realQty;
             if (archive) {
                 qteNvlle = qteOrigin - qty;
-                // Réception
-                if (qty > 0) {
-                    this.receiptQty += qty;
-                } else {
-                    // Livraison
-                    this.deliverQty -= qty;
+                if (t != TypeStockMouvement.RETOUR) {
+                    // Réception
+                    if (qty > 0) {
+                        this.receiptQty += qty;
+                    } else {
+                        // Livraison
+                        this.deliverQty -= qty;
+                    }
                 }
             } else {
                 qteNvlle = qteOrigin + qty;
-                // Réception
-                if (qty > 0) {
-                    this.receiptQty -= qty;
-                } else {
-                    // Livraison
-                    this.deliverQty += qty;
+                if (t != TypeStockMouvement.RETOUR) {
+                    // Réception
+                    if (qty > 0) {
+                        this.receiptQty -= qty;
+                    } else {
+                        // Livraison
+                        this.deliverQty += qty;
+                    }
                 }
             }
 
@@ -162,28 +162,32 @@ public class StockItem {
 
         }
 
-        if (t == TypeStockMouvement.THEORIQUE || t == TypeStockMouvement.REEL_THEORIQUE) {
+        if (t == TypeStockMouvement.THEORIQUE || t == TypeStockMouvement.REEL_THEORIQUE || t == TypeStockMouvement.RETOUR) {
 
             // THEORIQUE
             final double qteNvlle;
             final double qteOrigin = this.virtualQty;
             if (archive) {
                 qteNvlle = qteOrigin - qty;
-                // Réception
-                if (qty > 0) {
-                    this.receiptQty -= qty;
-                } else {
-                    // Livraison
-                    this.deliverQty += qty;
+                if (t != TypeStockMouvement.RETOUR) {
+                    // Réception
+                    if (qty > 0) {
+                        this.receiptQty -= qty;
+                    } else {
+                        // Livraison
+                        this.deliverQty += qty;
+                    }
                 }
             } else {
                 qteNvlle = qteOrigin + qty;
-                // Réception
-                if (qty > 0) {
-                    this.receiptQty += qty;
-                } else {
-                    // Livraison
-                    this.deliverQty -= qty;
+                if (t != TypeStockMouvement.RETOUR) {
+                    // Réception
+                    if (qty > 0) {
+                        this.receiptQty += qty;
+                    } else {
+                        // Livraison
+                        this.deliverQty -= qty;
+                    }
                 }
             }
 

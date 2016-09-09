@@ -43,8 +43,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
@@ -160,7 +158,18 @@ public class SQLTableModelLinesSourceOffline extends SQLTableModelLinesSource {
     }
 
     private final Row getRow(Number id) {
-        return this.id2line.get(id);
+        return this.getRow(id, false);
+    }
+
+    private final Row getRow(Number id, final boolean required) {
+        return this.getRow(id, required, null);
+    }
+
+    private final Row getRow(Number id, final boolean required, final Object idSource) {
+        final Row res = this.id2line.get(id);
+        if (required && res == null)
+            throw new IllegalArgumentException("Not in the list : " + (idSource == null ? id : idSource));
+        return res;
     }
 
     protected final int getSize() {
@@ -472,7 +481,7 @@ public class SQLTableModelLinesSourceOffline extends SQLTableModelLinesSource {
                 // TODO extract updateLines() from AbstractUpdateOneRunnable and delete
                 // ChangeFKRunnable
                 new ChangeFKRunnable(line, p, id).run();
-                recordOriginal(getRow(lineID), line);
+                recordOriginal(getRow(lineID, true), line);
             }
         });
     }
@@ -497,31 +506,28 @@ public class SQLTableModelLinesSourceOffline extends SQLTableModelLinesSource {
 
     protected void _moveBy(final List<? extends SQLRowAccessor> list, final int inc) {
         assert checkUpdateThread();
+        final int count = this.lines.size();
         final boolean after = inc > 0;
 
         final List<Number> order;
         // same algorithm as MoveQueue
         int outerIndex = -1;
-        final SortedSet<Integer> indexes = new TreeSet<Integer>(Collections.reverseOrder());
         final List<Row> ourLines = new ArrayList<Row>(list.size());
         for (final SQLRowAccessor r : list) {
-            final Row ourLine = this.getRow(r.getIDNumber());
-            if (ourLine == null)
-                throw new IllegalArgumentException("Not in the list " + r);
+            final Row ourLine = this.getRow(r.getIDNumber(), true, r);
             final int index = this.indexOf(ourLine);
-            indexes.add(index);
             ourLines.add(ourLine);
             if (outerIndex < 0 || after && index > outerIndex || !after && index < outerIndex) {
                 outerIndex = index;
             }
         }
-        assert outerIndex >= 0;
+        assert outerIndex >= 0 && ourLines.size() == list.size();
 
-        for (final Integer index : indexes) {
-            this.lines.remove(index);
-        }
+        this.lines.removeAll(ourLines);
+        assert this.lines.size() == count - ourLines.size();
         final int newIndex = after ? outerIndex + inc - list.size() + 1 : outerIndex + inc;
         this.lines.addAll(newIndex, ourLines);
+        assert this.lines.size() == count : "Move has changed the number of rows from " + count + " to " + this.lines.size();
         this.setDBOrder(false);
         order = this.getIDsOrder();
         this.getModel().getUpdateQ().reorder(order);
@@ -546,12 +552,13 @@ public class SQLTableModelLinesSourceOffline extends SQLTableModelLinesSource {
 
     protected void _moveTo(final List<?> ids, final int index) {
         assert checkUpdateThread();
+        final int count = this.lines.size();
 
         final List<Number> order;
         final List<Row> list = new ArrayList<Row>(ids.size());
         for (final Object o : ids) {
             final Number id = o instanceof SQLRowAccessor ? ((SQLRowAccessor) o).getIDNumber() : (Number) o;
-            list.add(this.getRow(id));
+            list.add(this.getRow(id, true, o));
         }
         if (index <= 0) {
             this.lines.removeAll(list);
@@ -578,6 +585,7 @@ public class SQLTableModelLinesSourceOffline extends SQLTableModelLinesSource {
                 this.lines.addAll(newIndex, list);
             }
         }
+        assert this.lines.size() == count : "Move has changed the number of rows from " + count + " to " + this.lines.size();
         this.setDBOrder(false);
         order = this.getIDsOrder();
         this.getModel().getUpdateQ().reorder(order);

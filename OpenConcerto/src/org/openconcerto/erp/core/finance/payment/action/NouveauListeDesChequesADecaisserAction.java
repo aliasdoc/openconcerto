@@ -26,7 +26,7 @@ public class NouveauListeDesChequesADecaisserAction extends CreateFrameAbstractA
 
     public NouveauListeDesChequesADecaisserAction() {
         super();
-        this.putValue(Action.NAME, "Chèques à décaisser");
+        this.putValue(Action.NAME, "Chèques fournisseurs à décaisser");
     }
 
     public JFrame createFrame() {

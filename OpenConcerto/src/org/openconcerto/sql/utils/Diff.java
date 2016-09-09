@@ -13,6 +13,7 @@
  
  package org.openconcerto.sql.utils;
 
+import org.openconcerto.sql.Log;
 import org.openconcerto.sql.model.Constraint;
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.DBSystemRoot;
@@ -20,18 +21,20 @@ import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLField.Properties;
-import org.openconcerto.sql.model.SQLFieldsSet;
-import org.openconcerto.sql.model.SQLName;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLSchema;
 import org.openconcerto.sql.model.SQLServer;
 import org.openconcerto.sql.model.SQLSyntax.ConstraintType;
+import org.openconcerto.sql.model.SQLSystem;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.SQLTable.Index;
-import org.openconcerto.sql.model.graph.DatabaseGraph;
 import org.openconcerto.sql.model.graph.Link;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.ProductInfo;
+import org.openconcerto.utils.cc.CustomEquals;
+import org.openconcerto.utils.cc.CustomEquals.ProxyItf;
+import org.openconcerto.utils.cc.HashingStrategy;
 import org.openconcerto.utils.cc.IClosure;
 
 import java.net.URISyntaxException;
@@ -174,6 +177,8 @@ public class Diff {
                 return null;
             else {
                 final AlterTable alterTable = new AlterTable(aT);
+                final SQLSystem aSystem = aT.getServer().getSQLSystem();
+                final SQLSystem bSystem = bT.getServer().getSQLSystem();
                 {
                     final Set<String> aFields = aT.getFieldsName();
                     final Set<String> bFields = bT.getFieldsName();
@@ -186,7 +191,7 @@ public class Diff {
                     for (final String common : CollectionUtils.inter(aFields, bFields)) {
                         final SQLField aF = aT.getField(common);
                         final SQLField bF = bT.getField(common);
-                        final Map<Properties, String> diff = aF.getDiffMap(bF, bT.getServer().getSQLSystem(), true);
+                        final Map<Properties, String> diff = aF.getDiffMap(bF, bSystem, true);
                         alterTable.alterColumn(common, bF, diff.keySet());
                     }
                 }
@@ -201,31 +206,16 @@ public class Diff {
 
                 // foreign keys
                 {
-                    final DatabaseGraph graph = this.a.getDBSystemRoot().getGraph();
-                    final DatabaseGraph bGraph = this.b.getDBSystemRoot().getGraph();
-                    final Set<String> aFKs = new SQLFieldsSet(aT.getForeignKeys()).getFieldsNames(aT);
-                    final Set<String> bFKs = new SQLFieldsSet(bT.getForeignKeys()).getFieldsNames(bT);
-                    for (final String rm : CollectionUtils.substract(aFKs, bFKs)) {
-                        final Link foreignLink = graph.getForeignLink(aT.getField(rm));
-                        if (foreignLink.getName() == null)
-                            throw new IllegalStateException(foreignLink + " is not a real constraint, use AddFK");
-                        alterTable.dropForeignConstraint(foreignLink.getName());
+                    final Set<ProxyItf<Link>> aFKs = CustomEquals.createSet(Link.getInterSystemHashStrategy(), aT.getForeignLinks());
+                    final Set<ProxyItf<Link>> bFKs = CustomEquals.createSet(Link.getInterSystemHashStrategy(), bT.getForeignLinks());
+                    for (final ProxyItf<Link> removed : CollectionUtils.substract(aFKs, bFKs)) {
+                        if (removed.getDelegate().getName() == null)
+                            throw new IllegalStateException(removed + " is not a real constraint, use AddFK");
+                        alterTable.dropForeignConstraint(removed.getDelegate().getName());
                     }
-                    for (final String added : CollectionUtils.substract(bFKs, aFKs)) {
-                        final Link link = bGraph.getForeignLink(bT.getField(added));
+                    for (final ProxyItf<Link> added : CollectionUtils.substract(bFKs, aFKs)) {
+                        final Link link = added.getDelegate();
                         alterTable.addForeignConstraint(link, false);
-                    }
-                    for (final String common : CollectionUtils.inter(aFKs, bFKs)) {
-                        final Link aLink = graph.getForeignLink(aT.getField(common));
-                        final Link bLink = bGraph.getForeignLink(bT.getField(common));
-                        final SQLName aPath = aLink.getContextualName();
-                        final SQLName bPath = bLink.getContextualName();
-                        if (!aPath.equals(bPath))
-                            throw new UnsupportedOperationException(common + " is different: " + aPath + " != " + bPath);
-                        if (aLink.getUpdateRule() != bLink.getUpdateRule() || aLink.getDeleteRule() != bLink.getDeleteRule()) {
-                            alterTable.dropForeignConstraint(aLink.getName());
-                            alterTable.addForeignConstraint(bLink, false);
-                        }
                     }
                 }
 
@@ -248,12 +238,14 @@ public class Diff {
 
                 // constraints
                 {
-                    final Set<Constraint> aConstr = aT.getConstraints();
-                    final Set<Constraint> bConstr = bT.getConstraints();
-                    for (final Constraint rm : CollectionUtils.substract(aConstr, bConstr)) {
-                        alterTable.dropConstraint(rm.getName());
+                    final HashingStrategy<Constraint> strategy = aSystem.equals(bSystem) ? null : Constraint.getInterSystemHashStrategy();
+                    final Set<ProxyItf<Constraint>> aConstr = CustomEquals.createSet(strategy, aT.getConstraints());
+                    final Set<ProxyItf<Constraint>> bConstr = CustomEquals.createSet(strategy, bT.getConstraints());
+                    for (final ProxyItf<Constraint> rm : CollectionUtils.substract(aConstr, bConstr)) {
+                        alterTable.dropConstraint(rm.getDelegate().getName());
                     }
-                    for (final Constraint added : CollectionUtils.substract(bConstr, aConstr)) {
+                    for (final ProxyItf<Constraint> addedP : CollectionUtils.substract(bConstr, aConstr)) {
+                        final Constraint added = addedP.getDelegate();
                         if (added.getType() == ConstraintType.UNIQUE)
                             alterTable.addUniqueConstraint(added.getName(), added.getCols());
                         else
@@ -261,9 +253,22 @@ public class Diff {
                     }
                 }
 
+                final boolean checkComment = aSystem.isTablesCommentSupported() && bSystem.isTablesCommentSupported();
+                if (checkComment && !CompareUtils.equals(aT.getComment(), bT.getComment())) {
+                    alterTable.addOutsideClause(alterTable.getSyntax().getSetTableComment(bT.getComment()));
+                }
+
+                if (alterTable.isEmpty()) {
+                    final String exactDiff = aT.equalsDesc(bT, null, true);
+                    assert exactDiff != null : "Why bother if exactly equals";
+                    final String lenientDiff = aT.equalsDesc(bT, bT.getServer().getSQLSystem(), true);
+                    if (lenientDiff == null)
+                        Log.get().info("Tables " + aT.getSQLName() + " and " + bT.getSQLName() + " are not exactly equal, but due to diferring DB system features can't be :\n" + exactDiff);
+                    else
+                        throw new IllegalStateException("Unequal tables with no ALTER TABLE : " + aT.getSQLName() + " and " + bT.getSQLName() + "\n" + lenientDiff);
+                }
                 return alterTable;
             }
         }
     }
-
 }

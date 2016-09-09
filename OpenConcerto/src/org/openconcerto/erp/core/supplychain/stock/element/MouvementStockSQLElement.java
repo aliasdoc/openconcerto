@@ -18,15 +18,12 @@ import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElement;
 import org.openconcerto.erp.core.supplychain.order.component.CommandeSQLComponent;
 import org.openconcerto.erp.core.supplychain.supplier.component.MouvementStockSQLComponent;
-import org.openconcerto.erp.preferences.DefaultNXProps;
-import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLBackgroundTableCache;
 import org.openconcerto.sql.model.SQLBase;
-import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowListRSH;
@@ -35,14 +32,13 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.preferences.SQLPreferences;
+import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.EditPanel;
 import org.openconcerto.sql.view.EditPanel.EditMode;
 import org.openconcerto.sql.view.list.RowValuesTableModel;
 import org.openconcerto.ui.FrameUtil;
-import org.openconcerto.ui.preferences.DefaultProps;
-import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.ListMap;
 
@@ -53,7 +49,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map.Entry;
 
-import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
 public class MouvementStockSQLElement extends ComptaSQLConfElement {
@@ -89,11 +84,6 @@ public class MouvementStockSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
-        super.archive(row, cutLinks);
-    }
-
-    @Override
     protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
         super.archive(trees, cutLinks);
         updateStock(trees.getRows(), true);
@@ -125,6 +115,7 @@ public class MouvementStockSQLElement extends ComptaSQLConfElement {
         SQLTable tableCmdElt = Configuration.getInstance().getBase().getTable("COMMANDE_ELEMENT");
         for (SQLRow rowMvtStock : rowsMvt) {
 
+            boolean retour = rowMvtStock.getString("SOURCE") == null || rowMvtStock.getString("SOURCE").startsWith("AVOIR_CLIENT");
             // Mise à jour des stocks
             SQLTable sqlTableArticle = ((ComptaPropsConfiguration) Configuration.getInstance()).getRootSociete().getTable("ARTICLE");
             SQLElement eltArticle = Configuration.getInstance().getDirectory().getElement(sqlTableArticle);
@@ -143,21 +134,25 @@ public class MouvementStockSQLElement extends ComptaSQLConfElement {
                 float qteNvlleEnAttenteExp = rowStock.getFloat("QTE_LIV_ATTENTE");
                 if (archive) {
                     qteNvlle = qte - qteMvt;
-                    // Réception
-                    if (qteMvt > 0) {
-                        qteNvlleEnAttenteRecept += qteMvt;
-                    } else {
-                        // Livraison
-                        qteNvlleEnAttenteExp -= qteMvt;
+                    if (!retour) {
+                        // Réception
+                        if (qteMvt > 0) {
+                            qteNvlleEnAttenteRecept += qteMvt;
+                        } else {
+                            // Livraison
+                            qteNvlleEnAttenteExp -= qteMvt;
+                        }
                     }
                 } else {
                     qteNvlle = qte + qteMvt;
-                    // Réception
-                    if (qteMvt > 0) {
-                        qteNvlleEnAttenteRecept -= qteMvt;
-                    } else {
-                        // Livraison
-                        qteNvlleEnAttenteExp += qteMvt;
+                    if (!retour) {
+                        // Réception
+                        if (qteMvt > 0) {
+                            qteNvlleEnAttenteRecept -= qteMvt;
+                        } else {
+                            // Livraison
+                            qteNvlleEnAttenteExp += qteMvt;
+                        }
                     }
                 }
                 rowVals.put("QTE_REEL", qteNvlle);
@@ -219,21 +214,27 @@ public class MouvementStockSQLElement extends ComptaSQLConfElement {
 
                 if (archive) {
                     qteNvlle = qte - qteMvt;
-                    // CommandeF
-                    if (qteMvt > 0) {
-                        qteNvlleEnAttenteRecept -= qteMvt;
-                    } else {
-                        // CommanceC
-                        qteNvlleEnAttenteExp += qteMvt;
+                    if (!retour) {
+
+                        // CommandeF
+                        if (qteMvt > 0) {
+                            qteNvlleEnAttenteRecept -= qteMvt;
+                        } else {
+                            // CommanceC
+                            qteNvlleEnAttenteExp += qteMvt;
+                        }
                     }
                 } else {
                     qteNvlle = qte + qteMvt;
-                    // CommandeF
-                    if (qteMvt > 0) {
-                        qteNvlleEnAttenteRecept += qteMvt;
-                    } else {
-                        // CommanceC
-                        qteNvlleEnAttenteExp -= qteMvt;
+                    if (!retour) {
+
+                        // CommandeF
+                        if (qteMvt > 0) {
+                            qteNvlleEnAttenteRecept += qteMvt;
+                        } else {
+                            // CommanceC
+                            qteNvlleEnAttenteExp -= qteMvt;
+                        }
                     }
                 }
                 rowVals.put("QTE_TH", qteNvlle);
@@ -311,7 +312,9 @@ public class MouvementStockSQLElement extends ComptaSQLConfElement {
                             if (rowsComm != null) {
                                 rowVals.put("ID_COMMERCIAL", rowsComm.getID());
                             }
-                            rowVals.put("ID_FOURNISSEUR", fournisseur.getID());
+                            if (fournisseur != null && !fournisseur.isUndefined()) {
+                                rowVals.put("ID_FOURNISSEUR", fournisseur.getID());
+                            }
                             if (rowDevise != null) {
                                 rowVals.put("ID_DEVISE", rowDevise.getID());
                             }
@@ -354,6 +357,12 @@ public class MouvementStockSQLElement extends ComptaSQLConfElement {
 
         }
 
+    }
+
+    @Override
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("SOURCE", "IDSOURCE");
     }
 
     public static final void showSource(final int id) {

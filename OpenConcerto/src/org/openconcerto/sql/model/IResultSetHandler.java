@@ -40,7 +40,8 @@ public class IResultSetHandler implements ResultSetHandler {
     static private final Object NOT_YET_COMPUTED = new Object();
 
     private final ResultSetHandler delegate;
-    private final Boolean useCache;
+    private final boolean readCache;
+    private final Boolean writeCache;
     private Object result;
 
     public IResultSetHandler(ResultSetHandler rsh) {
@@ -55,8 +56,13 @@ public class IResultSetHandler implements ResultSetHandler {
      *        <code>null</code>.
      */
     public IResultSetHandler(ResultSetHandler rsh, final Boolean useCache) {
+        this(rsh, useCache, useCache);
+    }
+
+    public IResultSetHandler(ResultSetHandler rsh, final Boolean readCache, final Boolean writeCache) {
         this.delegate = rsh;
-        this.useCache = useCache;
+        this.readCache = readCache == null ? true : readCache;
+        this.writeCache = writeCache;
         this.result = NOT_YET_COMPUTED;
     }
 
@@ -65,8 +71,16 @@ public class IResultSetHandler implements ResultSetHandler {
      * 
      * @return <code>true</code> if the cache is to be checked.
      */
-    public boolean readCache() {
-        return this.useCache == null ? true : this.useCache;
+    public final boolean readCache() {
+        return this.readCache;
+    }
+
+    // can be called before having the result
+    final boolean canWriteCache() {
+        if (this.writeCache != null)
+            return this.writeCache;
+        else
+            return true;
     }
 
     /**
@@ -74,9 +88,9 @@ public class IResultSetHandler implements ResultSetHandler {
      * 
      * @return <code>true</code> if the cache is to be updated.
      */
-    public boolean writeCache() {
-        if (this.useCache != null)
-            return this.useCache;
+    public final boolean writeCache() {
+        if (this.writeCache != null)
+            return this.writeCache;
         if (this.result == NOT_YET_COMPUTED)
             throw new IllegalStateException(this + " hasn't yet been used");
         return shouldCache(this.result);

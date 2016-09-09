@@ -41,12 +41,6 @@ public class ReglerMontantSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_MODE_REGLEMENT");
-        return l;
-    }
-
     public SQLComponent createComponent() {
         return new ReglerMontantSQLComponent(this);
     };

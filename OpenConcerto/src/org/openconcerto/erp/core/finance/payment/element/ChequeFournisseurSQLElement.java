@@ -39,7 +39,7 @@ import javax.swing.SwingConstants;
 public class ChequeFournisseurSQLElement extends ChequeSQLElement {
 
     public ChequeFournisseurSQLElement() {
-        super("CHEQUE_FOURNISSEUR", "un chéque fournisseur", "chéques fournisseurs");
+        super("CHEQUE_FOURNISSEUR", "un chéque fournisseur", "chéques fournisseurs à décaisser");
     }
 
     protected List<String> getListFields() {

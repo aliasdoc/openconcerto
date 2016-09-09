@@ -15,21 +15,29 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.sales.credit.component.AvoirClientSQLComponent;
 import org.openconcerto.erp.generationDoc.gestcomm.AvoirClientXmlSheet;
+import org.openconcerto.erp.generationEcritures.GenerationMvtSaisieVenteFacture;
 import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
+import org.openconcerto.utils.ExceptionHandler;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
@@ -39,6 +47,17 @@ public class AvoirClientSQLElement extends ComptaSQLConfElement {
     public AvoirClientSQLElement() {
         super("AVOIR_CLIENT", "une facture d'avoir", "factures d'avoir");
         getRowActions().addAll(new MouseSheetXmlListeListener(AvoirClientXmlSheet.class).getRowActions());
+    }
+
+    @Override
+    protected void setupLinks(SQLElementLinksSetup links) {
+        super.setupLinks(links);
+        if (getTable().contains("ID_ADRESSE")) {
+            links.get("ID_ADRESSE").setType(LinkType.ASSOCIATION);
+        }
+        if (getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            links.get("ID_ADRESSE_LIVRAISON").setType(LinkType.ASSOCIATION);
+        }
     }
 
     public List<String> getListFields() {
@@ -70,13 +89,6 @@ public class AvoirClientSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected List<String> getPrivateFields() {
-        List<String> l = new ArrayList<String>();
-        l.add("ID_MODE_REGLEMENT");
-        return l;
-    }
-
-    @Override
     protected SQLTableModelSourceOnline createTableSource() {
 
         SQLTableModelSourceOnline table = super.createTableSource();
@@ -93,37 +105,81 @@ public class AvoirClientSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(this.getTable(), this.getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.put("A_DEDUIRE", null);
-                graphToFetch.put("MOTIF", null);
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("A_DEDUIRE", "MOTIF");
+    }
+
+    public void annulationAvoir(SQLRowAccessor row) {
+        Collection<? extends SQLRowAccessor> rows = row.getReferentRows(getTable().getTable("SAISIE_VENTE_FACTURE"));
+        for (SQLRowAccessor sqlRowAccessor : rows) {
+            SQLRowAccessor rowAvoir = sqlRowAccessor.getForeign("ID_AVOIR_CLIENT");
+
+            Long montantSolde = (Long) rowAvoir.getObject("MONTANT_SOLDE");
+            Long avoirTTC = (Long) sqlRowAccessor.getObject("T_AVOIR_TTC");
+
+            long montant = montantSolde - avoirTTC;
+            if (montant < 0) {
+                montant = 0;
             }
-        };
+
+            SQLRowValues rowVals = rowAvoir.createEmptyUpdateRow();
+
+            // Soldé
+            rowVals.put("SOLDE", Boolean.FALSE);
+            rowVals.put("MONTANT_SOLDE", montant);
+            Long restant = (Long) rowAvoir.getObject("MONTANT_TTC") - montantSolde;
+            rowVals.put("MONTANT_RESTANT", restant);
+
+            try {
+                rowVals.update();
+
+                final SQLRowValues createEmptyUpdateRow = sqlRowAccessor.createEmptyUpdateRow();
+                createEmptyUpdateRow.putEmptyLink("ID_AVOIR_CLIENT");
+                createEmptyUpdateRow.put("NET_A_PAYER", sqlRowAccessor.getObject("T_TTC"));
+                createEmptyUpdateRow.put("T_AVOIR_TTC", 0L);
+                createEmptyUpdateRow.update();
+                EcritureSQLElement eltEcr = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
+                final int foreignIDmvt = sqlRowAccessor.getForeignID("ID_MOUVEMENT");
+                eltEcr.archiveMouvementProfondeur(foreignIDmvt, false);
+
+                System.err.println("Regeneration des ecritures");
+                new GenerationMvtSaisieVenteFacture(sqlRowAccessor.getID(), foreignIDmvt);
+                System.err.println("Fin regeneration");
+
+            } catch (SQLException e) {
+                ExceptionHandler.handle("Erreur lors de l'annulation de l'avoir", e);
+            }
+        }
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        // FIXME Vérifier si l'avoir est affecté sur une facture et recalculer les échéances pour la
+        // facture associée
+        for (SQLRow row : trees.getRows()) {
 
-        super.archive(row, cutLinks);
+            annulationAvoir(row);
 
-        // Mise à jour des stocks
-        SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
-        SQLSelect sel = new SQLSelect(eltMvtStock.getTable().getBase());
-        sel.addSelect(eltMvtStock.getTable().getField("ID"));
-        Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
-        Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-        sel.setWhere(w.and(w2));
+            // Mise à jour des stocks
+            SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
+            SQLSelect sel = new SQLSelect(eltMvtStock.getTable().getBase());
+            sel.addSelect(eltMvtStock.getTable().getField("ID"));
+            Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
+            Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
+            sel.setWhere(w.and(w2));
 
-        List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-        if (l != null) {
-            for (int i = 0; i < l.size(); i++) {
-                Object[] tmp = (Object[]) l.get(i);
-                eltMvtStock.archive(((Number) tmp[0]).intValue());
+            List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
+            if (l != null) {
+                for (int i = 0; i < l.size(); i++) {
+                    Object[] tmp = (Object[]) l.get(i);
+                    eltMvtStock.archive(((Number) tmp[0]).intValue());
+                }
             }
         }
+        // TODO Auto-generated method stub
+        super.archive(trees, cutLinks);
+
     }
 
 }

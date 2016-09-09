@@ -19,6 +19,7 @@ import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -39,8 +40,8 @@ import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.valuewrapper.TextValueWrapper;
 import org.openconcerto.ui.warning.JLabelWarning;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.checks.ValidState;
 import org.openconcerto.utils.i18n.I18nUtils;
@@ -74,17 +75,27 @@ public class UserCommonSQLElement extends ConfSQLElement {
      */
     public static final String LEGACY_PASSWORDS = "org.openconcerto.sql.legacyPasswords";
 
+    {
+        this.setL18nPackageName(I18nUtils.getPackageName(TM.class));
+    }
+
     public UserCommonSQLElement() {
         super("USER_COMMON");
-        this.setL18nPackageName(I18nUtils.getPackageName(TM.class));
+    }
+
+    public UserCommonSQLElement(DBRoot root) {
+        super(root.findTable("USER_COMMON"));
     }
 
     @Override
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
-        l.add("NOM");
         l.add("PRENOM");
+        l.add("NOM");
         l.add("LOGIN");
+        if (getTable().contains("DISABLED")) {
+            l.add("DISABLED");
+        }
         if (getTable().contains("OUT")) {
             l.add("OUT");
         }
@@ -94,8 +105,8 @@ public class UserCommonSQLElement extends ConfSQLElement {
     @Override
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
-        l.add("NOM");
         l.add("PRENOM");
+        l.add("NOM");
         return l;
     }
 
@@ -107,8 +118,8 @@ public class UserCommonSQLElement extends ConfSQLElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, "PRENOM", "NOM");
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "PRENOM", "NOM");
     }
 
     /*
@@ -282,12 +293,33 @@ public class UserCommonSQLElement extends ConfSQLElement {
                     c.gridwidth = GridBagConstraints.REMAINDER;
                     this.add(boxOut, c);
                     this.addView(boxOut, "OUT");
+                } else {
+                    if (getTable().contains("DISABLED")) {
+                        c.gridx++;
+                        JCheckBox boxDisabled = new JCheckBox(getLabelFor("DISABLED"));
+                        c.gridwidth = 1;
+                        c.weightx = 1;
+                        c.gridwidth = GridBagConstraints.REMAINDER;
+                        this.add(boxDisabled, c);
+                        this.addView(boxDisabled, "DISABLED");
+                    }
+                }
+                c.gridy++;
+                if (getTable().contains("TEL")) {
+                    c.gridx = 0;
+                    JLabel labelTel = new JLabel(getLabelFor("TEL"));
+                    c.gridwidth = 1;
+                    c.weightx = 0;
+                    this.add(labelTel, c);
+                    JTextField fieldTel = new JTextField(20);
+                    c.gridx++;
+                    c.weightx = 1;
+                    this.add(fieldTel, c);
+                    this.addView(fieldTel, "TEL");
                 }
                 if (getTable().contains("CALENDAR_USER")) {
-                    c.gridy++;
                     c.gridx = 2;
                     JCheckBox boxCalUser = new JCheckBox(getLabelFor("CALENDAR_USER"));
-                    c.gridwidth = 1;
                     c.weightx = 1;
                     c.gridwidth = GridBagConstraints.REMAINDER;
                     this.add(boxCalUser, c);

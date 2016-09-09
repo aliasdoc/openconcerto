@@ -21,7 +21,7 @@ import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -53,10 +53,8 @@ public class FamilleArticleFounisseurSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
-        res.put(null, "NOM");
-        return res;
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     /*

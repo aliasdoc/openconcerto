@@ -18,7 +18,6 @@ import org.openconcerto.erp.generationDoc.DocumentLocalStorageManager;
 import org.openconcerto.erp.generationDoc.SheetInterface;
 import org.openconcerto.erp.generationDoc.SpreadSheetGeneratorGestComm;
 import org.openconcerto.erp.preferences.PrinterNXProps;
-import org.openconcerto.map.model.Ville;
 import org.jopendocument.link.Component;
 import org.jopendocument.link.OOConnexion;
 import org.openconcerto.sql.Configuration;
@@ -28,6 +27,7 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.utils.ExceptionHandler;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Date;
@@ -38,7 +38,6 @@ import java.util.Map;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
@@ -318,11 +317,10 @@ public class FichePayeSheet extends SheetInterface {
                 this.mCell.put("B" + pos, nomTmp);
 
                 // Base
-                Object baseTmp = rowTmp.getObject("NB_BASE");
+                BigDecimal baseTmp = rowTmp.getBigDecimal("NB_BASE");
 
                 if (baseTmp != null) {
-                    float base = ((Float) baseTmp).floatValue();
-                    if (base != 0) {
+                    if (baseTmp.signum() != 0) {
                         this.mCell.put("E" + pos, baseTmp);
                     } else {
                         this.mCell.put("E" + pos, "");
@@ -332,11 +330,10 @@ public class FichePayeSheet extends SheetInterface {
                 }
 
                 // Taux Sal
-                Object tauxSalTmp = rowTmp.getObject("TAUX_SAL");
+                BigDecimal tauxSalTmp = rowTmp.getBigDecimal("TAUX_SAL");
 
                 if (tauxSalTmp != null) {
-                    float tauxSal = ((Float) tauxSalTmp).floatValue();
-                    if (tauxSal != 0) {
+                    if (tauxSalTmp.signum() != 0) {
                         this.mCell.put("F" + pos, tauxSalTmp);
                     } else {
                         this.mCell.put("F" + pos, "");
@@ -346,10 +343,9 @@ public class FichePayeSheet extends SheetInterface {
                 }
 
                 // Montant Sal Aj
-                Object montantSalAjTmp = rowTmp.getObject("MONTANT_SAL_AJ");
+                BigDecimal montantSalAjTmp = rowTmp.getBigDecimal("MONTANT_SAL_AJ");
                 if (montantSalAjTmp != null) {
-                    float montantSalAj = ((Float) montantSalAjTmp).floatValue();
-                    if (montantSalAj != 0) {
+                    if (montantSalAjTmp.signum() != 0) {
                         this.mCell.put("G" + pos, montantSalAjTmp);
                     } else {
                         this.mCell.put("G" + pos, "");
@@ -359,10 +355,9 @@ public class FichePayeSheet extends SheetInterface {
                 }
 
                 // Montant Sal ded
-                Object montantSalDedTmp = rowTmp.getObject("MONTANT_SAL_DED");
+                BigDecimal montantSalDedTmp = rowTmp.getBigDecimal("MONTANT_SAL_DED");
                 if (montantSalDedTmp != null) {
-                    float montantSalDed = ((Float) montantSalDedTmp).floatValue();
-                    if (montantSalDed != 0) {
+                    if (montantSalDedTmp.signum() != 0) {
                         this.mCell.put("H" + pos, montantSalDedTmp);
                     } else {
                         this.mCell.put("H" + pos, "");
@@ -372,10 +367,9 @@ public class FichePayeSheet extends SheetInterface {
                 }
 
                 // Taux Pat
-                Object tauxPatTmp = rowTmp.getObject("TAUX_PAT");
+                BigDecimal tauxPatTmp = rowTmp.getBigDecimal("TAUX_PAT");
                 if (tauxPatTmp != null) {
-                    float tauxPat = ((Float) tauxPatTmp).floatValue();
-                    if (tauxPat != 0) {
+                    if (tauxPatTmp.signum() != 0) {
                         this.mCell.put("I" + pos, tauxPatTmp);
                     } else {
                         this.mCell.put("I" + pos, "");
@@ -385,10 +379,10 @@ public class FichePayeSheet extends SheetInterface {
                 }
 
                 // Montant Pat
-                Object montantPatTmp = rowTmp.getObject("MONTANT_PAT");
+                BigDecimal montantPatTmp = rowTmp.getBigDecimal("MONTANT_PAT");
                 if (montantPatTmp != null) {
-                    float montantPat = ((Float) montantPatTmp).floatValue();
-                    if (montantPat != 0) {
+
+                    if (montantPatTmp.signum() != 0) {
                         this.mCell.put("J" + pos, montantPatTmp);
                     } else {
                         this.mCell.put("J" + pos, "");
@@ -408,11 +402,11 @@ public class FichePayeSheet extends SheetInterface {
         }
 
         // Totaux
-        float netApayerCumul = this.row.getFloat("NET_A_PAYER");
-        float salBrutCumul = this.row.getFloat("SAL_BRUT");
-        float cotSalCumul = this.row.getFloat("COT_SAL");
-        float cotPatCumul = this.row.getFloat("COT_PAT");
-        float netImpCumul = this.row.getFloat("NET_IMP");
+        BigDecimal netApayerCumul = this.row.getBigDecimal("NET_A_PAYER");
+        BigDecimal salBrutCumul = this.row.getBigDecimal("SAL_BRUT");
+        BigDecimal cotSalCumul = this.row.getBigDecimal("COT_SAL");
+        BigDecimal cotPatCumul = this.row.getBigDecimal("COT_PAT");
+        BigDecimal netImpCumul = this.row.getBigDecimal("NET_IMP");
         this.mCell.put("I61", this.row.getObject("NET_A_PAYER"));
         this.mCell.put("D61", this.row.getObject("SAL_BRUT"));
         this.mCell.put("E61", this.row.getObject("COT_SAL"));
@@ -427,16 +421,16 @@ public class FichePayeSheet extends SheetInterface {
             rowCumulsPaye = tableCumulsPaye.getRow(this.row.getInt("ID_CUMULS_PAYE"));
         }
 
-        netApayerCumul += rowCumulsPaye.getFloat("NET_A_PAYER_C");
-        salBrutCumul += rowCumulsPaye.getFloat("SAL_BRUT_C");
-        cotSalCumul += rowCumulsPaye.getFloat("COT_SAL_C");
-        cotPatCumul += rowCumulsPaye.getFloat("COT_PAT_C");
-        netImpCumul += rowCumulsPaye.getFloat("NET_IMP_C");
+        netApayerCumul = netApayerCumul.add(rowCumulsPaye.getBigDecimal("NET_A_PAYER_C"));
+        cotSalCumul = cotSalCumul.add(rowCumulsPaye.getBigDecimal("COT_SAL_C"));
+        cotPatCumul = cotPatCumul.add(rowCumulsPaye.getBigDecimal("COT_PAT_C"));
+        netImpCumul = netImpCumul.add(rowCumulsPaye.getBigDecimal("NET_IMP_C"));
+        
 
-        this.mCell.put("D62", new Float(salBrutCumul));
-        this.mCell.put("E62", new Float(cotSalCumul));
-        this.mCell.put("F62", new Float(cotPatCumul));
-        this.mCell.put("H62", new Float(netImpCumul));
+        this.mCell.put("D62", salBrutCumul);
+        this.mCell.put("E62", cotSalCumul);
+        this.mCell.put("F62", cotPatCumul);
+        this.mCell.put("H62", netImpCumul);
     }
 
 }

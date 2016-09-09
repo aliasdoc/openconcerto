@@ -17,8 +17,6 @@
 package org.openconcerto.sql.navigator;
 
 import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.IResultSetHandler;
-import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowListRSH;
@@ -30,17 +28,13 @@ import org.openconcerto.sql.model.Where;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.commons.dbutils.ResultSetHandler;
-
 public class RowsSQLListModel extends SQLListModel<SQLRow> implements SQLTableModifiedListener {
 
     private final SQLElement element;
-    private final ResultSetHandler handler;
 
     public RowsSQLListModel(SQLElement element) {
         super();
         this.element = element;
-        this.handler = new SQLRowListRSH(this.getElement().getTable(), true);
         this.getElement().getTable().addTableModifiedListener(this);
     }
 
@@ -57,22 +51,10 @@ public class RowsSQLListModel extends SQLListModel<SQLRow> implements SQLTableMo
         if (ids != null && key != null) {
             sel.setWhere(new Where(key, ids));
         }
-        final SQLDataSource source = this.getElement().getTable().getBase().getDataSource();
 
         // cannot just use a SwingWorker, cause some methods (like SQLBrowser#selectPath())
         // expect reload() to by synchronous.
-        @SuppressWarnings("unchecked")
-        final List<SQLRow> rows = (List<SQLRow>) source.execute(sel.asString(), new IResultSetHandler(this.handler) {
-            @Override
-            public boolean readCache() {
-                return !noCache;
-            }
-
-            @Override
-            public boolean writeCache() {
-                return true;
-            }
-        });
+        final List<SQLRow> rows = SQLRowListRSH.execute(sel, !noCache, true);
         this.setAll(rows);
     }
 

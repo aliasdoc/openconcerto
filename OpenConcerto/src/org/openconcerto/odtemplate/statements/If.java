@@ -27,9 +27,13 @@ import org.jdom.Element;
  * If tag: conditionally displays a document element. <br>
  * Attributes:
  * <ul>
- * <li><b>element </b> (required): the document element to which this tag applies, e.g. "table-row"
- * </li>
+ * <li><b>element </b> (required): the document element to which this tag applies, e.g. "table-row"</li>
  * <li><b>test </b> (required): expression that must be true for the element to be displayed</li>
+ * <li><b>keepSection </b> (optional, default false): expression that must be true for the section
+ * element to be kept. In general a section is inserted just for delimiting a portion of conditional
+ * content and thus may be removed in the generated document. But a section with multiple columns
+ * cannot be inside another section, so to make it conditional one must put the if tag on it and
+ * specify not to remove it.</li>
  * </ul>
  */
 public class If extends BaseStatement {
@@ -46,6 +50,8 @@ public class If extends BaseStatement {
         String testExpression = command.getAttributeValue("test");
         if (testExpression == null)
             throw new TemplateException("missing required attribute for if tag: test");
+        final String keepSectionExpr = command.getAttributeValue("keepSection", "false");
+
         Element target = getAncestorByName(script, elementName);
         if (target == null) {
             throw new TemplateException("no such element enclosing if tag: " + elementName + " for expression: " + testExpression);
@@ -54,7 +60,7 @@ public class If extends BaseStatement {
         // Element ifTag = parent.addElement(getQName("if")).addAttribute("test",
         // testExpression);
         // parent.remove(ifTag);
-        final Element ifTag = getElement(this.getName()).setAttribute("test", testExpression);
+        final Element ifTag = getElement(this.getName()).setAttribute("test", testExpression).setAttribute("keepSection", keepSectionExpr);
         int index = parent.indexOf(target);
         target.detach();
         parent.getContent().add(index, ifTag);
@@ -69,6 +75,8 @@ public class If extends BaseStatement {
         if (testExpression != null) {
             Object value = model.eval(testExpression);
             if (Boolean.TRUE.equals(value)) {
+                final Boolean keepSection = (Boolean) model.eval(tag.getAttributeValue("keepSection"));
+
                 final List<Content> parentContent = tag.getParentElement().getContent();
                 final int index = parentContent.indexOf(tag);
 
@@ -79,7 +87,8 @@ public class If extends BaseStatement {
                 // then transform, see ForEach
                 for (final Element target : children) {
                     processor.transform(target);
-                    removeSection(target);
+                    if (!keepSection)
+                        removeSection(target);
                 }
             }
         }

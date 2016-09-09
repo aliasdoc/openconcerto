@@ -42,6 +42,8 @@ import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.event.DocumentEvent;
 
+import org.jgrapht.alg.DijkstraShortestPath;
+
 import koala.dynamicjava.interpreter.Interpreter;
 import koala.dynamicjava.interpreter.InterpreterException;
 import koala.dynamicjava.interpreter.TreeInterpreter;
@@ -187,6 +189,10 @@ public class SQLJavaEditor extends JavaEditor implements ValueWrapper<String> {
             Set<SQLRow> set = rowSal.getForeignRows();
             for (SQLRow row : set) {
                 mapCacheRow.put(row.getTable().getName(), row);
+                Set<SQLRow> set2 = row.getForeignRows();
+                for (SQLRow row2 : set2) {
+                    mapCacheRow.put(row2.getTable().getName(), row2);
+                }
             }
             // System.err.println("LOAD Variable");
             for (final Object o : this.mVar) {
@@ -199,9 +205,9 @@ public class SQLJavaEditor extends JavaEditor implements ValueWrapper<String> {
                         SQLRow rowAssoc = mapCacheRow.get(field.getTable().getName());
 
                         // on recupere la row associee exemple : SALARIE.INFOS_SALARIE_PAYE
-                        final Set<SQLRow> foreignRows = null;
+                        Set<SQLRow> foreignRows = null;
                         if (rowAssoc == null) {
-                            rowSal.getForeignRows(field.getTable().getName());
+                            foreignRows = rowSal.getForeignRows(field.getTable().getName());
                         }
 
                         if (rowAssoc != null || ((rowSal != null) && (foreignRows != null))) {
@@ -237,7 +243,9 @@ public class SQLJavaEditor extends JavaEditor implements ValueWrapper<String> {
                             } else {
                                 if (!rowTmp.getString("NOM").equalsIgnoreCase(varCallName)) {
                                     Object ob = checkFormule(rowTmp.getString("FORMULE"), rowTmp.getString("NOM"));
-                                    defineVariable(interpreter, bW, rowTmp.getString("NOM"), ob == null ? new Float(1) : ob);
+                                    if (ob != null) {
+                                        defineVariable(interpreter, bW, rowTmp.getString("NOM"), ob);
+                                    }
                                 }
                             }
                         }

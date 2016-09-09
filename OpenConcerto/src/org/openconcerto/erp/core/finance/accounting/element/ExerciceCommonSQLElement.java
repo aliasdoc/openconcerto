@@ -13,12 +13,15 @@
  
  package org.openconcerto.erp.core.finance.accounting.element;
 
+import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.checks.ValidState;
 
 import java.awt.GridBagConstraints;
@@ -31,8 +34,17 @@ import javax.swing.JLabel;
 
 public class ExerciceCommonSQLElement extends ConfSQLElement {
 
+    public ExerciceCommonSQLElement(DBRoot root) {
+        super(root.getTable("EXERCICE_COMMON"), "un excercice", "exercices");
+    }
+
     public ExerciceCommonSQLElement() {
-        super("EXERCICE_COMMON", "un excercice", "exercices");
+        this(Configuration.getInstance().getRoot());
+    }
+
+    @Override
+    public boolean isPrivate() {
+        return true;
     }
 
     protected List<String> getListFields() {
@@ -49,6 +61,11 @@ public class ExerciceCommonSQLElement extends ConfSQLElement {
         l.add("DATE_FIN");
         l.add("DATE_CLOTURE");
         return l;
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "DATE_DEB", "DATE_FIN");
     }
 
     /*

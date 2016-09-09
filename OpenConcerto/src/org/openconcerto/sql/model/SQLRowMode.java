@@ -27,6 +27,13 @@ import org.apache.commons.collections.Predicate;
  */
 public class SQLRowMode {
 
+    public static final boolean check(final ArchiveMode archiveMode, final SQLRow r) {
+        if (archiveMode == SQLSelect.BOTH)
+            return true;
+
+        return (archiveMode == SQLSelect.ARCHIVED && r.isArchived()) || (archiveMode == SQLSelect.UNARCHIVED && !r.isArchived());
+    }
+
     public static final SQLRowMode DATA = new SQLRowMode(SQLSelect.UNARCHIVED, true, true);
     public static final SQLRowMode DEFINED = new SQLRowMode(SQLSelect.BOTH, true, true);
     public static final SQLRowMode VALID = new SQLRowMode(SQLSelect.UNARCHIVED, true, false);
@@ -39,10 +46,10 @@ public class SQLRowMode {
     private final boolean existing;
     private final boolean undefined;
 
-    public SQLRowMode(ArchiveMode archiveMode, boolean existing, boolean undefined) {
+    public SQLRowMode(ArchiveMode archiveMode, boolean existing, boolean excludeUndefined) {
         this.archiveMode = archiveMode;
         this.existing = existing;
-        this.undefined = undefined;
+        this.undefined = excludeUndefined;
     }
 
     public ArchiveMode getArchiveMode() {
@@ -74,9 +81,7 @@ public class SQLRowMode {
         if (this.excludeUndefined() && r.isUndefined())
             return false;
 
-        if (this.getArchiveMode() == SQLSelect.ARCHIVED && !r.isArchived())
-            return false;
-        if (this.getArchiveMode() == SQLSelect.UNARCHIVED && r.isArchived())
+        if (!check(this.getArchiveMode(), r))
             return false;
 
         if (this.wantExisting() != r.exists())

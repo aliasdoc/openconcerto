@@ -38,6 +38,7 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.UndefinedRowValuesCache;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.preferences.SQLPreferences;
+import org.openconcerto.sql.sqlobject.ITextArticleWithCompletionCellEditor;
 import org.openconcerto.sql.sqlobject.ITextWithCompletion;
 import org.openconcerto.sql.view.list.AutoCompletionManager;
 import org.openconcerto.sql.view.list.CellDynamicModifier;
@@ -95,7 +96,8 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         list.add(tableElementArticle);
 
         // Code article
-        final SQLTableElement tableElementCode = new SQLTableElement(e.getTable().getField("CODE"));
+        final SQLTableElement tableElementCode = new SQLTableElement(e.getTable().getField("CODE"), String.class,
+                new ITextArticleWithCompletionCellEditor(e.getTable().getTable("ARTICLE"), e.getTable().getTable("ARTICLE_FOURNISSEUR")));
         list.add(tableElementCode);
         // Désignation de l'article
         final SQLTableElement tableElementNom = new SQLTableElement(e.getTable().getField("NOM"));
@@ -108,14 +110,14 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         // Valeur des métriques
         final SQLTableElement tableElement_ValeurMetrique2 = new SQLTableElement(e.getTable().getField("VALEUR_METRIQUE_2"), Float.class) {
             @Override
-            public boolean isCellEditable(SQLRowValues vals) {
+            public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
                 Number modeNumber = (Number) vals.getObject("ID_MODE_VENTE_ARTICLE");
                 // int mode = vals.getInt("ID_MODE_VENTE_ARTICLE");
                 if (modeNumber != null && (modeNumber.intValue() == ReferenceArticleSQLElement.A_LA_PIECE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE
                         || modeNumber.intValue() == ReferenceArticleSQLElement.AU_METRE_LONGUEUR)) {
                     return false;
                 } else {
-                    return super.isCellEditable(vals);
+                    return super.isCellEditable(vals, rowIndex, columnIndex);
                 }
             }
 
@@ -129,13 +131,13 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         list.add(tableElement_ValeurMetrique2);
         final SQLTableElement tableElement_ValeurMetrique3 = new SQLTableElement(e.getTable().getField("VALEUR_METRIQUE_3"), Float.class) {
             @Override
-            public boolean isCellEditable(SQLRowValues vals) {
+            public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
 
                 Number modeNumber = (Number) vals.getObject("ID_MODE_VENTE_ARTICLE");
                 if (modeNumber != null && (!(modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE))) {
                     return false;
                 } else {
-                    return super.isCellEditable(vals);
+                    return super.isCellEditable(vals, rowIndex, columnIndex);
                 }
             }
 
@@ -149,14 +151,14 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         list.add(tableElement_ValeurMetrique3);
         final SQLTableElement tableElement_ValeurMetrique1 = new SQLTableElement(e.getTable().getField("VALEUR_METRIQUE_1"), Float.class) {
             @Override
-            public boolean isCellEditable(SQLRowValues vals) {
+            public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
 
                 Number modeNumber = (Number) vals.getObject("ID_MODE_VENTE_ARTICLE");
                 if (modeNumber != null && (modeNumber.intValue() == ReferenceArticleSQLElement.A_LA_PIECE || modeNumber.intValue() == ReferenceArticleSQLElement.AU_POID_METRECARRE
                         || modeNumber.intValue() == ReferenceArticleSQLElement.AU_METRE_LARGEUR)) {
                     return false;
                 } else {
-                    return super.isCellEditable(vals);
+                    return super.isCellEditable(vals, rowIndex, columnIndex);
                 }
             }
 
@@ -213,8 +215,8 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
             // Prix vente devise
             eltUnitDevise = new SQLTableElement(e.getTable().getField("PV_U_DEVISE"), BigDecimal.class) {
                 @Override
-                public boolean isCellEditable(SQLRowValues vals) {
-                    return isCellNiveauEditable(vals);
+                public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
+                    return isCellNiveauEditable(vals, rowIndex, columnIndex);
                 }
             };
             eltUnitDevise.setRenderer(new DeviseTableCellRenderer());
@@ -223,13 +225,13 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
 
         SQLTableElement qteU = new SQLTableElement(e.getTable().getField("QTE_UNITAIRE"), BigDecimal.class) {
             @Override
-            public boolean isCellEditable(SQLRowValues vals) {
+            public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
 
                 SQLRowAccessor row = vals.getForeign("ID_UNITE_VENTE");
                 if (row != null && !row.isUndefined() && row.getBoolean("A_LA_PIECE")) {
                     return false;
                 } else {
-                    return super.isCellEditable(vals);
+                    return super.isCellEditable(vals, rowIndex, columnIndex);
                 }
             }
 
@@ -334,8 +336,8 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
             // Total HT
             this.tableElementTotalDevise = new SQLTableElement(e.getTable().getField("PV_T_DEVISE"), BigDecimal.class) {
                 @Override
-                public boolean isCellEditable(SQLRowValues vals) {
-                    return isCellNiveauEditable(vals);
+                public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
+                    return isCellNiveauEditable(vals, rowIndex, columnIndex);
                 }
             };
             this.tableElementTotalDevise.setRenderer(new DeviseTableCellRenderer());
@@ -368,7 +370,7 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
                     BigDecimal percent = rowVals.getBigDecimal("POURCENT_REMISE");
                     BigDecimal amount = rowVals.getBigDecimal("MONTANT_REMISE");
                     Remise a = new Remise(percent, amount);
-                    label.setText(a.toPlainString());
+                    label.setText(a.toPlainString(true));
                     return label;
                 }
             });
@@ -701,16 +703,19 @@ public class BonDeLivraisonItemTable extends AbstractVenteArticleItemTable {
         tableElementArticle.setModifier(new CellDynamicModifier() {
             @Override
             public Object computeValueFrom(SQLRowValues row, SQLTableElement source) {
-                if (row.isForeignEmpty("ID_FAMILLE_ARTICLE")) {
-                    m.setWhere(w);
-                    m2.setWhere(w);
 
-                } else {
-                    m.setWhere(w.and(new Where(sqlTableArticle.getField("ID_FAMILLE_ARTICLE"), "=", row.getForeignID("ID_FAMILLE_ARTICLE"))));
-                    m2.setWhere(w.and(new Where(sqlTableArticle.getField("ID_FAMILLE_ARTICLE"), "=", row.getForeignID("ID_FAMILLE_ARTICLE"))));
+                if (filterFamilleArticle) {
 
+                    if (row.isForeignEmpty("ID_FAMILLE_ARTICLE")) {
+                        m.setWhere(w);
+                        m2.setWhere(w);
+
+                    } else {
+                        m.setWhere(w.and(new Where(sqlTableArticle.getField("ID_FAMILLE_ARTICLE"), "=", row.getForeignID("ID_FAMILLE_ARTICLE"))));
+                        m2.setWhere(w.and(new Where(sqlTableArticle.getField("ID_FAMILLE_ARTICLE"), "=", row.getForeignID("ID_FAMILLE_ARTICLE"))));
+
+                    }
                 }
-
                 SQLRowAccessor foreign = row.getForeign("ID_ARTICLE");
                 if (foreign != null && !foreign.isUndefined() && foreign.getObject("CODE") != null && foreign.getString("CODE").equals(row.getString("CODE"))) {
                     return foreign.getID();

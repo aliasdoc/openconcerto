@@ -25,6 +25,8 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.HierarchyListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.util.ArrayList;
@@ -176,6 +178,16 @@ public class GraphMargePanel extends JPanel implements ChangeListener, ItemListe
 
         buttonLeft.addActionListener(this);
         buttonRight.addActionListener(this);
+
+        p.addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent e) {
+                model3.load();
+                model4.load();
+            }
+
+        });
+
         return p;
 
     }
@@ -269,6 +281,16 @@ public class GraphMargePanel extends JPanel implements ChangeListener, ItemListe
         c.fill = GridBagConstraints.BOTH;
         p.add(panel, c);
         panel.setOpaque(false);
+
+        p.addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent e) {
+                model1.load();
+                model2.load();
+            }
+
+        });
+
         return p;
     }
 
@@ -296,10 +318,12 @@ public class GraphMargePanel extends JPanel implements ChangeListener, ItemListe
             // Year changed
             updateDayAxis();
             updateMonthAxis();
-            model1.loadYear(s1.getValue());
-            model2.loadYear(s2.getValue());
-            model3.loadYear(s1.getValue(), month);
-            model4.loadYear(s2.getValue(), month);
+            final int year1 = ((Number) s1.getValue()).intValue();
+            final int year2 = ((Number) s2.getValue()).intValue();
+            model1.loadYear(year1);
+            model2.loadYear(year2);
+            model3.loadYear(year1, month);
+            model4.loadYear(year2, month);
         }
 
     }
@@ -310,8 +334,10 @@ public class GraphMargePanel extends JPanel implements ChangeListener, ItemListe
             // Month changed
             this.month = combo.getSelectedIndex();
             updateDayAxis();
-            model3.loadYear(s1.getValue(), month);
-            model4.loadYear(s2.getValue(), month);
+            final int year1 = ((Number) s1.getValue()).intValue();
+            final int year2 = ((Number) s2.getValue()).intValue();
+            model3.loadYear(year1, month);
+            model4.loadYear(year2, month);
         }
     }
 
@@ -331,7 +357,6 @@ public class GraphMargePanel extends JPanel implements ChangeListener, ItemListe
             }
             combo.setSelectedIndex(c);
         }
-
     }
 
 }

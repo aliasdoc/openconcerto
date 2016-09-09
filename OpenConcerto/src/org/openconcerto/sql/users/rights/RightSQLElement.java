@@ -20,7 +20,7 @@ import org.openconcerto.sql.element.UISQLComponent;
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.utils.SQLCreateTable;
 import org.openconcerto.ui.component.ITextArea;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.i18n.I18nUtils;
 
 import java.util.Arrays;
@@ -57,8 +57,8 @@ public class RightSQLElement extends ConfSQLElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, "NOM");
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     public SQLComponent createComponent() {

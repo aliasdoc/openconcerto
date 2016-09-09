@@ -82,13 +82,6 @@ public class ArticleSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    @Override
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_STOCK");
-        return l;
-    }
-
     /*
      * (non-Javadoc)
      * 

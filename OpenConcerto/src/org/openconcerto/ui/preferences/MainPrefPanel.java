@@ -236,10 +236,9 @@ public class MainPrefPanel extends JPanel implements TreeSelectionListener, Acti
                 }
             }
             this.currentPanel.removeValidListener(this.validListener);
+            this.remove((JComponent) this.currentPanel);
+            this.currentPanel = null;
         }
-
-        this.remove((JComponent) this.currentPanel);
-        this.currentPanel = null;
 
         c.anchor = GridBagConstraints.NORTHWEST;
         c.fill = GridBagConstraints.BOTH;

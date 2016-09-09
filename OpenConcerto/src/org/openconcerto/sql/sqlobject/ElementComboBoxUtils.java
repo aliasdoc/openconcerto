@@ -27,6 +27,7 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.request.BaseFillSQLRequest;
+import org.openconcerto.ui.light.LightUIComboBoxElement;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.Tuple2;
 import org.openconcerto.utils.cc.IPredicate;
@@ -57,12 +58,12 @@ public class ElementComboBoxUtils {
         return vals;
     }
 
-    public static final StringWithId createItem(Configuration conf, SQLTable primaryTable, final SQLRowValues rs, List<SQLField> fields) {
+    public static final StringWithId createItem(final List<Tuple2<Path, List<FieldPath>>> expanded, final SQLRowValues rs) {
         final String desc;
-        if (rs.getID() == primaryTable.getUndefinedID())
+        if (rs.isUndefined())
             desc = "?";
         else
-            desc = CollectionUtils.join(getShowAs(conf).expandGroupBy(fields), " ◄ ", new ITransformer<Tuple2<Path, List<FieldPath>>, Object>() {
+            desc = CollectionUtils.join(expanded, " ◄ ", new ITransformer<Tuple2<Path, List<FieldPath>>, Object>() {
                 public Object transformChecked(Tuple2<Path, List<FieldPath>> ancestorFields) {
                     final List<String> filtered = CollectionUtils.transformAndFilter(ancestorFields.get1(), new ITransformer<FieldPath, String>() {
                         // no need to keep this Transformer in an attribute
@@ -76,6 +77,19 @@ public class ElementComboBoxUtils {
             });
         // don't store the whole SQLRowValues to save some memory
         final StringWithId res = new StringWithId(rs.getID(), desc);
+
+        return res;
+    }
+
+    public static final LightUIComboBoxElement createLightUIItem(final List<Tuple2<Path, List<FieldPath>>> expanded, final SQLRowValues rs) {
+        if(rs.getTable().isOrdered()) {
+            rs.remove(rs.getTable().getOrderField().getName());
+        }
+        
+        final StringWithId createItem = createItem(expanded, rs);
+
+        final LightUIComboBoxElement res = new LightUIComboBoxElement(rs.getID());
+        res.setValue1(createItem.getValue());
 
         return res;
     }
@@ -155,23 +169,19 @@ public class ElementComboBoxUtils {
         return res;
     }
 
-    public static final List<SQLRowValues> fetchRows(final Configuration conf, final SQLTable foreignTable, List<SQLField> fieldsToFetch, final Where where) {
+    public static final List<SQLRowValues> fetchRows(final SQLRowValues graphToFetch, final Where where) {
         // TODO: a cleaner par Sylvain
-        SQLRowValues graphToFetch = ElementComboBoxUtils.getGraphToFetch(conf, foreignTable, fieldsToFetch);
         final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(graphToFetch, false);
-        final String tableName = foreignTable.getName();
+        final String tableName = graphToFetch.getTable().getName();
         BaseFillSQLRequest.setupForeign(fetcher);
-        final ITransformer<SQLSelect, SQLSelect> origSelTransf = fetcher.getSelTransf();
-        fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+        fetcher.appendSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
             @Override
             public SQLSelect transformChecked(SQLSelect sel) {
-                if (origSelTransf != null)
-                    sel = origSelTransf.transformChecked(sel);
                 boolean lockSelect = true;
                 if (lockSelect) {
-                    sel.addWaitPreviousWriteTXTable(tableName);
+                    sel.addLockedTable(tableName);
                 }
-                for (final Path orderP : Collections.singletonList(new Path(foreignTable))) {
+                for (final Path orderP : Collections.singletonList(new Path(graphToFetch.getTable()))) {
                     sel.addOrder(sel.assurePath(tableName, orderP), false);
                 }
                 if (where != null) {

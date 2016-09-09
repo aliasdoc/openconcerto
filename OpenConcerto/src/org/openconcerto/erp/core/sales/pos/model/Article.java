@@ -20,11 +20,11 @@ import java.util.Map;
 public class Article {
     private Categorie s;
     private String name;
-    private BigDecimal priceInCents;
-    int idTaxe;
-    BigDecimal priceHTInCents;
-    String barCode = "empty barcode";
-    String code = "";
+    private BigDecimal priceTTC;
+    private int idTaxe;
+    private BigDecimal priceHT;
+    private String barCode = "empty barcode";
+    private String code = "";
     private final int id;
     private static Map<String, Article> codes = new HashMap<String, Article>();
 
@@ -39,12 +39,12 @@ public class Article {
         return this.id;
     }
 
-    public BigDecimal getPriceHTInCents() {
-        return this.priceHTInCents;
+    public BigDecimal getPriceWithoutTax() {
+        return this.priceHT;
     }
 
-    public void setPriceHTInCents(BigDecimal priceHTInCents) {
-        this.priceHTInCents = priceHTInCents;
+    public void setPriceWithoutTax(BigDecimal priceHTInCents) {
+        this.priceHT = priceHTInCents;
     }
 
     public int getIdTaxe() {
@@ -60,12 +60,12 @@ public class Article {
         codes.put(bar, this);
     }
 
-    public void setPriceInCents(BigDecimal priceInCents) {
-        this.priceInCents = priceInCents;
+    public void setPriceWithTax(BigDecimal priceInCents) {
+        this.priceTTC = priceInCents;
     }
 
-    public BigDecimal getPriceInCents() {
-        return this.priceInCents;
+    public BigDecimal getPriceWithTax() {
+        return this.priceTTC;
     }
 
     public String getName() {
@@ -90,8 +90,7 @@ public class Article {
 
     @Override
     public String toString() {
-
-        return "Article:" + this.name + " " + this.priceInCents + " cents" + " HT:" + priceHTInCents;
+        return "Article:" + this.name + " " + this.priceTTC + " cents" + "(HT:" + priceHT + ")";
     }
 
     public static Article getArticleFromBarcode(String code) {

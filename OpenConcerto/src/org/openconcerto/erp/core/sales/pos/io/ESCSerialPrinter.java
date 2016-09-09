@@ -17,7 +17,6 @@ import gnu.io.CommPort;
 import gnu.io.CommPortIdentifier;
 import gnu.io.SerialPort;
 
-import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -25,9 +24,8 @@ import java.util.Calendar;
 import java.util.Enumeration;
 import java.util.List;
 
-public class ESCSerialPrinter extends DefaultTicketPrinter {
-    private static final int GS = 0x1D;
-    private static final int ESC = 0x1B;
+public class ESCSerialPrinter extends AbstractESCPrinter {
+
     private String port;
 
     /**
@@ -39,15 +37,6 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
             port = port.substring(0, port.length() - 1);
         }
         this.port = port;
-    }
-
-    public void addToBuffer(String t) {
-        addToBuffer(t, NORMAL);
-    }
-
-    public void addToBuffer(String t, int mode) {
-        this.strings.add(t);
-        this.modes.add(mode);
     }
 
     public synchronized void openDrawer() throws Exception {
@@ -115,98 +104,11 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
     }
 
     public synchronized void printBuffer() throws Exception {
-        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
-        // Init
-        bOut.write(ESC);
-        bOut.write(0x40);
-        // French characters
-        bOut.write(ESC);
-        bOut.write(0x52);
-        bOut.write(0x01);
-        //
-
-        final int size = this.strings.size();
-        for (int i = 0; i < size; i++) {
-            String string = this.strings.get(i);
-            int mode = modes.get(i);
-
-            if (mode == BARCODE) {
-                //
-                bOut.write(GS);
-                bOut.write(0x48);
-                bOut.write(0x02); // en bas
-
-                //
-                bOut.write(GS);
-                bOut.write(0x77);
-                bOut.write(0x02); // Zoom 2
-
-                //
-                bOut.write(GS);
-                bOut.write(0x68);
-                bOut.write(60); // Hauteur
-                // Code 39
-                bOut.write(GS);
-                bOut.write(0x6B);
-                bOut.write(0x04); // Code 39
-                for (int k = 0; k < string.length(); k++) {
-                    char c = string.charAt(k);
-
-                    bOut.write(c);
-                }
-                bOut.write(0x00); // End
-            } else {
-                if (mode == NORMAL) {
-                    bOut.write(ESC);
-                    bOut.write(0x21);
-                    bOut.write(0);// Default
-                } else if (mode == BOLD) {
-                    bOut.write(ESC);
-                    bOut.write(0x21);
-                    bOut.write(8);// Emphasis
-                } else if (mode == BOLD_LARGE) {
-                    bOut.write(GS);
-                    bOut.write(0x21);
-                    bOut.write(0x11);//
-                }
-
-                for (int k = 0; k < string.length(); k++) {
-                    char c = string.charAt(k);
-                    if (c == 'é') {
-                        c = 130;
-                    } else if (c == 'è') {
-                        c = 138;
-                    } else if (c == 'ê') {
-                        c = 136;
-                    } else if (c == 'ù') {
-                        c = 151;
-                    } else if (c == 'à') {
-                        c = 133;
-                    } else if (c == 'ç') {
-                        c = 135;
-                    } else if (c == 'ô') {
-                        c = 147;
-                    }
-                    bOut.write(c);
-                }
-            }
-            bOut.write(0x0A);// Retour a la ligne
-
-        }
-        // Eject
-        bOut.write(0x0A);
-        bOut.write(0x0A);
-        bOut.write(0x0A);
-        bOut.write(0x0A);
-        // Coupe
-        bOut.write(GS);
-        bOut.write(0x56); // V
-        bOut.write(0x01);
-
+        final byte[] byteArray = getPrintBufferBytes();
         // Do NOT flush or use BufferedOutputStream !
         final SerialPort serialPort = getSerialPort();
         final OutputStream out = serialPort.getOutputStream();
-        out.write(bOut.toByteArray());
+        out.write(byteArray);
         out.close();
         serialPort.close();
     }
@@ -234,6 +136,7 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
         listPorts();
         final ESCSerialPrinter prt = new ESCSerialPrinter("COM1");
         prt.setPort(getSerialPortNames().get(0));
+        int col = 42;
         prt.addToBuffer("ILM INFORMATIQUE", BOLD_LARGE);
         prt.addToBuffer("");
         prt.addToBuffer("22 place de la liberation");
@@ -242,13 +145,12 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
         prt.addToBuffer("Fax: 00 00 00 00 00");
         prt.addToBuffer("");
         final SimpleDateFormat df = new SimpleDateFormat("EEEE d MMMM yyyy à HH:mm");
-        prt.addToBuffer(formatRight(45, "Le " + df.format(Calendar.getInstance().getTime())));
+        prt.addToBuffer(formatRight(42, "Le " + df.format(Calendar.getInstance().getTime())));
         prt.addToBuffer("");
-        prt.addToBuffer(formatRight(5, "3") + " " + formatLeft(30, "ILM Informatique") + " " + formatRight(8, "3.00"));
-        prt.addToBuffer("      =======================================");
-        prt.addToBuffer(formatRight(37, "Total") + formatRight(8, "3.00"), BOLD);
+        prt.addToBuffer(formatRight(5, "3") + " " + formatLeft(col - 6 - 9, "ILM Informatique") + " " + formatRight(8, "3.00"));
+        prt.addToBuffer(formatLeft(col, "      ======================================="));
+        prt.addToBuffer(formatRight(col - 8, "Total") + formatRight(8, "3.00"), BOLD);
         prt.addToBuffer("");
-
         prt.addToBuffer("Merci de votre visite, à bientôt.");
         prt.addToBuffer("");
         prt.addToBuffer("01 05042010 00002", BARCODE);
@@ -275,7 +177,7 @@ public class ESCSerialPrinter extends DefaultTicketPrinter {
         }
     }
 
-    private static List<String> getSerialPortNames() {
+    public static List<String> getSerialPortNames() {
         ArrayList<String> r = new ArrayList<String>();
         @SuppressWarnings("unchecked")
         Enumeration<CommPortIdentifier> portEnum = CommPortIdentifier.getPortIdentifiers();

@@ -54,7 +54,7 @@ public class LivrePayeSheet extends SheetInterface {
     }
 
     static {
-        setSize(8, 65, 3);
+        setSize(9, 65, 6);
     }
 
     @Override
@@ -81,7 +81,7 @@ public class LivrePayeSheet extends SheetInterface {
     private void makeEntete(int row) {
         SQLRow rowSociete = ((ComptaPropsConfiguration) Configuration.getInstance()).getRowSociete();
         this.mCell.put("A" + row, rowSociete.getObject("NOM"));
-        this.mCell.put("D" + row, "Edition du " + dateFormat.format(new Date()));
+        this.mCell.put("G" + row, "Edition du " + dateFormat.format(new Date()));
         // this.mCell.put("D" + (row + 2), "Impression Journaux");
         System.err.println("MAKE ENTETE");
     }
@@ -211,6 +211,20 @@ public class LivrePayeSheet extends SheetInterface {
                 mapValue.put(new Integer(rowFicheElt.getInt("IDSOURCE")), new Float(montant));
                 mapTotal.put(new Integer(rowFicheElt.getInt("IDSOURCE")), new Float(montantTot));
             }
+
+            if (rowFicheElt.getObject("MONTANT_PAT") != null) {
+                Object o = mapValue.get(new Integer(rowFicheElt.getInt("IDSOURCE")) + "_PAT");
+                Object oTot = mapTotal.get(new Integer(rowFicheElt.getInt("IDSOURCE")) + "_PAT");
+
+                float montant = (o == null) ? 0.0F : ((Float) o).floatValue();
+                float montantTotal = (oTot == null) ? 0.0F : ((Float) oTot).floatValue();
+                montant += rowFicheElt.getFloat("MONTANT_PAT");
+                montantTotal += rowFicheElt.getFloat("MONTANT_PAT");
+
+                mapValue.put(new Integer(rowFicheElt.getInt("IDSOURCE")) + "_PAT", new Float(montant));
+                mapTotal.put(new Integer(rowFicheElt.getInt("IDSOURCE")) + "_PAT", new Float(montantTotal));
+            }
+
         }
 
         // Dump
@@ -223,47 +237,49 @@ public class LivrePayeSheet extends SheetInterface {
         int posLine = 1;
         int firstLine = 1;
 
+        int nbSalPerPage = 3;
         System.err.println("NB Sal = " + mapSal.keySet().size());
-        System.err.println("NB Pages = " + Math.ceil((double) (mapSal.keySet().size() + 1) / nbCol));
-        for (int n = 0; n < Math.ceil((double) (mapSal.keySet().size() + 1) / nbCol); n++) {
+
+        System.err.println("NB Pages = " + Math.ceil((double) (mapSal.keySet().size()) / nbSalPerPage));
+        for (int n = 0; n < Math.ceil((double) (mapSal.keySet().size() + 1) / nbSalPerPage); n++) {
 
             // entete
             makeEntete(posLine);
             posLine += (debutFill - 1);
 
-            int numFirstSal = (n * nbCol);
+            int numFirstSal = (n * nbSalPerPage);
 
             if (numFirstSal < mapSal.keySet().size()) {
                 SQLRow rowSal = tableSalarie.getRow(((Integer) mapSal.keySet().toArray()[numFirstSal]).intValue());
-                this.mCell.put("B" + (posLine - 2), rowSal.getObject("NOM"));
-                this.mCell.put("B" + (posLine - 1), rowSal.getObject("PRENOM"));
+                this.mCell.put("B" + (posLine - 3), rowSal.getObject("NOM"));
+                this.mCell.put("B" + (posLine - 2), rowSal.getObject("PRENOM"));
             } else {
                 if (numFirstSal == mapSal.keySet().size()) {
                     System.err.println("Cumuls B");
-                    this.mCell.put("B" + (posLine - 2), "Cumuls");
-                    this.mCell.put("B" + (posLine - 1), "");
+                    this.mCell.put("B" + (posLine - 3), "Cumuls");
+                    this.mCell.put("B" + (posLine - 2), "");
                 }
             }
             if (numFirstSal + 1 < mapSal.keySet().size()) {
                 SQLRow rowSal = tableSalarie.getRow(((Integer) mapSal.keySet().toArray()[numFirstSal + 1]).intValue());
-                this.mCell.put("C" + (posLine - 2), rowSal.getObject("NOM"));
-                this.mCell.put("C" + (posLine - 1), rowSal.getObject("PRENOM"));
+                this.mCell.put("D" + (posLine - 3), rowSal.getObject("NOM"));
+                this.mCell.put("D" + (posLine - 2), rowSal.getObject("PRENOM"));
             } else {
                 if (numFirstSal + 1 == mapSal.keySet().size()) {
                     System.err.println("Cumuls C");
-                    this.mCell.put("C" + (posLine - 2), "Cumuls");
-                    this.mCell.put("C" + (posLine - 1), "");
+                    this.mCell.put("D" + (posLine - 3), "Cumuls");
+                    this.mCell.put("D" + (posLine - 2), "");
                 }
             }
             if (numFirstSal + 2 < mapSal.keySet().size()) {
                 SQLRow rowSal = tableSalarie.getRow(((Integer) mapSal.keySet().toArray()[numFirstSal + 2]).intValue());
-                this.mCell.put("D" + (posLine - 2), rowSal.getObject("NOM"));
-                this.mCell.put("D" + (posLine - 1), rowSal.getObject("PRENOM"));
+                this.mCell.put("F" + (posLine - 3), rowSal.getObject("NOM"));
+                this.mCell.put("F" + (posLine - 2), rowSal.getObject("PRENOM"));
             } else {
                 if (numFirstSal + 2 == mapSal.keySet().size()) {
                     System.err.println("Cumuls D");
-                    this.mCell.put("D" + (posLine - 2), "Cumuls");
-                    this.mCell.put("D" + (posLine - 1), "");
+                    this.mCell.put("F" + (posLine - 3), "Cumuls");
+                    this.mCell.put("F" + (posLine - 2), "");
                 }
             }
             for (int i = 0; i < mapRubriqueBrut.keySet().size(); i++) {
@@ -273,10 +289,12 @@ public class LivrePayeSheet extends SheetInterface {
 
                 this.mCell.put("A" + posLine, rowRub.getObject("NOM"));
 
-                this.mCell.put("B" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal, mapTotalbrut));
-                this.mCell.put("C" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal + 1, mapTotalbrut));
-                this.mCell.put("D" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal + 2, mapTotalbrut));
-
+                this.mCell.put("B" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal, mapTotalbrut, false));
+                this.mCell.put("C" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal, mapTotalbrut, true));
+                this.mCell.put("D" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal + 1, mapTotalbrut, false));
+                this.mCell.put("E" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal + 1, mapTotalbrut, true));
+                this.mCell.put("F" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal + 2, mapTotalbrut, false));
+                this.mCell.put("G" + posLine, fillLine(mapSalarieBrut, idRub, mapSal, numFirstSal + 2, mapTotalbrut, true));
                 posLine++;
             }
 
@@ -287,9 +305,12 @@ public class LivrePayeSheet extends SheetInterface {
 
                 this.mCell.put("A" + posLine, rowRub.getObject("NOM"));
 
-                this.mCell.put("B" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal, mapTotalCot));
-                this.mCell.put("C" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal + 1, mapTotalCot));
-                this.mCell.put("D" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal + 2, mapTotalCot));
+                this.mCell.put("B" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal, mapTotalCot, false));
+                this.mCell.put("C" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal, mapTotalCot, true));
+                this.mCell.put("D" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal + 1, mapTotalCot, false));
+                this.mCell.put("E" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal + 1, mapTotalCot, true));
+                this.mCell.put("F" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal + 2, mapTotalCot, false));
+                this.mCell.put("G" + posLine, fillLine(mapSalarieCot, idRub, mapSal, numFirstSal + 2, mapTotalCot, true));
 
                 posLine++;
             }
@@ -301,9 +322,12 @@ public class LivrePayeSheet extends SheetInterface {
 
                 this.mCell.put("A" + posLine, rowRub.getObject("NOM"));
 
-                this.mCell.put("B" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal, mapTotalNet));
-                this.mCell.put("C" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal + 1, mapTotalNet));
-                this.mCell.put("D" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal + 2, mapTotalNet));
+                this.mCell.put("B" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal, mapTotalNet, false));
+                this.mCell.put("C" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal, mapTotalNet, true));
+                this.mCell.put("D" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal + 1, mapTotalNet, false));
+                this.mCell.put("E" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal + 1, mapTotalNet, true));
+                this.mCell.put("F" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal + 2, mapTotalNet, false));
+                this.mCell.put("G" + posLine, fillLine(mapSalarieNet, idRub, mapSal, numFirstSal + 2, mapTotalNet, true));
 
                 posLine++;
             }
@@ -317,7 +341,7 @@ public class LivrePayeSheet extends SheetInterface {
             firstLine = posLine;
         }
 
-        this.nbPage = new Double(Math.ceil((double) (mapSal.keySet().size() + 1) / (nbCol))).intValue();
+        this.nbPage = new Double(Math.ceil((double) (mapSal.keySet().size() + 1) / (nbSalPerPage))).intValue();
 
         System.err.println("Nombre de page " + this.nbPage);
 
@@ -328,20 +352,21 @@ public class LivrePayeSheet extends SheetInterface {
         }
     }
 
-    private Object fillLine(Map mapSalRub, int idRub, Map mapSal, int numSal, Map mapTotal) {
+    private Object fillLine(Map mapSalRub, int idRub, Map mapSal, int numSal, Map mapTotal, boolean pat) {
 
         Object value = null;
         if (numSal < mapSal.keySet().size()) {
             Map m = (Map) mapSalRub.get(mapSal.keySet().toArray()[numSal]);
 
             value = new Float(0);
-            if (m != null && m.get(new Integer(idRub)) != null) {
-                value = m.get(new Integer(idRub));
+            Object key = (pat ? new Integer(idRub) + "_PAT" : new Integer(idRub));
+            if (m != null && m.get(key) != null) {
+                value = m.get(key);
             }
         } else {
-
+            Object key = (pat ? new Integer(idRub) + "_PAT" : new Integer(idRub));
             if (numSal == mapSal.keySet().size()) {
-                value = mapTotal.get(new Integer(idRub));
+                value = mapTotal.get(key);
             }
         }
         return value;

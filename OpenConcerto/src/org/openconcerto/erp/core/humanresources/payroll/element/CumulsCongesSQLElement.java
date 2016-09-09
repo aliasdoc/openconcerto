@@ -45,6 +45,11 @@ public class CumulsCongesSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     /*
      * (non-Javadoc)
      * 

@@ -14,6 +14,7 @@
  package org.openconcerto.erp.core.sales.quote.action;
 
 import org.openconcerto.erp.action.CreateFrameAbstractAction;
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.ui.IListFilterDatePanel;
 import org.openconcerto.erp.core.common.ui.IListTotalPanel;
 import org.openconcerto.erp.core.common.ui.ListeViewPanel;
@@ -44,22 +45,20 @@ public class ListeDesElementsDevisAction extends CreateFrameAbstractAction {
 
         IListe liste = new IListe(element.getTableSource(true));
         final ListeViewPanel listeAddPanel = new ListeViewPanel(element, liste);
-        listeAddPanel.getListe().getRequest().setWhere(new Where(element.getTable().getField("ID_DEVIS"), ">", 1));
-        List<SQLField> l = new ArrayList<SQLField>();
-        l.add(element.getTable().getField("T_PV_HT"));
-        l.add(element.getTable().getField("T_PV_TTC"));
-        IListTotalPanel total = new IListTotalPanel(listeAddPanel.getListe(), l);
+
         GridBagConstraints c = new DefaultGridBagConstraints();
         c.gridy = 2;
         c.weightx = 0;
         c.weighty = 0;
         c.anchor = GridBagConstraints.EAST;
         c.fill = GridBagConstraints.NONE;
-        listeAddPanel.add(total, c);
+
         IListFrame frame = new IListFrame(listeAddPanel);
         frame.setTextTitle("Liste des missions proposées");
         frame.getPanel().getListe().setSQLEditable(false);
         frame.getPanel().setAddVisible(false);
+        frame.getPanel().setShowReadOnlyFrameOnDoubleClick(false);
+        frame.getPanel().setModifyVisible(false);
         frame.getPanel().setSearchFullMode(true);
 
         // Date panel

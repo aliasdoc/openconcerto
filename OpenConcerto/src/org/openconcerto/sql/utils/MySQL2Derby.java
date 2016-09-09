@@ -16,8 +16,8 @@
 import java.io.File;
 import java.io.IOException;
 
-import org.jdom.Document;
-import org.jdom.JDOMException;
+import org.jdom2.Document;
+import org.jdom2.JDOMException;
 
 public class MySQL2Derby extends MySQLXML2 {
 

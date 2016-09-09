@@ -237,12 +237,15 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
         JTabbedPane tabbedPane = new JTabbedPane();
 
         JPanel panelAdresse = new JPanel(new GridBagLayout());
+        panelAdresse.setOpaque(false);
         GridBagConstraints cAdr = new DefaultGridBagConstraints();
         // Adresse
         TitledSeparator sep = new TitledSeparator("Adresse");
+        sep.setOpaque(false);
         panelAdresse.add(sep, cAdr);
 
         this.sep2 = new TitledSeparator("Adresse d'enlévement");
+        this.sep2.setOpaque(false);
         cAdr.gridx = GridBagConstraints.RELATIVE;
         panelAdresse.add(this.sep2, cAdr);
 
@@ -253,16 +256,20 @@ public class FournisseurSQLComponent extends BaseSQLComponent {
         cAdr.gridy++;
         cAdr.fill = GridBagConstraints.HORIZONTAL;
         cAdr.weightx = 1;
-        panelAdresse.add((ElementSQLObject) this.getView("ID_ADRESSE"), cAdr);
+        final ElementSQLObject view = (ElementSQLObject) this.getView("ID_ADRESSE");
+        view.setOpaque(false);
+        panelAdresse.add(view, cAdr);
 
         // Selection de 2eme adresse
         this.addView("ID_ADRESSE_E", DEC);
         cAdr.gridx = GridBagConstraints.RELATIVE;
         this.comp2 = (ElementSQLObject) this.getView("ID_ADRESSE_E");
         this.comp2.setCreated(true);
+        this.comp2.setOpaque(false);
         panelAdresse.add(this.comp2, cAdr);
 
         this.checkEnlevement = new JCheckBox("Adresse d'enlèvement identique");
+        this.checkEnlevement.setOpaque(false);
         cAdr.gridx = 0;
         cAdr.gridy++;
         cAdr.gridwidth = GridBagConstraints.REMAINDER;

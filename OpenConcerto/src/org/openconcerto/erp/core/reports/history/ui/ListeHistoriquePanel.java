@@ -119,7 +119,7 @@ public class ListeHistoriquePanel extends JPanel {
             final int size = ListeHistoriquePanel.this.vectListePanel.size();
             for (int i = 0; i < size; i++) {
                 IListPanel liste = ListeHistoriquePanel.this.vectListePanel.get(i);
-
+                // TODO : verifier la pertinence de remove / add
                 // remove listener
                 if (ListeHistoriquePanel.this.mapListener.get(i) != null) {
                     List<TableModelListener> l = ListeHistoriquePanel.this.mapListener.get(i);
@@ -158,7 +158,7 @@ public class ListeHistoriquePanel extends JPanel {
                 } else {
                     liste.getListe().getRequest().setWhere(w);
                 }
-                liste.getListe().setSQLEditable(false);
+                liste.getListe().getModel().setCellsEditable(false);
                 // Set renderer
                 setRenderer(liste);
 
@@ -249,6 +249,7 @@ public class ListeHistoriquePanel extends JPanel {
                         request.setWhere(where);
                     }
                 } else {
+                    // Evite de charger les listes completes à la création de la fenetre
                     request.setWhere(Where.FALSE);
                 }
 
@@ -316,7 +317,7 @@ public class ListeHistoriquePanel extends JPanel {
                 if (elementSheet.get(liste.getElement()) != null) {
                     liste.getListe().addIListeActions(new MouseSheetXmlListeListener(elementSheet.get(liste.getElement())).getRowActions());
                 }
-                liste.getListe().setSQLEditable(false);
+                liste.getListe().getModel().setCellsEditable(false);
                 liste.setOpaque(false);
                 liste.setBorder(null);
                 liste.getListe().getModel().setHibernateDelay(-1);
@@ -397,6 +398,10 @@ public class ListeHistoriquePanel extends JPanel {
 
     public void selectIDinJList(int id) {
         this.jListePanel.selectID(id);
+    }
+
+    public void selectFirstIDinJList() {
+        this.jListePanel.selectFirstID();
     }
 
     private void setRenderer(IListPanel liste) {
@@ -492,7 +497,7 @@ public class ListeHistoriquePanel extends JPanel {
         IListe liste = getIListeFromTableName(tableName);
         int index = getIndexFromTableName(tableName);
         if (liste != null) {
-            liste.addListener(listener);
+            liste.getModel().addTableModelListener(listener);
             List<TableModelListener> l = this.mapListener.get(index);
             if (l == null) {
                 l = new ArrayList<TableModelListener>();

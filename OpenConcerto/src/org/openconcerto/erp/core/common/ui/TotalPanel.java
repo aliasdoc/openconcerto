@@ -532,7 +532,7 @@ public class TotalPanel extends JPanel implements TableModelListener {
                     }
                 }
             }
-            rowValsPort.putRowValues("ID_ARTICLE").put("ID_COMPTE_PCE", rowDefaultCptPort);
+            rowValsPort.putRowValues("ID_ARTICLE").put("ID_COMPTE_PCE", rowDefaultCptPort.getID());
         } else {
             rowValsPort = null;
         }

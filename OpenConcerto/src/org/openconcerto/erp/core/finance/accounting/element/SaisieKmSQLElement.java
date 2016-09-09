@@ -101,13 +101,6 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
         return new SaisieKmComponent();
     }
 
-    @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("SAISIE_KM_ELEMENT");
-        return set;
-    }
-
     /**
      * Genere une saisie au kilometre à partir d'un mouvement
      * 
@@ -611,6 +604,16 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
 
         private void tableChanged(TableModelEvent e) {
             assert SwingUtilities.isEventDispatchThread();
+            int col = e.getColumn();
+            if (e.getType() == TableModelEvent.UPDATE && (col == this.model.getColumnCount() - 1 || col == this.model.getColumnCount() - 2) && e.getFirstRow() >= 0
+                    && e.getFirstRow() < this.model.getRowCount()) {
+                SQLRowValues rowVals = this.model.getRowValuesAt(e.getFirstRow());
+                Long longValue = (Long) this.model.getValueAt(e.getFirstRow(), col);
+                if (rowVals.getReferentRows(getTable().getTable("ASSOCIATION_ANALYTIQUE")).size() > 0 && longValue != null && longValue != 0) {
+                    JOptionPane.showMessageDialog(SwingUtilities.getRootPane(this.labelTotalCredit), "Pensez à mettre à jour la répartition analytique!");
+                }
+            }
+
             long totalCred = 0;
             long totalDeb = 0;
             long totalCredWithNoValid = 0;
@@ -634,9 +637,8 @@ public class SaisieKmSQLElement extends ComptaSQLConfElement {
                 totalCredWithNoValid += fTc;
 
                 totalDebWithNoValid += fTd;
-                final boolean emptyAmount = fTc == 0 && fTd == 0;
-                this.tableKm.setRowDeviseValidAt(!emptyAmount, i);
-                allLineValid &= !emptyAmount;
+
+                // Les lignes à 0 sont permises
             }
             this.tableKm.revalidate();
             this.tableKm.repaint();

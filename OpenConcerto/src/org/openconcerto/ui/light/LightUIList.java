@@ -26,10 +26,11 @@
 
 package org.openconcerto.ui.light;
 
-import java.util.ArrayList;
-
 import org.openconcerto.utils.io.JSONConverter;
 import org.openconcerto.utils.ui.StringWithId;
+
+import java.util.ArrayList;
+
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
@@ -38,7 +39,7 @@ public class LightUIList extends LightUIElement {
 
     // Init from json constructor
     public LightUIList(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
     // Clone constructor
@@ -47,14 +48,25 @@ public class LightUIList extends LightUIElement {
         this.values = listElement.values;
     }
 
-    public LightUIList(String id, final ArrayList<StringWithId> values) {
-        this.setId(id);
+    public LightUIList(final String id, final ArrayList<StringWithId> values) {
+        super(id);
         this.setType(TYPE_LIST);
+
         this.values = values;
     }
-    
-    public ArrayList<StringWithId> getValues(){
+
+    public ArrayList<StringWithId> getValues() {
         return (ArrayList<StringWithId>) this.values.clone();
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIList(json);
+            }
+        };
     }
 
     @Override
@@ -63,10 +75,20 @@ public class LightUIList extends LightUIElement {
     }
 
     @Override
+    protected void copy(LightUIElement element) {
+        super.copy(element);
+        if (!(element instanceof LightUIList)) {
+            throw new InvalidClassException(this.getClassName(), element.getClassName(), element.getId());
+        }
+    }
+
+    @Override
     public JSONObject toJSON() {
         final JSONObject json = super.toJSON();
         json.put("class", "LightUIList");
-        json.put("values", this.values);
+        if (this.values != null && this.values.size() > 0) {
+            json.put("values", this.values);
+        }
         return json;
     }
 
@@ -74,7 +96,7 @@ public class LightUIList extends LightUIElement {
     public void fromJSON(final JSONObject json) {
         super.fromJSON(json);
         final JSONArray jsonValues = (JSONArray) JSONConverter.getParameterFromJSON(json, "values", JSONArray.class);
-        this.values.clear();
+        this.values = new ArrayList<StringWithId>();
         if (jsonValues != null) {
             for (final Object jsonValue : jsonValues) {
                 if (!(jsonValue instanceof JSONObject)) {

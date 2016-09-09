@@ -13,13 +13,12 @@
  
  /*
  * SQLTableListener created on 15 mai 2004
- * 
  */
 package org.openconcerto.sql.model;
 
 /**
  * @author ILM Informatique 15 mai 2004
- * 
+ * @deprecated use {@link SQLTableModifiedListener}
  */
 public interface SQLTableListener {
 

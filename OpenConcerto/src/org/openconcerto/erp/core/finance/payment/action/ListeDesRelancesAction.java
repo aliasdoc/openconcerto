@@ -15,6 +15,7 @@
 
 import org.openconcerto.erp.action.CreateFrameAbstractAction;
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.core.common.ui.IListFilterDatePanel;
 import org.openconcerto.erp.core.sales.invoice.report.VenteFactureXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.FicheRelanceSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.RelanceSheet;
@@ -29,8 +30,11 @@ import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelColumnPath;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
+import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.cc.ITransformer;
 
+import java.awt.GridBagConstraints;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -38,6 +42,7 @@ import java.util.List;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPopupMenu;
 
@@ -52,7 +57,26 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
 
     public JFrame createFrame() {
         final SQLElement elt = Configuration.getInstance().getDirectory().getElement("RELANCE");
-        this.frame = new IListFrame(new ListeAddPanel(elt));
+        this.frame = new IListFrame(new ListeAddPanel(elt) {
+            @Override
+            protected void createUI() {
+                super.createUI();
+
+                this.btnMngr.setAdditional(this.buttonModifier, new ITransformer<JButton, String>() {
+
+                    @Override
+                    public String transformChecked(JButton input) {
+
+                        SQLRowAccessor row = getListe().fetchSelectedRow();
+
+                        if (row.getForeign("ID_TYPE_LETTRE_RELANCE") == null || row.isForeignEmpty("ID_TYPE_LETTRE_RELANCE")) {
+                            return "Vous ne pouvez pas modifier une relance envoyée par mail!";
+                        }
+                        return null;
+                    }
+                });
+            }
+        });
 
         final SQLTableModelSourceOnline src = (SQLTableModelSourceOnline) this.frame.getPanel().getListe().getModel().getReq();
 
@@ -68,6 +92,20 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
 
         this.frame.getPanel().getListe().getJTable().addMouseListener(this);
         this.frame.getPanel().setAddVisible(false);
+
+        // Date panel
+        GridBagConstraints c = new DefaultGridBagConstraints();
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.fill = GridBagConstraints.NONE;
+        c.weightx = 0;
+        c.gridy = 4;
+
+        IListFilterDatePanel datePanel = new IListFilterDatePanel(frame.getPanel().getListe(), elt.getTable().getField("DATE"), IListFilterDatePanel.getDefaultMap());
+        c.gridy++;
+        c.anchor = GridBagConstraints.CENTER;
+        datePanel.setFilterOnDefault();
+        frame.getPanel().add(datePanel, c);
+
         return this.frame;
     }
 
@@ -82,6 +120,8 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
             // String locationRelance =
             // TemplateNXProps.getInstance().getStringProperty("LocationRelanceOO");
             final SQLRow rowRelance = this.frame.getPanel().getListe().fetchSelectedRow();
+
+            boolean isNotMail = !(rowRelance.getForeign("ID_TYPE_LETTRE_RELANCE") == null || rowRelance.isForeignEmpty("ID_TYPE_LETTRE_RELANCE"));
             // final String fileName = "Relance_" + rowRelance.getString("NUMERO");
             // final File fileOutOO = new File(locationRelance, fileName + ".odt");
             JPopupMenu menu = new JPopupMenu();
@@ -94,7 +134,7 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
                     s.showDocument();
                 }
             };
-            // actionOpen.setEnabled(s.exists());
+            actionOpen.setEnabled(isNotMail);
             menu.add(actionOpen);
 
             // Impression
@@ -103,6 +143,7 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
                     s.fastPrintDocument();
                 }
             };
+            actionPrint.setEnabled(isNotMail);
             menu.add(actionPrint);
 
             // Impression
@@ -123,6 +164,7 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
 
                 }
             };
+            actionPrintFact.setEnabled(isNotMail);
             menu.add(actionPrintFact);
 
             // Impression
@@ -143,16 +185,19 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
                     t.start();
                 }
             };
+            actionPrintBoth.setEnabled(isNotMail);
             menu.add(actionPrintBoth);
 
             // Générer
-            menu.add(new AbstractAction("Générer") {
+            final AbstractAction actionGenerate = new AbstractAction("Générer") {
                 public void actionPerformed(ActionEvent e) {
 
                     String printer = PrinterNXProps.getInstance().getStringProperty("RelancePrinter");
                     s.generate(false, true, printer, true);
                 }
-            });
+            };
+            actionGenerate.setEnabled(isNotMail);
+            menu.add(actionGenerate);
 
             // Créer la fiche de relance
             menu.add(new AbstractAction("Créer la fiche de relance") {
@@ -182,7 +227,6 @@ public class ListeDesRelancesAction extends CreateFrameAbstractAction implements
     private void printInvoice(final SQLRow rowRelance) throws Exception {
         final VenteFactureXmlSheet sheet = new VenteFactureXmlSheet(rowRelance.getForeignRow("ID_SAISIE_VENTE_FACTURE"));
         sheet.getOrCreateDocumentFile();
-        sheet.fastPrintDocument();
-        sheet.showPrintAndExport(false, false, true);
+        sheet.showPrintAndExport(false, true, true);
     }
 }

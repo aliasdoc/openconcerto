@@ -18,7 +18,7 @@ import org.openconcerto.erp.core.sales.product.component.ProductItemGroup;
 import org.openconcerto.sql.element.GroupSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,8 +55,8 @@ public class ProductItemSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override

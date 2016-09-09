@@ -14,8 +14,14 @@
  package org.openconcerto.sql.request;
 
 import org.openconcerto.sql.model.SQLData;
+import org.openconcerto.sql.model.TransactionPoint;
+import org.openconcerto.sql.model.TransactionPoint.State;
 import org.openconcerto.utils.cache.CacheWatcherFactory;
 import org.openconcerto.utils.cache.ICache;
+import org.openconcerto.utils.cache.ICacheSupport;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * To keep result related to some SQLTables in cache. The results will be automatically invalidated
@@ -27,9 +33,10 @@ import org.openconcerto.utils.cache.ICache;
  * @param <K> type of keys
  * @param <V> type of value
  */
-public final class SQLCache<K, V> extends ICache<K, V, SQLData> {
+public class SQLCache<K, V> extends ICache<K, V, SQLData> {
 
-    private final boolean clearAfterTx;
+    private final TransactionPoint txPoint;
+    private final List<TransactionPoint> releasedTxPoints;
 
     public SQLCache() {
         this(60);
@@ -52,23 +59,57 @@ public final class SQLCache<K, V> extends ICache<K, V, SQLData> {
      * @throws IllegalArgumentException if size is 0.
      */
     public SQLCache(int delay, int size, final String name) {
-        // clearAfterTx = true : READ_COMMITTED but even for the current transaction. To use cache
-        // inside a transaction, another instance must be used (as in SQLDataSource).
-        this(delay, size, name, true);
+        this(null, delay, size, name, null);
     }
 
-    public SQLCache(int delay, int size, final String name, final boolean clearAfterTx) {
-        super(delay, size, name);
-        this.clearAfterTx = clearAfterTx;
-        this.setWatcherFactory(new CacheWatcherFactory<K, SQLData>() {
-            public SQLCacheWatcher<K> createWatcher(ICache<K, ?, SQLData> cache, SQLData o) {
-                final SQLCache<K, ?> c = (SQLCache<K, ?>) cache;
-                return new SQLCacheWatcher<K>(c, o);
+    public SQLCache(final ICacheSupport<SQLData> supp, int delay, int size, final String name, final TransactionPoint txPoint) {
+        super(supp, delay, size, name);
+        this.txPoint = txPoint;
+        this.releasedTxPoints = new ArrayList<TransactionPoint>();
+    }
+
+    @Override
+    protected ICacheSupport<SQLData> createSupp(String name) {
+        final ICacheSupport<SQLData> res = super.createSupp(name);
+        res.setWatcherFactory(new CacheWatcherFactory<SQLData>() {
+            @Override
+            public SQLCacheWatcher createWatcher(SQLData o) {
+                return new SQLCacheWatcher(o);
             }
         });
+        return res;
     }
 
-    public final boolean isClearedAfterTransaction() {
-        return this.clearAfterTx;
+    public final TransactionPoint getTransactionPoint() {
+        return this.txPoint;
+    }
+
+    private final void addReleasedSavePoint(final TransactionPoint txPoint) {
+        if (txPoint.getSavePoint() == null || txPoint.getState() != State.COMMITTED)
+            throw new IllegalArgumentException("Not a released savepoint : " + txPoint);
+        if (txPoint.getTransaction() != this.getTransactionPoint().getTransaction())
+            throw new IllegalArgumentException("Not in same transaction : " + txPoint);
+        this.releasedTxPoints.add(txPoint);
+    }
+
+    public final void addReleasedSavePoints(final SQLCache<K, V> cache) {
+        if (this.getSupp() != cache.getSupp())
+            throw new IllegalArgumentException("Not same support : " + cache);
+        for (final TransactionPoint tp : cache.releasedTxPoints)
+            this.addReleasedSavePoint(tp);
+        this.addReleasedSavePoint(cache.getTransactionPoint());
+    }
+
+    public final boolean changedBy(TransactionPoint evtTxPoint) {
+        assert this.getTransactionPoint() != null : "See SQLCacheWatcher";
+        if (evtTxPoint.isActive())
+            return this.getTransactionPoint() == evtTxPoint;
+        // since fires are done outside transactions (to free DB resources) the transactions are
+        // already committed
+        else if (evtTxPoint.wasCommitted())
+            return this.releasedTxPoints.contains(evtTxPoint);
+        else
+            // a cache is never changed by a roll back, it is just discarded
+            return false;
     }
 }

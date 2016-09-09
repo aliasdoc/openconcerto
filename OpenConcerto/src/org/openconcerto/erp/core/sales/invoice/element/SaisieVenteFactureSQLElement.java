@@ -39,6 +39,9 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.GlobalMapper;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLInjector;
@@ -67,12 +70,12 @@ import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.table.PercentTableCellRenderer;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.Tuple2;
+import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.i18n.TranslationManager;
 
@@ -215,9 +218,21 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        CollectionMap<String, String> map = new CollectionMap<String, String>();
-        map.put(null, "NUMERO");
+    protected void setupLinks(SQLElementLinksSetup links) {
+
+        super.setupLinks(links);
+        if (getTable().contains("ID_ADRESSE")) {
+            links.get("ID_ADRESSE").setType(LinkType.ASSOCIATION);
+        }
+        if (getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            links.get("ID_ADRESSE_LIVRAISON").setType(LinkType.ASSOCIATION);
+        }
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        ListMap<String, String> map = new ListMap<String, String>();
+        map.putCollection(null, "NUMERO");
         return map;
     }
 
@@ -230,7 +245,7 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
             l.add("ID_CLIENT");
                 l.add("ID_MODE_REGLEMENT");
             l.add("ID_COMMERCIAL");
-            if (!UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
+            if (UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
                 l.add("T_HA");
             }
             l.add("T_HT");
@@ -243,11 +258,11 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(this.getTable(), this.getListFields()) {
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.changeGraphToFetch(new IClosure<SQLRowValues>() {
             @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
+            public void executeChecked(SQLRowValues graphToFetch) {
                 graphToFetch.put("ACOMPTE", null);
                 graphToFetch.put("PARTIAL", null);
                 graphToFetch.put("SOLDE", null);
@@ -260,7 +275,7 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
                 graphToFetch.put("ID_MOUVEMENT", value);
                 graphToFetch.put("T_AVOIR_TTC", null);
             }
-        };
+        });
     }
 
     private BigDecimal getAvancement(SQLRowAccessor r) {
@@ -322,19 +337,6 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_MODE_REGLEMENT");
-        return l;
-    }
-
-    @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("SAISIE_VENTE_FACTURE_ELEMENT");
-        return set;
-    }
-
     @Override
     public Set<String> getReadOnlyFields() {
         Set<String> s = new HashSet<String>(1);
@@ -359,55 +361,56 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        for (SQLRow row : trees.getRows()) {
 
-        // On retire l'avoir
-        if (row.getInt("ID_AVOIR_CLIENT") > 1) {
-            SQLElement eltAvoir = Configuration.getInstance().getDirectory().getElement("AVOIR_CLIENT");
-            SQLRow rowAvoir = eltAvoir.getTable().getRow(row.getInt("ID_AVOIR_CLIENT"));
+            // On retire l'avoir
+            if (row.getInt("ID_AVOIR_CLIENT") > 1) {
+                SQLElement eltAvoir = Configuration.getInstance().getDirectory().getElement("AVOIR_CLIENT");
+                SQLRow rowAvoir = eltAvoir.getTable().getRow(row.getInt("ID_AVOIR_CLIENT"));
 
-            Long montantSolde = (Long) rowAvoir.getObject("MONTANT_SOLDE");
+                Long montantSolde = (Long) rowAvoir.getObject("MONTANT_SOLDE");
 
-            Long avoirTTC = (Long) row.getObject("T_AVOIR_TTC");
+                Long avoirTTC = (Long) row.getObject("T_AVOIR_TTC");
 
-            long montant = montantSolde - avoirTTC;
-            if (montant < 0) {
-                montant = 0;
+                long montant = montantSolde - avoirTTC;
+                if (montant < 0) {
+                    montant = 0;
+                }
+
+                SQLRowValues rowVals = rowAvoir.createEmptyUpdateRow();
+
+                // Soldé
+                rowVals.put("SOLDE", Boolean.FALSE);
+                rowVals.put("MONTANT_SOLDE", montant);
+                Long restant = (Long) rowAvoir.getObject("MONTANT_TTC") - montantSolde;
+                rowVals.put("MONTANT_RESTANT", restant);
+                try {
+                    rowVals.update();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
             }
 
-            SQLRowValues rowVals = rowAvoir.createEmptyUpdateRow();
+            super.archive(new TreesOfSQLRows(this, row), cutLinks);
+            SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
+            if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.STOCK_FACT, true)) {
 
-            // Soldé
-            rowVals.put("SOLDE", Boolean.FALSE);
-            rowVals.put("MONTANT_SOLDE", montant);
-            Long restant = (Long) rowAvoir.getObject("MONTANT_TTC") - montantSolde;
-            rowVals.put("MONTANT_RESTANT", restant);
-            try {
-                rowVals.update();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
+                // Mise à jour des stocks
+                SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
+                SQLSelect sel = new SQLSelect();
+                sel.addSelect(eltMvtStock.getTable().getField("ID"));
+                Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
+                Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
+                sel.setWhere(w.and(w2));
 
-        super.archive(row, cutLinks);
-
-        SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
-        if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.STOCK_FACT, true)) {
-
-            // Mise à jour des stocks
-            SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
-            SQLSelect sel = new SQLSelect();
-            sel.addSelect(eltMvtStock.getTable().getField("ID"));
-            Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
-            Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-            sel.setWhere(w.and(w2));
-
-            @SuppressWarnings("rawtypes")
-            List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-            if (l != null) {
-                for (int i = 0; i < l.size(); i++) {
-                    Object[] tmp = (Object[]) l.get(i);
-                    eltMvtStock.archive(((Number) tmp[0]).intValue());
+                @SuppressWarnings("rawtypes")
+                List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
+                if (l != null) {
+                    for (int i = 0; i < l.size(); i++) {
+                        Object[] tmp = (Object[]) l.get(i);
+                        eltMvtStock.archive(((Number) tmp[0]).intValue());
+                    }
                 }
             }
         }
@@ -435,7 +438,7 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
 
     /**
      * Transfert en commande fournisseur
-     * */
+     */
     public void transfertCommande(final int idFacture) {
         ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
 
@@ -458,38 +461,39 @@ public class SaisieVenteFactureSQLElement extends ComptaSQLConfElement {
 
                     int idArticle = ReferenceArticleSQLElement.getIdForCNM(rowArticle, true);
                     SQLRow rowArticleFind = eltArticle.getTable().getRow(idArticle);
-                    SQLInjector inj = SQLInjector.getInjector(rowArticle.getTable(), tableCmdElt);
-                    SQLRowValues rowValsElt = new SQLRowValues(inj.createRowValuesFrom(rowArticleFind));
-                    rowValsElt.put("ID_STYLE", sqlRow.getObject("ID_STYLE"));
-                    rowValsElt.put("QTE", sqlRow.getObject("QTE"));
-                    rowValsElt.put("T_POIDS", rowValsElt.getLong("POIDS") * rowValsElt.getInt("QTE"));
+                    if (rowArticleFind != null) {
+                        SQLInjector inj = SQLInjector.getInjector(rowArticle.getTable(), tableCmdElt);
+                        SQLRowValues rowValsElt = new SQLRowValues(inj.createRowValuesFrom(rowArticleFind));
+                        rowValsElt.put("ID_STYLE", sqlRow.getObject("ID_STYLE"));
+                        rowValsElt.put("QTE", sqlRow.getObject("QTE"));
+                        rowValsElt.put("T_POIDS", rowValsElt.getLong("POIDS") * rowValsElt.getInt("QTE"));
 
-                    // gestion de la devise
-                    rowDeviseF = sqlRow.getForeignRow("ID_DEVISE");
-                    SQLRow rowDeviseHA = rowArticleFind.getForeignRow("ID_DEVISE_HA");
-                    BigDecimal qte = new BigDecimal(rowValsElt.getInt("QTE"));
-                    if (rowDeviseF != null && !rowDeviseF.isUndefined()) {
-                        if (rowDeviseF.getID() == rowDeviseHA.getID()) {
-                            rowValsElt.put("PA_DEVISE", rowArticleFind.getObject("PA_DEVISE"));
-                            rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowArticleFind.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
-                            rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
-                        } else {
-                            BigDecimal taux = (BigDecimal) rowDeviseF.getObject("TAUX");
-                            rowValsElt.put("PA_DEVISE", taux.multiply((BigDecimal) rowValsElt.getObject("PA_HT")));
-                            rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowValsElt.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
-                            rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
+                        // gestion de la devise
+                        rowDeviseF = sqlRow.getForeignRow("ID_DEVISE");
+                        SQLRow rowDeviseHA = rowArticleFind.getForeignRow("ID_DEVISE_HA");
+                        BigDecimal qte = new BigDecimal(rowValsElt.getInt("QTE"));
+                        if (rowDeviseF != null && !rowDeviseF.isUndefined()) {
+                            if (rowDeviseF.getID() == rowDeviseHA.getID()) {
+                                rowValsElt.put("PA_DEVISE", rowArticleFind.getObject("PA_DEVISE"));
+                                rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowArticleFind.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
+                                rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
+                            } else {
+                                BigDecimal taux = (BigDecimal) rowDeviseF.getObject("TAUX");
+                                rowValsElt.put("PA_DEVISE", taux.multiply((BigDecimal) rowValsElt.getObject("PA_HT")));
+                                rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowValsElt.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
+                                rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
+                            }
                         }
+
+                        BigDecimal prixHA = (BigDecimal) rowValsElt.getObject("PA_HT");
+                        rowValsElt.put("T_PA_HT", prixHA.multiply(qte, DecimalUtils.HIGH_PRECISION));
+
+                        rowValsElt.put("T_PA_HT", prixHA.multiply(qte, DecimalUtils.HIGH_PRECISION));
+                        rowValsElt.put("T_PA_TTC",
+                                ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal(rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0), DecimalUtils.HIGH_PRECISION));
+
+                        map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
                     }
-
-                    BigDecimal prixHA = (BigDecimal) rowValsElt.getObject("PA_HT");
-                    rowValsElt.put("T_PA_HT", prixHA.multiply(qte, DecimalUtils.HIGH_PRECISION));
-
-                    rowValsElt.put("T_PA_HT", prixHA.multiply(qte, DecimalUtils.HIGH_PRECISION));
-                    rowValsElt.put("T_PA_TTC",
-                            ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal(rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0), DecimalUtils.HIGH_PRECISION));
-
-                    map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
-
                 }
                 MouvementStockSQLElement.createCommandeF(map, rowDeviseF);
 

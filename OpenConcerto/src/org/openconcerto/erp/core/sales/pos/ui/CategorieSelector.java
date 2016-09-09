@@ -42,7 +42,7 @@ public class CategorieSelector extends JPanel implements ListSelectionListener, 
     private ArticleModel articleModel;
     private CaisseControler controller;
 
-    CategorieSelector(CaisseControler controller, final ArticleModel articleModel) {
+    CategorieSelector(final CaisseControler controller, final ArticleModel articleModel) {
         this.setBackground(Color.WHITE);
         this.articleModel = articleModel;
         this.controller = controller;
@@ -164,6 +164,7 @@ public class CategorieSelector extends JPanel implements ListSelectionListener, 
                     CategorieSelector.this.previous = newCategory.getParent();
                 }
                 articleModel.setCategorie(newCategory);
+                controller.setArticleSelected(null);
             }
 
         });

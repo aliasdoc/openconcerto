@@ -32,4 +32,6 @@ public interface TicketPrinter {
 
     public void addToBuffer(TicketLine line);
 
+    public void clearBuffer();
+
 }

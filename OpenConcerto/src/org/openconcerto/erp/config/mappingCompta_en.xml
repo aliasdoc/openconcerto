@@ -139,6 +139,7 @@
 	</TABLE>
 
 	<TABLE name="AVOIR_CLIENT_ELEMENT">
+		<FIELD name="RETOUR_STOCK" label="Back into stock" />
 		<FIELD name="ID_FAMILLE_ARTICLE" label="Product family" />
 		<FIELD name="QTE_UNITAIRE" label="Qté U.V." titlelabel="Qté U.V." />
 		<FIELD name="ID_UNITE_VENTE" label="Sale unit" titlelabel="Sale unit" />
@@ -471,6 +472,7 @@
 		<FIELD name="BLOQUE" label="Block interactions" />
 		<FIELD name="BLOQUE_LIVRAISON" label="Block deliveries" />
 		<FIELD name="GROUPE" label="Group" />
+		<FIELD name="OBSOLETE" label="Deprecated" />
 	</TABLE>
 
 	<TABLE name="CLIENT_DEPARTEMENT">

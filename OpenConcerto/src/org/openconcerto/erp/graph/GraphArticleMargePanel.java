@@ -41,6 +41,7 @@ public class GraphArticleMargePanel extends GraphArticleVentePanel {
         sel.addSelect(tableVFElement.getField("PV_HT"));
         sel.addSelect(tableVFElement.getField("QTE"), "SUM");
 
+        @SuppressWarnings("unchecked")
         final List<Object[]> rowsArticle = (List<Object[]>) Configuration
                 .getInstance()
                 .getBase()

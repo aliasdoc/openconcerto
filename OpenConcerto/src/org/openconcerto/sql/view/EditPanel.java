@@ -85,7 +85,7 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
         READONLY {
             @Override
             protected Mode getCompMode() {
-                return null;
+                return Mode.READ_ONLY;
             }
         };
         protected abstract Mode getCompMode();
@@ -179,9 +179,7 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
                 }
             }
 
-            if (this.mode == READONLY) {
-                this.component.setEditable(InteractionMode.READ_ONLY);
-            } else {
+            if (this.mode != READONLY) {
                 // on écoute les changements de validation,
                 // avant component.uiInit() car il fait un fireValidChange()
                 this.component.addValidListener(new ValidListener() {
@@ -361,8 +359,8 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
     }
 
     /**
-     * Redimensionne la frame pour qu'elle soit de taille maximum sans déborder de l'écran. <img
-     * src="doc-files/resizeFrame.png"/>
+     * Redimensionne la frame pour qu'elle soit de taille maximum sans déborder de l'écran.
+     * <img src="doc-files/resizeFrame.png"/>
      */
     public Dimension getViewResizedDimesion(Dimension frameSize) {
 
@@ -468,12 +466,12 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
         // ne pas laisser ajouter par le raccourci clavier quand le bouton est grisé
         if (this.jButtonAjouter.isEnabled()) {
             final int id;
-            if (!Boolean.getBoolean(ADD_AT_THE_END) && this.l != null && !this.l.isDead() && this.l.getDesiredRow() != null)
-                id = this.component.insert(this.l.getDesiredRow());
+            if (!Boolean.getBoolean(ADD_AT_THE_END) && this.getIListe() != null && !this.getIListe().isDead() && this.getIListe().getDesiredRow() != null)
+                id = this.component.insert(this.getIListe().getDesiredRow());
             else
                 id = this.component.insert();
-            if (this.l != null)
-                this.l.selectID(id);
+            if (this.getIListe() != null)
+                this.getIListe().selectID(id);
             // otherwise full reset on visibility change.
             if (this.alwaysVisible()) {
                 ((BaseSQLComponent) this.getSQLComponent()).partialReset();
@@ -603,8 +601,12 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
         this.component.select(vals);
     }
 
-    public void setIList(IListe l) {
+    public final void setIListe(IListe l) {
         this.l = l;
+    }
+
+    private final IListe getIListe() {
+        return this.l;
     }
 
     public String getDocId() {
@@ -622,4 +624,5 @@ public class EditPanel extends JPanel implements IListener, ActionListener, Docu
     public boolean isDocTransversable() {
         return true;
     }
+
 }

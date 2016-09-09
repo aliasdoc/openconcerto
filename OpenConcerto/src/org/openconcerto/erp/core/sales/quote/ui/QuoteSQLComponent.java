@@ -548,7 +548,7 @@ public class QuoteSQLComponent extends GroupSQLComponent {
             super.select(r);
         else {
             System.err.println(r);
-            final SQLRowValues rVals = r.asRowValues();
+            final SQLRowValues rVals = r.asRowValues().deepCopy();
             final SQLRowValues vals = new SQLRowValues(r.getTable());
             vals.load(rVals, createSet("ID_CLIENT"));
             vals.setID(rVals.getID());

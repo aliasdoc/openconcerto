@@ -51,6 +51,9 @@ public class FactureAvoirSQLInjector extends SQLInjector {
         if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
             map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
         }
+        if (getSource().getTable().contains("ID_TARIF") && getDestination().getTable().contains("ID_TARIF")) {
+            map(getSource().getField("ID_TARIF"), getDestination().getField("ID_TARIF"));
+        }
     }
 
     @Override

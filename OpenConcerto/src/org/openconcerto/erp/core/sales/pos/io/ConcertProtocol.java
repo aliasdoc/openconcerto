@@ -44,14 +44,14 @@ public class ConcertProtocol {
     private static final char TYPE_BUY = '0';
 
     // Currency
-    private static final String CURRENCY_EUR = "978";
+    public static final String CURRENCY_EUR = "978";
     private String port;
 
     public ConcertProtocol(String port) {
         this.port = port;
     }
 
-    public boolean sendCardPayment(int amountInCents, String currency) throws Exception {
+    public synchronized boolean sendCardPayment(int amountInCents, String currency) throws Exception {
         if (currency == null) {
             currency = CURRENCY_EUR;
         }
@@ -201,5 +201,10 @@ public class ConcertProtocol {
             r += fillChar;
         }
         return r;
+    }
+
+    public static void main(String[] args) throws Exception {
+        ConcertProtocol p = new ConcertProtocol("COM9");
+        p.sendCardPayment(4579, ConcertProtocol.CURRENCY_EUR);
     }
 }

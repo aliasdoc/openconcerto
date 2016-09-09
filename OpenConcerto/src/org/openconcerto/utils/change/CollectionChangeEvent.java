@@ -38,7 +38,7 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * @return un nouveau PropertyChangeEvent.
      * @throws NullPointerException if oldVal of newVal is <code>null</code>.
      */
-    static public CollectionChangeEvent create(Object src, String propName, Collection oldVal, Collection newVal) {
+    static public CollectionChangeEvent create(Object src, String propName, Collection<?> oldVal, Collection<?> newVal) {
         if (oldVal == null || newVal == null)
             throw new NullPointerException();
         return new CollectionChangeEvent(src, propName, oldVal, newVal);
@@ -47,20 +47,20 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
     // *** Instance
 
     // use static
-    protected CollectionChangeEvent(Object source, String propertyName, Collection oldValue, Collection newValue) {
+    protected CollectionChangeEvent(Object source, String propertyName, Collection<?> oldValue, Collection<?> newValue) {
         super(source, propertyName, oldValue, newValue);
     }
 
     public Collection getItemsAdded() {
-        return CollectionUtils.subtract((Collection) this.getNewValue(), (Collection) this.getOldValue());
+        return CollectionUtils.subtract((Collection<?>) this.getNewValue(), (Collection<?>) this.getOldValue());
     }
 
     public Collection getItemsRemoved() {
-        return CollectionUtils.subtract((Collection) this.getOldValue(), (Collection) this.getNewValue());
+        return CollectionUtils.subtract((Collection<?>) this.getOldValue(), (Collection<?>) this.getNewValue());
     }
 
     public Collection getItemsNotChanged() {
-        return CollectionUtils.intersection((Collection) this.getNewValue(), (Collection) this.getOldValue());
+        return CollectionUtils.intersection((Collection<?>) this.getNewValue(), (Collection<?>) this.getOldValue());
     }
 
     /**
@@ -68,7 +68,7 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * 
      * @return <code>true</code> if no items were removed.
      */
-    public boolean isOnlyAddition() {
+    public final boolean isOnlyAddition() {
         return this.getItemsRemoved().size() == 0;
     }
 
@@ -77,7 +77,7 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * 
      * @return <code>true</code> if no items were added.
      */
-    public boolean isOnlyRemoval() {
+    public final boolean isOnlyRemoval() {
         return this.getItemsAdded().size() == 0;
     }
 
@@ -87,7 +87,7 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * 
      * @return a List of Integer.
      */
-    public List<Integer> getIndexesAdded() {
+    public final List<Integer> getIndexesAdded() {
         if (!this.isOnlyAddition())
             throw new IllegalStateException("items were also removed");
         return this.getIndexesChanged();
@@ -99,7 +99,7 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * 
      * @return a List of Integer.
      */
-    public List<Integer> getIndexesRemoved() {
+    public final List<Integer> getIndexesRemoved() {
         if (!this.isOnlyRemoval())
             throw new IllegalStateException("items were also added");
         return this.getIndexesChanged();
@@ -110,7 +110,7 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * 
      * @return a List of int[2], inclusive.
      */
-    public List<int[]> getIntervalsAdded() {
+    public final List<int[]> getIntervalsAdded() {
         return org.openconcerto.utils.CollectionUtils.aggregate(this.getIndexesAdded());
     }
 
@@ -119,11 +119,11 @@ public class CollectionChangeEvent extends PropertyChangeEvent {
      * 
      * @return a List of int[2], inclusive.
      */
-    public List<int[]> getIntervalsRemoved() {
+    public final List<int[]> getIntervalsRemoved() {
         return org.openconcerto.utils.CollectionUtils.aggregate(this.getIndexesRemoved());
     }
 
-    private List<Integer> getIndexesChanged() {
+    private final List<Integer> getIndexesChanged() {
         if (!(this.getNewValue() instanceof List))
             throw new IllegalStateException("the values must be List");
         return org.openconcerto.utils.CollectionUtils.getIndexesChanged((List) this.getOldValue(), (List) this.getNewValue());

@@ -16,7 +16,8 @@
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.config.ServerFinderConfig;
 import org.openconcerto.erp.config.ServerFinderPanel;
-import org.openconcerto.erp.core.sales.pos.Caisse;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
+import org.openconcerto.erp.core.sales.pos.io.ESCSerialPrinter;
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowListRSH;
@@ -28,32 +29,32 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
 import javax.swing.ComboBoxModel;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
-import javax.swing.JCheckBox;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
 public class ConfigCaissePanel extends JPanel {
-    private final JComboBox comboType;
-    private final JTextField textPrintWidth;
-    private final JTextField textPort;
-    private final JTextField textLibJPOS;
-    private final JCheckBox checkboxDouble;
+
     private int userId;
     private int societeId;
     private int caisseId;
@@ -65,15 +66,17 @@ public class ConfigCaissePanel extends JPanel {
     private final TicketLineTable footerTable;
     private JTextField textTerminalCB;
 
-    // Selecteur de societe
-    // Selecteur d'utilisateur
-    // Selecteur de numero de caisse
-    // Headers
-    // Footers
-    // JPOS
-    // ESCP
+    // Ticket printers
+    private final TicketPrinterConfigPanel ticketPanel1;
+    private final TicketPrinterConfigPanel ticketPanel2;
+    // LCD
+    private JTextField textLCDSerialPort;
+    private JTextField textLCDLine1;
+    private JTextField textLCDLine2;
+
     public ConfigCaissePanel(final ServerFinderPanel serverFinderPanel) {
         this.serverFinderPanel = serverFinderPanel;
+
         setOpaque(false);
 
         setLayout(new GridBagLayout());
@@ -86,8 +89,8 @@ public class ConfigCaissePanel extends JPanel {
         c.gridwidth = 3;
         c.weightx = 1;
         JTextField textConfigurationFile = new JTextField("");
-        if (Caisse.getConfigFile() != null) {
-            textConfigurationFile.setText(Caisse.getConfigFile().getAbsolutePath());
+        if (POSConfiguration.getConfigFile() != null) {
+            textConfigurationFile.setText(POSConfiguration.getConfigFile().getAbsolutePath());
         }
         textConfigurationFile.setEditable(false);
         this.add(textConfigurationFile, c);
@@ -161,103 +164,41 @@ public class ConfigCaissePanel extends JPanel {
         c.gridy++;
         c.weightx = 0;
         this.add(titleTicket, c);
+
+        final JTabbedPane tabsTicket = new JTabbedPane();
         c.gridy++;
-        c.gridwidth = 1;
+        c.gridwidth = 2;
         c.weightx = 0;
-        c.fill = GridBagConstraints.HORIZONTAL;
+        c.fill = GridBagConstraints.BOTH;
         c.anchor = GridBagConstraints.NORTHWEST;
-        this.add(new JLabel("Entête", SwingConstants.RIGHT), c);
-        c.gridx++;
-        c.weightx = 1;
-
-        c.fill = GridBagConstraints.BOTH;
         this.headerTable = new TicketLineTable();
-        this.add(this.headerTable, c);
-        c.gridx = 0;
-        c.gridy++;
-
-        c.weightx = 0;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        this.add(new JLabel("Pied de page", SwingConstants.RIGHT), c);
-        c.gridx++;
-        c.weightx = 1;
-
-        c.fill = GridBagConstraints.BOTH;
+        tabsTicket.addTab("Entête", this.headerTable);
         this.footerTable = new TicketLineTable();
-        this.add(this.footerTable, c);
+        tabsTicket.addTab("Pied de page", this.footerTable);
+        this.add(tabsTicket, c);
+
+        // Périphérique
+        final JLabelBold titleImprimante = new JLabelBold("Périphériques");
         c.fill = GridBagConstraints.HORIZONTAL;
-
-        this.checkboxDouble = new JCheckBox("imprimer le ticket en double exemplaire");
-        this.checkboxDouble.setOpaque(false);
-        c.gridx = 1;
-        c.gridy++;
-        c.weightx = 0;
-        c.gridwidth = 1;
-        this.add(this.checkboxDouble, c);
-
-        // Imprimante
-        final JLabelBold titleImprimante = new JLabelBold("Imprimante ticket");
         c.anchor = GridBagConstraints.WEST;
         c.gridwidth = 2;
         c.gridx = 0;
         c.gridy++;
         c.weightx = 0;
         this.add(titleImprimante, c);
-        c.gridx = 0;
         c.gridy++;
-        c.weightx = 0;
-        c.gridwidth = 1;
-        c.fill = GridBagConstraints.NONE;
-        this.add(new JLabel("Largeur (en caractères)", SwingConstants.RIGHT), c);
-        c.gridx++;
-        this.textPrintWidth = new JTextField(8);
-        this.add(this.textPrintWidth, c);
-        c.gridy++;
-        c.gridx = 0;
-        c.weightx = 0;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        this.add(new JLabel("Type", SwingConstants.RIGHT), c);
-        c.gridx++;
-        c.weightx = 1;
-        c.fill = GridBagConstraints.NONE;
-        this.comboType = new JComboBox(new String[] { "jpos", "escp" });
-        this.add(this.comboType, c);
-        c.gridx = 0;
-        c.gridy++;
-        c.weightx = 0;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        this.add(new JLabel("Port/nom", SwingConstants.RIGHT), c);
-        c.gridx++;
-        this.textPort = new JTextField();
-        this.add(this.textPort, c);
-        c.gridx = 0;
-        c.gridy++;
-        c.weightx = 0;
-        this.add(new JLabel("Dossier lib JPOS", SwingConstants.RIGHT), c);
-        c.gridx++;
-        this.textLibJPOS = new JTextField();
-        this.add(this.textLibJPOS, c);
-
-        // Terminal CB
-        final JLabelBold titleTerminalCB = new JLabelBold("Terminal CB");
-        c.anchor = GridBagConstraints.WEST;
-        c.gridwidth = 2;
-        c.gridx = 0;
-        c.gridy++;
-        c.weightx = 0;
-        this.add(titleTerminalCB, c);
-        c.gridx = 0;
-        c.gridy++;
-        c.weightx = 0;
-        c.gridwidth = 1;
-        c.anchor = GridBagConstraints.EAST;
-        c.fill = GridBagConstraints.NONE;
-        this.add(new JLabel("Port série", SwingConstants.RIGHT), c);
-        c.gridx++;
-        c.weightx = 1;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        this.textTerminalCB = new JTextField();
-        this.add(this.textTerminalCB, c);
+        //
+        JTabbedPane tabs = new JTabbedPane();
+        ticketPanel1 = new TicketPrinterConfigPanel();
+        ticketPanel1.setOpaque(false);
+        ticketPanel2 = new TicketPrinterConfigPanel();
+        ticketPanel2.setOpaque(false);
+        tabs.addTab("Imprimante ticket principale", ticketPanel1);
+        tabs.addTab("Imprimante ticket secondaire", ticketPanel2);
+        tabs.addTab("Terminal CB", createCreditCardPanel());
+        tabs.addTab("Afficheur LCD", createLCDPanel());
+        this.add(tabs, c);
+        //
 
         // Spacer
         c.gridx = 0;
@@ -297,6 +238,133 @@ public class ConfigCaissePanel extends JPanel {
                 }
             }
         });
+    }
+
+    private Component createLCDPanel() {
+        final JPanel p = new JPanel();
+        p.setOpaque(false);
+
+        GridBagConstraints c = new DefaultGridBagConstraints();
+        p.setLayout(new GridBagLayout());
+        c.gridx = 0;
+        c.gridy++;
+        c.weightx = 0;
+        c.gridwidth = 1;
+        c.anchor = GridBagConstraints.EAST;
+        c.fill = GridBagConstraints.NONE;
+        p.add(new JLabel("Port série", SwingConstants.RIGHT), c);
+        c.gridx++;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        this.textLCDSerialPort = new JTextField(20);
+        p.add(this.textLCDSerialPort, c);
+        c.weightx = 0;
+        c.gridx++;
+        final JButton selectPortButton = new JButton("Sélectionner");
+        selectPortButton.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                List<String> choices = new ArrayList<String>();
+                final String title;
+                final String message;
+
+                choices.addAll(ESCSerialPrinter.getSerialPortNames());
+                title = "Port série";
+                message = "Choisissez le port série lié à l'afficheur";
+                if (choices.isEmpty()) {
+                    return;
+                }
+                String s = (String) JOptionPane.showInputDialog(p, message, title, JOptionPane.PLAIN_MESSAGE, null, choices.toArray(), choices.get(0));
+                // If a string was returned
+                if ((s != null) && (s.length() > 0)) {
+                    textLCDSerialPort.setText(s);
+                }
+            }
+        });
+        p.add(selectPortButton, c);
+        //
+
+        c.gridx = 0;
+        c.gridy++;
+        c.gridwidth = 3;
+        p.add(new JLabel("Message d'accueil de l'afficheur"), c);
+        //
+        c.gridy++;
+        c.gridwidth = 1;
+        p.add(new JLabel("Ligne 1", SwingConstants.RIGHT), c);
+        c.gridx++;
+        this.textLCDLine1 = new JTextField(20);
+        p.add(textLCDLine1, c);
+
+        c.gridx = 0;
+        c.gridy++;
+        p.add(new JLabel("Ligne 2", SwingConstants.RIGHT), c);
+        c.gridx++;
+        this.textLCDLine2 = new JTextField(20);
+        p.add(textLCDLine2, c);
+
+        final JPanel spacer = new JPanel();
+        spacer.setOpaque(false);
+        c.gridy++;
+        c.weighty = 1;
+        p.add(spacer, c);
+        return p;
+    }
+
+    private JPanel createCreditCardPanel() {
+        final JPanel p = new JPanel();
+        p.setOpaque(false);
+        p.setLayout(new GridBagLayout());
+        GridBagConstraints c = new DefaultGridBagConstraints();
+
+        c.gridx = 0;
+        c.gridy++;
+        c.weightx = 0;
+        c.gridwidth = 1;
+        c.anchor = GridBagConstraints.EAST;
+        c.fill = GridBagConstraints.NONE;
+        p.add(new JLabel("Port série", SwingConstants.RIGHT), c);
+        c.gridx++;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        this.textTerminalCB = new JTextField(20);
+        p.add(this.textTerminalCB, c);
+        c.weightx = 0;
+        c.gridx++;
+        final JButton selectPortButton = new JButton("Sélectionner");
+        selectPortButton.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                List<String> choices = new ArrayList<String>();
+                final String title;
+                final String message;
+
+                choices.addAll(ESCSerialPrinter.getSerialPortNames());
+                title = "Port série";
+                message = "Choisissez le port série lié au terminal CB";
+                if (choices.isEmpty()) {
+                    return;
+                }
+                String s = (String) JOptionPane.showInputDialog(p, message, title, JOptionPane.PLAIN_MESSAGE, null, choices.toArray(), choices.get(0));
+                // If a string was returned
+                if ((s != null) && (s.length() > 0)) {
+                    textTerminalCB.setText(s);
+                }
+            }
+        });
+        p.add(selectPortButton, c);
+
+        final JPanel spacer = new JPanel();
+        spacer.setOpaque(false);
+        c.gridy++;
+        c.weighty = 1;
+        p.add(spacer, c);
+
+        return p;
     }
 
     protected void reloadCaisses() {
@@ -360,22 +428,22 @@ public class ConfigCaissePanel extends JPanel {
     }
 
     public void loadConfiguration() {
-        if (Caisse.isUsingJPos()) {
-            this.comboType.setSelectedIndex(0);
-            this.textPort.setText(Caisse.getJPosPrinter());
-        } else {
-            this.comboType.setSelectedIndex(1);
-            this.textPort.setText(Caisse.getESCPPort());
-        }
-        this.textTerminalCB.setText(Caisse.getCardPort());
-        this.textPrintWidth.setText(String.valueOf(Caisse.getTicketWidth()));
-        this.textLibJPOS.setText(Caisse.getJPosDirectory());
-        this.checkboxDouble.setSelected(Caisse.isCopyActive());
-        this.userId = Caisse.getUserID();
-        this.societeId = Caisse.getSocieteID();
-        this.caisseId = Caisse.getID();
-        this.headerTable.fillFrom(Caisse.getHeaders());
-        this.footerTable.fillFrom(Caisse.getFooters());
+
+        final POSConfiguration configuration = POSConfiguration.getInstance();
+        // Terminal CB
+        this.textTerminalCB.setText(configuration.getCreditCardPort());
+        // Afficheur LCD
+        this.textLCDSerialPort.setText(configuration.getLCDSerialPort());
+        this.textLCDLine1.setText(configuration.getLCDLine1());
+        this.textLCDLine2.setText(configuration.getLCDLine2());
+
+        this.userId = configuration.getUserID();
+        this.societeId = configuration.getCompanyID();
+        this.caisseId = configuration.getPosID();
+        this.headerTable.fillFrom(configuration.getHeaderLines());
+        this.footerTable.fillFrom(configuration.getFooterLines());
+        this.ticketPanel1.setConfiguration(configuration.getTicketPrinterConfiguration1());
+        this.ticketPanel2.setConfiguration(configuration.getTicketPrinterConfiguration2());
 
         addComponentListener(new ComponentListener() {
             @Override
@@ -463,8 +531,13 @@ public class ConfigCaissePanel extends JPanel {
                                         ConfigCaissePanel.this.comboUtilisateur.setSelectedItem(model.getElementAt(0));
                                         ConfigCaissePanel.this.userId = ((SQLRow) model.getElementAt(0)).getID();
                                     }
+                                    final Thread t = new Thread() {
+                                        public void run() {
+                                            reloadCaisses();
+                                        };
+                                    };
+                                    t.start();
 
-                                    reloadCaisses();
                                 }
 
                             });
@@ -489,23 +562,21 @@ public class ConfigCaissePanel extends JPanel {
     }
 
     public void saveConfiguration() {
-        Caisse.setPrinterType(this.comboType.getSelectedItem().toString());
-        if (this.comboType.getSelectedIndex() == 0) {
-            // JPOS
-            Caisse.setJPosPrinter(this.textPort.getText());
-        } else {
-            Caisse.setESCPPort(this.textPort.getText());
-        }
-        Caisse.setTicketWidth(this.textPrintWidth.getText());
-        Caisse.setJPosDirectory(this.textLibJPOS.getText());
-        Caisse.setCopyActive(this.checkboxDouble.isSelected());
-
-        Caisse.setUserID(this.userId);
-        Caisse.setSocieteID(this.societeId);
-        Caisse.setID(this.caisseId);
-        Caisse.setCardPort(this.textTerminalCB.getText());
-        Caisse.setHeaders(this.headerTable.getLines());
-        Caisse.setFooters(this.footerTable.getLines());
-        Caisse.saveConfiguration();
+        POSConfiguration configuration = POSConfiguration.getInstance();
+        this.ticketPanel1.commitValues();
+        this.ticketPanel2.commitValues();
+        configuration.setUserID(this.userId);
+        configuration.setCompanyID(this.societeId);
+        configuration.setPosID(this.caisseId);
+        configuration.setHeaderLines(this.headerTable.getLines());
+        configuration.setFooterLines(this.footerTable.getLines());
+        // Terminal CB
+        configuration.setCreditCardPort(this.textTerminalCB.getText());
+        // LCD
+        configuration.setLCDSerialPort(this.textLCDSerialPort.getText());
+        configuration.setLCDLine1(this.textLCDLine1.getText());
+        configuration.setLCDLine2(this.textLCDLine2.getText());
+        // Save
+        configuration.saveConfiguration();
     }
 }

@@ -15,10 +15,11 @@
 
 import org.openconcerto.ui.preferences.EmailProps;
 import org.openconcerto.utils.EmailClient;
-import org.openconcerto.utils.ExceptionHandler;
 
 import java.io.File;
 import java.io.IOException;
+
+import javax.swing.JOptionPane;
 
 public class EmailComposer {
     private static EmailComposer instance = new EmailComposer();
@@ -60,7 +61,8 @@ public class EmailComposer {
             // mailto shouldn't fail
             if (emailClient == EmailClient.MailTo)
                 throw new IOException(e);
-            ExceptionHandler.handle(TM.tr("email.fallback"), e);
+            JOptionPane.showMessageDialog(null, TM.tr("email.fallback"));
+            e.printStackTrace();
             EmailClient.MailTo.compose(to, subject, text, attachedFile);
         }
     }

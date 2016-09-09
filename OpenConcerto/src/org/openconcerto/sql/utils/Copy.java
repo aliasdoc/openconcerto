@@ -102,7 +102,7 @@ public class Copy {
         return Enum.valueOf(enumType, propValue.toUpperCase());
     }
 
-    static enum FileExistsMode {
+    static public enum FileExistsMode {
         /**
          * Fail if the dump directory already exists.
          */
@@ -122,7 +122,7 @@ public class Copy {
         OVERWRITE;
     }
 
-    static enum CreationMode {
+    static public enum CreationMode {
         /**
          * The item must not already exist.
          */

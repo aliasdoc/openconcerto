@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -91,7 +92,7 @@ public class JavaEditor extends JPanel implements Scrollable {
         this.codeValid = codeValid;
     }
 
-    protected final boolean isCodeValid() {
+    public final boolean isCodeValid() {
         return this.codeValid;
     }
 
@@ -211,40 +212,42 @@ public class JavaEditor extends JPanel implements Scrollable {
 
         if (value == null) {
             try {
-                b.write("float " + varName + " = 1.0F;\n");
+                b.write("double " + varName + " = 1.0;\n");
             } catch (final IOException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
-        } else {
-            if (value instanceof Integer) {
-                try {
-                    b.write("int " + varName + " = " + value + ";\n");
-                } catch (final IOException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-            } else {
-                if (value instanceof Float) {
-                    try {
-                        b.write("float " + varName + " = " + value + "F;\n");
-                    } catch (final IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
-                } else {
-                    if (value instanceof Double) {
-                        try {
-                            b.write("double " + varName + " = " + value + ";\n");
-                        } catch (final IOException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
-                        }
-                    } else {
-                        interpret.defineVariable(varName, value);
-                    }
-                }
+        } else if (value instanceof BigDecimal) {
+            try {
+                b.write("double " + varName + " = " + ((BigDecimal) value).doubleValue() + ";\n");
+            } catch (final IOException e) {
+                e.printStackTrace();
             }
+        } else if (value instanceof Integer) {
+            try {
+                b.write("int " + varName + " = " + value + ";\n");
+            } catch (final IOException e) {
+                e.printStackTrace();
+            }
+        } else if (value instanceof Float) {
+            try {
+                b.write("float " + varName + " = " + value + "F;\n");
+            } catch (final IOException e) {
+                e.printStackTrace();
+            }
+        } else if (value instanceof Double) {
+            try {
+                b.write("double " + varName + " = " + value + ";\n");
+            } catch (final IOException e) {
+                e.printStackTrace();
+            }
+        } else if (value instanceof String) {
+            String stringValue = value.toString();
+            if (stringValue.trim().length() == 0) {
+                stringValue = "0.0";
+            }
+            interpret.defineVariable(varName, new Double(stringValue));
+        } else {
+            interpret.defineVariable(varName, value);
         }
     }
 

@@ -16,8 +16,7 @@
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.UISQLComponent;
-import org.openconcerto.sql.request.ListSQLRequest;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,8 +36,8 @@ public class CustomerCategorySQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getComboFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 
     @Override
@@ -52,12 +51,6 @@ public class CustomerCategorySQLElement extends ComptaSQLConfElement {
             }
         };
         return c;
-    }
-
-    @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(getTable(), getListFields());
-
     }
 
     @Override

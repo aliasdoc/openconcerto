@@ -11,17 +11,15 @@
  * When distributing the software, include this License Header Notice in each file.
  */
  
- package org.openconcerto.ui.light;
+ package org.openconcerto.erp.core.humanresources.payroll.element;
 
-import net.minidev.json.JSONObject;
-
-public class LightUIComboElement extends LightUIElement {
-    public LightUIComboElement(final JSONObject json) {
-        this.fromJSON(json);
+public class MotifRepriseArretTravailSQLElement extends AbstractCodeCommonSQLElement {
+    public MotifRepriseArretTravailSQLElement() {
+        super("MOTIF_REPRISE_ARRET_TRAVAIL", "un motif de reprise d'arrêt de travail", "motifs de reprise d'arrêt de travail");
     }
-    
-    public LightUIComboElement(String id) {
-        this.setId(id);
-        this.setType(TYPE_COMBOBOX_ELEMENT);
+
+    @Override
+    protected String createCode() {
+        return "humanresources.motif.reprise.arrettravail.code";
     }
 }

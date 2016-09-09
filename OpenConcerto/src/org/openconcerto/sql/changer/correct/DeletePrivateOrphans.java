@@ -16,21 +16,22 @@
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.changer.Changer;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLink;
 import org.openconcerto.sql.model.DBSystemRoot;
 import org.openconcerto.sql.model.IResultSetHandler;
+import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLName;
-import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLSelect.ArchiveMode;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.utils.SQLCreateTable;
 import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.sql.utils.SQLUtils.SQLFactory;
 
 import java.sql.SQLException;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collection;
 
 /**
  * Delete unreferenced private rows.
@@ -39,8 +40,25 @@ import java.util.Set;
  */
 public class DeletePrivateOrphans extends Changer<SQLTable> {
 
+    private boolean deleteAll;
+
     public DeletePrivateOrphans(DBSystemRoot b) {
         super(b);
+        this.setDeleteAll(true);
+    }
+
+    @Override
+    public void setUpFromSystemProperties() {
+        super.setUpFromSystemProperties();
+        this.setDeleteAll(!Boolean.getBoolean("deleteOnlyUnarchived"));
+    }
+
+    public void setDeleteAll(boolean deleteArchived) {
+        this.deleteAll = deleteArchived;
+    }
+
+    public boolean getDeleteAll() {
+        return this.deleteAll;
     }
 
     @Override
@@ -54,16 +72,12 @@ public class DeletePrivateOrphans extends Changer<SQLTable> {
             return;
         }
 
-        final Set<SQLField> privateParentReferentFields = elem.getPrivateParentReferentFields();
-        if (privateParentReferentFields.size() == 0) {
+        if (!elem.isPrivate()) {
             getStream().println(" : not a private table");
             return;
         }
-        if (elem.getParentForeignFieldName() != null)
-            throw new IllegalStateException("Private with a parent : " + elem.getParentForeignFieldName());
-        final Set<SQLField> referentKeys = t.getDBSystemRoot().getGraph().getReferentKeys(t);
-        if (!referentKeys.equals(privateParentReferentFields))
-            throw new IllegalStateException("Table is not only private : " + referentKeys);
+        if (elem.getParentLink() != null)
+            throw new IllegalStateException("Private with a parent : " + elem.getParentLink());
 
         getStream().println("... ");
 
@@ -85,6 +99,7 @@ public class DeletePrivateOrphans extends Changer<SQLTable> {
                 final SQLSelect selAllIDs = new SQLSelect(true).addSelect(t.getKey());
                 // don't delete undefined
                 selAllIDs.setExcludeUndefined(true);
+                selAllIDs.setArchivedPolicy(getDeleteAll() ? ArchiveMode.BOTH : ArchiveMode.UNARCHIVED);
                 getDS().execute("INSERT INTO " + toDeleteIDsName.quote() + " " + selAllIDs.asString());
                 final long total = getCount(toDeleteIDsName);
 
@@ -92,27 +107,21 @@ public class DeletePrivateOrphans extends Changer<SQLTable> {
                     getStream().println("nothing to delete");
                 } else {
                     // delete all used IDs
-                    for (final SQLField pp : privateParentReferentFields) {
+                    for (final SQLElementLink privateLink : elem.getContainerLinks(true, false).getByPath().values()) {
+                        assert privateLink.getStepToChild().getTo() == t;
+                        final SQLField pp = privateLink.getStepToChild().getSingleField();
                         getDS().execute(t.getBase().quote("DELETE from %i where %i in ( " + new SQLSelect(true).addSelect(pp).asString() + ")", toDeleteIDsName, pkName));
                     }
                     // delete unused rows
-                    getStream().println("deleting " + getCount(toDeleteIDsName) + " / " + total);
-                    getDS().execute(t.getBase().quote("DELETE from %f where %n in ( select %i from %i )", t, t.getKey(), pkName, toDeleteIDsName));
+                    getStream().println("archiving " + getCount(toDeleteIDsName) + " / " + total);
+                    if (!isDryRun()) {
+                        // archive join rows and cut private associations
+                        @SuppressWarnings("unchecked")
+                        final Collection<? extends Number> ids = getDS().executeCol("select " + SQLBase.quoteIdentifier(pkName) + " from " + toDeleteIDsName.quote());
+                        elem.archiveIDs(ids);
+                    }
                 }
                 getDS().execute("DROP TABLE " + toDeleteIDsName.quote());
-
-                // if we just deleted LIAISON we need to delete OBSERVATION
-                if (total > 0) {
-                    final Set<SQLTable> privateTables = new HashSet<SQLTable>();
-                    for (final SQLRowValues privateVals : elem.getPrivateGraph().getGraph().getItems()) {
-                        privateTables.add(privateVals.getTable());
-                    }
-                    // don't loop endlessly
-                    privateTables.remove(t);
-                    for (final SQLTable privateTable : privateTables) {
-                        DeletePrivateOrphans.this.changeImpl(privateTable);
-                    }
-                }
 
                 return null;
             }

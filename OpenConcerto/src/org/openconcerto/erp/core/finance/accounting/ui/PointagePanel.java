@@ -381,12 +381,13 @@ public class PointagePanel extends JPanel {
 
         // Action Souris sur la IListe
         this.ecriturePanel.getListe().getJTable().addMouseListener(new MouseAdapter() {
-            public void mousePressed(MouseEvent e) {
 
-                System.err.println("Mouse Pressed");
-                if ((e.getClickCount() == 2) && (e.getButton() == 1)) {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                // ATTN never modify an IListe on mousePressed otherwise the selection is incoherent
+                // (see IListe.iterateSelectedRows())
+                if ((e.getClickCount() == 2) && (e.getButton() == MouseEvent.BUTTON1)) {
 
-                    System.err.println("Double clicked");
                     int rowIndex = PointagePanel.this.ecriturePanel.getListe().getJTable().rowAtPoint(e.getPoint());
                     int id = PointagePanel.this.ecriturePanel.getListe().idFromIndex(rowIndex);
 
@@ -398,15 +399,10 @@ public class PointagePanel extends JPanel {
                     }
                 }
 
-                if (e.getButton() == 3) {
-
-                    System.err.println("Right click");
+                if (e.getButton() == MouseEvent.BUTTON3) {
                     actionMenuDroit(e);
                 }
-            }
 
-            public void mouseReleased(MouseEvent e) {
-                System.err.println("Mouse released");
                 int[] selectedRows = PointagePanel.this.ecriturePanel.getListe().getJTable().getSelectedRows();
                 int[] idRows = new int[selectedRows.length];
                 for (int i = 0; i < idRows.length; i++) {
@@ -419,9 +415,8 @@ public class PointagePanel extends JPanel {
 
         // action sur la IListe
         this.ecriturePanel.getListe().getJTable().addKeyListener(new KeyAdapter() {
+            @Override
             public void keyReleased(KeyEvent e) {
-
-                System.err.println("Key released");
                 int[] selectedRows = PointagePanel.this.ecriturePanel.getListe().getJTable().getSelectedRows();
                 int[] idRows = new int[selectedRows.length];
                 for (int i = 0; i < idRows.length; i++) {

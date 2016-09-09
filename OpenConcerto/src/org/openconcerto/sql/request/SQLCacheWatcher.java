@@ -17,26 +17,49 @@ import org.openconcerto.sql.model.SQLData;
 import org.openconcerto.sql.model.SQLDataListener;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.SQLTable.ListenerAndConfig;
+import org.openconcerto.sql.model.SQLTableEvent;
+import org.openconcerto.sql.model.TransactionPoint;
+import org.openconcerto.sql.model.TransactionPoint.State;
+import org.openconcerto.utils.cache.CacheItem;
 import org.openconcerto.utils.cache.CacheWatcher;
 
 /**
  * A listener to invalidate cache results when their data is modified. Currently datum can either be
  * a SQLTable or a SQLRow.
  * 
- * @param <K> type of keys
  */
-public class SQLCacheWatcher<K> extends CacheWatcher<K, SQLData> {
+public class SQLCacheWatcher extends CacheWatcher<SQLData> {
 
     private final ListenerAndConfig listener;
 
-    SQLCacheWatcher(final SQLCache<K, ?> c, final SQLData t) {
-        super(c, t);
+    SQLCacheWatcher(final SQLData t) {
+        super(t);
         this.listener = new ListenerAndConfig(t.createTableListener(new SQLDataListener() {
-            public void dataChanged() {
-                clearCache();
+            @Override
+            public void dataChanged(SQLTableEvent evt) {
+                SQLCacheWatcher.this.dataChanged(evt);
             }
-        }), c.isClearedAfterTransaction());
-        this.getTable().addPremierTableModifiedListener(this.listener);
+        }), null);
+    }
+
+    @Override
+    protected boolean changedBy(CacheItem<?, ?, ? extends SQLData> val, Object event) {
+        final SQLCache<?, ?> sqlCache = (SQLCache<?, ?>) val.getCache();
+        final TransactionPoint cacheTxPoint = sqlCache.getTransactionPoint();
+
+        final SQLTableEvent evt = (SQLTableEvent) event;
+        final TransactionPoint evtTxPoint = evt.getTransactionPoint();
+        final boolean transactionCommitted = evtTxPoint == null || evtTxPoint.getTransaction().getState() == State.COMMITTED;
+
+        if (cacheTxPoint != null) {
+            // even transactions at or above TRANSACTION_REPEATABLE_READ get up to date data
+            // the first time they read it, so since we don't know which data has been read
+            // (initially all items of the committed cache are copied to our cache), just
+            // clear any committed cached data
+            return transactionCommitted || sqlCache.changedBy(evtTxPoint);
+        } else {
+            return transactionCommitted;
+        }
     }
 
     private final SQLTable getTable() {
@@ -44,7 +67,12 @@ public class SQLCacheWatcher<K> extends CacheWatcher<K, SQLData> {
     }
 
     @Override
-    protected void dying() {
+    protected void startWatching() {
+        this.getTable().addPremierTableModifiedListener(this.listener);
+    }
+
+    @Override
+    protected void stopWatching() {
         this.getTable().removeTableModifiedListener(this.listener);
     }
 

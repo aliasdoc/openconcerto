@@ -25,6 +25,7 @@ import org.openconcerto.sql.view.IListFrame;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.ui.table.AlternateTableCellRenderer;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -61,6 +62,11 @@ public class ProfilPayeSQLElement extends ConfSQLElement {
         final List<String> l = new ArrayList<String>();
         l.add("NOM");
         return l;
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     /*

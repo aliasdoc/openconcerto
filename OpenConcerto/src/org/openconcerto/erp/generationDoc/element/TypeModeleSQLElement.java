@@ -20,10 +20,11 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.UISQLComponent;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLSelect;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,8 +35,12 @@ import java.util.Set;
 
 public class TypeModeleSQLElement extends ConfSQLElement {
 
+    public TypeModeleSQLElement(DBRoot root) {
+        super(root.getTable("TYPE_MODELE"), "un type_modele ", "type_modeles");
+    }
+
     public TypeModeleSQLElement() {
-        super("TYPE_MODELE", "un type_modele ", "type_modeles");
+        this(Configuration.getInstance().getRoot());
     }
 
     protected List<String> getListFields() {
@@ -52,9 +57,9 @@ public class TypeModeleSQLElement extends ConfSQLElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        CollectionMap<String, String> map = new CollectionMap<String, String>();
-        map.put(null, "NOM");
+    public ListMap<String, String> getShowAs() {
+        ListMap<String, String> map = new ListMap<String, String>();
+        map.putCollection(null, "NOM");
         return map;
     }
 

@@ -14,6 +14,7 @@
  package org.openconcerto.sql.model;
 
 import static org.openconcerto.utils.CollectionUtils.join;
+
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.model.SQLField.Properties;
 import org.openconcerto.sql.model.SQLTable.SQLIndex;
@@ -152,6 +153,8 @@ public abstract class SQLSyntax {
         return this.sys;
     }
 
+    public abstract int getMaximumIdentifierLength();
+
     public String getInitSystemRoot() {
         // by default: nothing
         return "";
@@ -232,7 +235,7 @@ public abstract class SQLSyntax {
     /**
      * How to declare a foreign key constraint.
      * 
-     * @param constraintPrefix to be prepended to the constraint name, can be empty.
+     * @param tableName the name of the table where the constraint will be.
      * @param fk the name of the foreign keys, eg ["ID_SITE"].
      * @param refTable the name of the referenced table, eg CTech.SITE.
      * @param referencedFields the fields in the foreign table, eg ["ID"].
@@ -240,11 +243,17 @@ public abstract class SQLSyntax {
      * @param deleteRule the delete rule, <code>null</code> means use DB default.
      * @return a String declaring that <code>fk</code> points to <code>referencedFields</code>.
      */
-    public String getFK(final String constraintPrefix, final List<String> fk, final SQLName refTable, final List<String> referencedFields, final Rule updateRule, final Rule deleteRule) {
+    public String getFK(final String tableName, final List<String> fk, final SQLName refTable, final List<String> referencedFields, final Rule updateRule, final Rule deleteRule) {
         final String onUpdate = updateRule == null ? "" : " ON UPDATE " + getRuleSQL(updateRule);
         final String onDelete = deleteRule == null ? "" : " ON DELETE " + getRuleSQL(deleteRule);
-        // a prefix for the constraint name, since in psql constraints are db wide not table wide
-        return "CONSTRAINT " + SQLBase.quoteIdentifier(constraintPrefix + join(fk, "__") + "_fkey") + " FOREIGN KEY ( " + quoteIdentifiers(fk) + " ) REFERENCES " + refTable.quote() + " ( "
+        // a prefix for the constraint name, since in at least PG and H2, constraints are schema
+        // wide not table wide. Moreover we can't use the original link name, as sometimes we copy a
+        // table in the same schema.
+        if (tableName == null)
+            throw new NullPointerException("Null tableName");
+        final String name = tableName + '_' + join(fk, "__") + "_fkey";
+        final String boundedName = StringUtils.getBoundedLengthString(name, this.getMaximumIdentifierLength());
+        return "CONSTRAINT " + SQLBase.quoteIdentifier(boundedName) + " FOREIGN KEY ( " + quoteIdentifiers(fk) + " ) REFERENCES " + refTable.quote() + " ( "
         // don't put ON DELETE CASCADE since it's dangerous, plus MS SQL only supports 1 fk with
         // cascade : http://support.microsoft.com/kb/321843/en-us
                 + quoteIdentifiers(referencedFields) + " )" + onUpdate + onDelete;
@@ -331,6 +340,8 @@ public abstract class SQLSyntax {
     public boolean isUniqueException(final SQLException exn) {
         return SQLUtils.findWithSQLState(exn).getSQLState().equals("23505");
     }
+
+    public abstract boolean isDeadLockException(final SQLException exn);
 
     /**
      * Something to be appended to CREATE TABLE statements, like "ENGINE = InnoDB".
@@ -879,8 +890,9 @@ public abstract class SQLSyntax {
      * 
      * @param negation <code>true</code> to negate.
      * @return the regexp operator, <code>null</code> if not supported.
-     * @see <a
-     *      href="http://www.postgresql.org/docs/9.1/static/functions-matching.html#FUNCTIONS-POSIX-REGEXP">postgresql</a>
+     * @see <a href=
+     *      "http://www.postgresql.org/docs/9.1/static/functions-matching.html#FUNCTIONS-POSIX-REGEXP">
+     *      postgresql</a>
      */
     public String getRegexpOp(final boolean negation) {
         return negation ? "NOT REGEXP" : "REGEXP";

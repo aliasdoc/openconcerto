@@ -214,9 +214,8 @@ public class CloturePanel extends JPanel {
 
     private boolean isDateValid() {
         final Date d = (Date) this.rowExercice.getObject("DATE_FIN");
-        return this.boxValid.isSelected()
-                && (((!this.dateFerm.isEmpty()) && (!this.dateOuv.isEmpty()) && (this.dateFerm.getValue().getTime() > this.dateOuv.getValue().getTime()) && (this.dateOuv.getValue().getTime() > d
-                        .getTime())));
+        return this.boxValid.isSelected() && (((!this.dateFerm.isEmpty()) && (!this.dateOuv.isEmpty()) && (this.dateFerm.getValue().getTime() > this.dateOuv.getValue().getTime())
+                && (this.dateOuv.getValue().getTime() > d.getTime())));
     }
 
     private final SQLTable tablePrefCompte = this.base.getTable("PREFS_COMPTE");
@@ -258,17 +257,10 @@ public class CloturePanel extends JPanel {
         System.err.println("Time :: " + (time2 - time));
 
         /*******************************************************************************************
-         * Validation des écritures de clotures
-         ******************************************************************************************/
-        this.opEnCours.setText("En cours: validation des écritures de l'exercice");
-        this.bar.setValue(2);
-        EcritureSQLElement.validationEcrituresBefore((Date) this.rowExercice.getObject("DATE_FIN"), true);
-
-        /*******************************************************************************************
          * Reouverture des comptes de bilan
          ******************************************************************************************/
         this.opEnCours.setText("En cours: report des à nouveaux");
-        this.bar.setValue(3);
+        this.bar.setValue(2);
         // transfert du compte bilan fermeture vers le compte bilan ouverture
         SQLTable ecritureTable = this.base.getTable("ECRITURE");
         SQLTable compteTable = this.base.getTable("COMPTE_PCE");
@@ -315,6 +307,12 @@ public class CloturePanel extends JPanel {
                 }
             }
         }
+        /*******************************************************************************************
+         * Validation des écritures de clotures
+         ******************************************************************************************/
+        this.opEnCours.setText("En cours: validation des écritures de l'exercice");
+        this.bar.setValue(3);
+        EcritureSQLElement.validationEcrituresBefore((Date) this.rowExercice.getObject("DATE_FIN"), true);
 
         // A nouveaux
         Object[] compteAnouveau = this.mRAN.keySet().toArray();
@@ -450,12 +448,12 @@ public class CloturePanel extends JPanel {
                 }
 
                 if (solde > 0) {
-                    genFerm.setValues(cptTmp.getId(), compteDest, 0, Math.abs(solde), "Fermeture du compte " + cptTmp.getNumero(), this.rowExercice.getDate("DATE_FIN").getTime(),
-                            JournalSQLElement.OD, false);
+                    genFerm.setValues(cptTmp.getId(), compteDest, 0, Math.abs(solde), "Fermeture du compte " + cptTmp.getNumero(), this.rowExercice.getDate("DATE_FIN").getTime(), JournalSQLElement.OD,
+                            false);
                 } else {
 
-                    genFerm.setValues(cptTmp.getId(), compteDest, Math.abs(solde), 0, "Fermeture du compte " + cptTmp.getNumero(), this.rowExercice.getDate("DATE_FIN").getTime(),
-                            JournalSQLElement.OD, false);
+                    genFerm.setValues(cptTmp.getId(), compteDest, Math.abs(solde), 0, "Fermeture du compte " + cptTmp.getNumero(), this.rowExercice.getDate("DATE_FIN").getTime(), JournalSQLElement.OD,
+                            false);
                 }
                 genFerm.genereMouvement();
             }

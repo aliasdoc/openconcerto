@@ -67,12 +67,6 @@ public class RubriqueCommSQLElement extends ConfSQLElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_PERIODE_VALIDITE");
-        return l;
-    }
-
     /*
      * (non-Javadoc)
      * 

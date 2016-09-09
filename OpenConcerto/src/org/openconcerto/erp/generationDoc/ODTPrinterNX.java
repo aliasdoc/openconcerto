@@ -13,89 +13,57 @@
  
  package org.openconcerto.erp.generationDoc;
 
+import java.awt.print.PageFormat;
+import java.awt.print.Paper;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
 
-import javax.print.PrintService;
 import javax.print.attribute.HashPrintRequestAttributeSet;
 import javax.print.attribute.PrintRequestAttributeSet;
+import javax.print.attribute.Size2DSyntax;
+import javax.print.attribute.standard.MediaPrintableArea;
 import javax.print.attribute.standard.MediaSizeName;
 
 import org.jopendocument.model.OpenDocument;
 import org.jopendocument.print.ODTPrinterXML;
-import org.jopendocument.renderer.ODTRenderer;
 
 public class ODTPrinterNX extends ODTPrinterXML {
-    protected ODTRenderer renderer;
 
     public ODTPrinterNX(final OpenDocument doc) {
         super(doc);
-        this.renderer = new ODTRenderer(doc);
-        // this.renderer.setPaintMaxResolution(true);
-        renderer.setIgnoreMargins(true);
+        this.renderer.setPaintMaxResolution(true);
     }
 
-    public void print(final String printerName, final int copies) {
-        final PrinterJob printJob = PrinterJob.getPrinterJob();
-        printJob.setPrintable(this);
-        printJob.setCopies(copies);
+    /**
+     * Print the document (synchronously)
+     * 
+     * @throws PrinterException
+     */
+    public void print(PrinterJob job) throws PrinterException {
+        PrinterJob printJob = job;
+        if (printJob == null) {
+            printJob = PrinterJob.getPrinterJob();
+            // L'impression est forcée en A4, sur OpenSuse le format est en
+            // Letter par défaut alors que l'imprimante est en A4 dans le système
+            final PrintRequestAttributeSet attributes = new HashPrintRequestAttributeSet();
+            final MediaSizeName media = MediaSizeName.ISO_A4;
+            attributes.add(media);
+            final Paper paper = new A4();
+            final double POINTS_PER_INCH = 72.0;
+            final MediaPrintableArea printableArea = new MediaPrintableArea((float) (paper.getImageableX() / POINTS_PER_INCH), (float) (paper.getImageableY() / POINTS_PER_INCH),
+                    (float) (paper.getImageableWidth() / POINTS_PER_INCH), (float) (paper.getImageableHeight() / POINTS_PER_INCH), Size2DSyntax.INCH);
+            attributes.add(printableArea);
 
-        // Set the printer
-        PrintService myService = null;
-        if (printerName != null && printerName.trim().length() != 0) {
-            final PrintService[] services = PrinterJob.lookupPrintServices();
-
-            for (int i = 0; i < services.length; i++) {
-
-                if (services[i].getName().equals(printerName)) {
-
-                    myService = services[i];
-                    break;
-
-                }
-
-            }
-            if (myService != null) {
-                try {
-                    printJob.setPrintService(myService);
-                } catch (PrinterException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        final PrintRequestAttributeSet pras = new HashPrintRequestAttributeSet();
-        // FIXME l'impression est forcée en A4, pour Agronis sur OpenSuse le format est en
-        // Letter par défaut alors que l'imprimante est en A4 dans le système
-        pras.add(MediaSizeName.ISO_A4);
-        Thread t;
-        if (myService == null) {
-            t = new Thread(new Runnable() {
-                public void run() {
-                    if (printJob.printDialog(pras)) {
-                        try {
-                            printJob.print(pras);
-                        } catch (PrinterException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            });
+            final PageFormat format = job.getPageFormat(null);
+            format.setPaper(paper);
+            printJob.setPrintable(this, format);
+            printJob.print(attributes);
         } else {
-            t = new Thread(new Runnable() {
-                public void run() {
-                    try {
-                        printJob.print(pras);
-                    } catch (PrinterException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
+            final PageFormat format = job.getPageFormat(null);
+            final Paper paper = new A4();
+            format.setPaper(paper);
+            printJob.setPrintable(this, format);
+            printJob.print();
         }
-        t.setName("ODTDPrinter Thread");
-        t.setDaemon(true);
-        t.start();
-
     }
 }

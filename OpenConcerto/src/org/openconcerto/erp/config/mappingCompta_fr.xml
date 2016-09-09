@@ -221,6 +221,7 @@
 	</TABLE>
 
 	<TABLE name="AVOIR_CLIENT_ELEMENT">
+		<FIELD name="RETOUR_STOCK" label="Remettre en stock" />
 		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />
 		<FIELD name="NB_COLIS" label="Nb Colis" titlelabel="Nb Colis" />
 		<FIELD name="POIDS_COLIS_NET" label="Pds Colis" titlelabel="Pds Colis" />
@@ -609,7 +610,7 @@
 		<FIELD name="BLOQUE" label="Bloquer les interactions" />
 		<FIELD name="GROUPE" label="Groupe" />
 		<FIELD name="BLOQUE_LIVRAISON" label="Bloquer les livraisons" />
-
+    <FIELD name="OBSOLETE" label="Obsolète" />
 
 	</TABLE>
 
@@ -728,20 +729,26 @@
 		<FIELD name="ID_CODE_STATUT_CATEGORIEL" label="Statut catégoriel du salarié " titlelabel="Code statut catégoriel" />
 		<FIELD name="ID_CODE_CARACT_ACTIVITE" label="Caractéristique de l'activité" titlelabel="Code caractéristique" />
 		<FIELD name="ID_CODE_STATUT_CAT_CONV" label="Statut catégoriel conventionnel" titlelabel="Statut catégoriel conventionnel" />
-
-		<FIELD name="CODE_IRC_UGRR" label="Code IRC UGRR" titlelabel="Code IRC UGRR" />
-		<FIELD name="CODE_IRC_UGRC" label="Code IRC UGRC" titlelabel="Code IRC UGRC" />
-		<FIELD name="NUMERO_RATTACHEMENT_UGRR" label="N° rattachement UGRR" titlelabel="N° rattachement UGRR" />
-		<FIELD name="NUMERO_RATTACHEMENT_UGRC" label="N° rattachement UGRC" titlelabel="N° rattachement UGRC" />
-		<FIELD name="CODE_IRC_RETRAITE" label="Code IRC retraite" titlelabel="Code IRC retraite" />
-		<FIELD name="NUMERO_RATTACHEMENT_RETRAITE" label="N° rattachement retraite" titlelabel="N° rattachement retraite" />
-
+		<FIELD name="ID_CONTRAT_MODALITE_TEMPS" label="Modalité de temps" />
+		<FIELD name="ID_CONTRAT_REGIME_MALADIE" label="Régime maladie" />
+		<FIELD name="ID_CONTRAT_REGIME_VIEILLESSE" label="Régime vieillesse" />
+		<FIELD name="ID_CONTRAT_DETACHE_EXPATRIE" label="Contrat détaché expatrié" />
+		<FIELD name="ID_CONTRAT_DISPOSITIF_POLITIQUE" label="Dispositif politique" />
+		<FIELD name="ID_CONTRAT_MOTIF_RECOURS" label="Motif de recours au contrat" />
+		<FIELD name="CODE_IRC_UGRR" label="Code IRC ARRCO" titlelabel="Code IRC ARRCO" />
+		<FIELD name="CODE_IRC_UGRC" label="Code IRC AGIRC" titlelabel="Code IRC AGIRC" />
+		<FIELD name="NUMERO_RATTACHEMENT_UGRR" label="N° rattachement ARRCO" titlelabel="N° rattachement ARRCO" />
+		<FIELD name="NUMERO_RATTACHEMENT_UGRC" label="N° rattachement AGIRC" titlelabel="N° rattachement AGIRC" />
+		<FIELD name="CODE_IRC_RETRAITE" label="Code IRC prévoyance" titlelabel="Code IRC prévoyance" />
+		<FIELD name="NUMERO_RATTACHEMENT_RETRAITE" label="N° rattachement prévoyance" titlelabel="N° rattachement prévoyance" />
+		<FIELD name="DATE_PREV_FIN" label="Date de fin prévisionnelle" />
 	</TABLE>
 
 	<TABLE name="COMMANDE">
 		<FIELD name="DATE_RECEPTION_DEMANDEE" label="Date réception demandée" />
 		<FIELD name="DATE_RECEPTION_CONFIRMEE" label="Date réception confirmée" />
 		<FIELD name="INCOTERM" label="Incoterm" />
+		<FIELD name="ID_TAXE_PORT" label="Taxe sur port" />
 		<FIELD name="EN_COURS" label="En cours" titlelabel="En cours" />
 		<FIELD name="NOM" label="Référence" titlelabel="Référence" />
 		<FIELD name="NUMERO" label="Numéro" titlelabel="Numéro" />
@@ -1005,6 +1012,12 @@
 		<FIELD name="T_DEVISE" label="Total Devise" />
 		<FIELD name="DUNNING_DATE" label="Date de relance" />
 		<FIELD name="ID_TARIF" label="Tarif à appliquer" />
+
+		<FIELD name="NB_RAPPORT_A_SAISIR" label="Nombre de rapport à saisir" />
+		<FIELD name="NB_RAPPORT_SAISI" label="Nombre de rapport saisis" />
+		<FIELD name="DATE_DEMANDE_SAISIE" label="Date de demande en saisie" />
+		<FIELD name="TYPE_RAPPORT" label="Type de rapport" />
+
 	</TABLE>
 	<TABLE name="DEVIS_ELEMENT">
 		<FIELD name="ID_FAMILLE_ARTICLE" label="Famille d'article" />

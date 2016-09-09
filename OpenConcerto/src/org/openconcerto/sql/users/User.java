@@ -19,6 +19,7 @@ public class User {
     private final int id;
     private String name, firstName, nickName;
     private final UserRights userRights;
+    private boolean active = true;
 
     public User(int id, String name) {
         this.id = id;
@@ -63,4 +64,11 @@ public class User {
         return getFirstName() + " " + getName();
     }
 
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean b) {
+        this.active = b;
+    }
 }

@@ -19,6 +19,7 @@ import org.openconcerto.erp.generationDoc.SheetInterface;
 import org.openconcerto.erp.preferences.PrinterNXProps;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
@@ -29,6 +30,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
@@ -37,12 +39,12 @@ public class BalanceSheet extends SheetInterface {
     private static int debutFill, endFill;
     private final static SQLTable tableEcriture = base.getTable("ECRITURE");
     private final static SQLTable tableCompte = base.getTable("COMPTE_PCE");
-    private boolean centralClient, centralFourn;
+    private boolean centralClient, centralFourn, centralFournImmo;
     private final static DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM);
     private final static DateFormat dateFormatEcr = DateFormat.getDateInstance(DateFormat.SHORT);
     public static String TEMPLATE_ID = "Balance";
     public static String TEMPLATE_PROPERTY_NAME = "LocationBalance";
-    private Date dateAu;
+    private Date dateAu, dateDu;
     private String compteDeb, compteEnd;
 
     public static void setSize(int debut, int fin) {
@@ -65,7 +67,7 @@ public class BalanceSheet extends SheetInterface {
         return TEMPLATE_ID;
     }
 
-    public BalanceSheet(Date au, String compteDeb, String compteEnd, boolean centralClient, boolean centralFourn) {
+    public BalanceSheet(Date du, Date au, String compteDeb, String compteEnd, boolean centralClient, boolean centralFourn, boolean centralFournImmo) {
         super();
 
         Calendar cal = Calendar.getInstance();
@@ -81,11 +83,13 @@ public class BalanceSheet extends SheetInterface {
         // this.locationOO = storage.getDocumentOutputDirectory(TEMPLATE_ID);
         // this.locationPDF = storage.getPDFOutputDirectory(TEMPLATE_ID);
         this.dateAu = au;
+        this.dateDu = du;
 
         this.compteDeb = compteDeb;
         this.compteEnd = compteEnd;
         this.centralClient = centralClient;
         this.centralFourn = centralFourn;
+        this.centralFournImmo = centralFournImmo;
         createMap();
     }
 
@@ -98,8 +102,11 @@ public class BalanceSheet extends SheetInterface {
     }
 
     private void makePiedPage(int row) {
-
-        this.mCell.put("C" + row, "Balance au " + dateFormatEcr.format(this.dateAu));
+        if (this.dateDu == null) {
+            this.mCell.put("C" + row, "Balance au " + dateFormatEcr.format(this.dateAu));
+        } else {
+            this.mCell.put("C" + row, "Balance du " + dateFormatEcr.format(this.dateDu) + " au " + dateFormatEcr.format(this.dateAu));
+        }
         this.mCell.put("B" + row, "Du compte " + this.compteDeb + " à " + this.compteEnd);
     }
 
@@ -120,12 +127,15 @@ public class BalanceSheet extends SheetInterface {
         this.mCell = new HashMap();
         this.mapStyleRow = new HashMap();
 
-        SQLSelect sel = new SQLSelect(base);
+        SQLSelect sel = new SQLSelect();
         sel.addSelect(tableCompte.getField("ID"));
         sel.addSelect(tableEcriture.getField("DEBIT"), "SUM");
         sel.addSelect(tableEcriture.getField("CREDIT"), "SUM");
 
-        Where w = (new Where(tableEcriture.getField("DATE"), "<=", this.dateAu));
+        Where w = (new Where(tableEcriture.getField("DATE"), this.dateDu, this.dateAu));
+        if (dateDu == null) {
+            w = (new Where(tableEcriture.getField("DATE"), "<=", this.dateAu));
+        }
 
         if (compteDeb.equals(this.compteEnd)) {
             w = w.and(new Where(tableCompte.getField("NUMERO"), "=", this.compteDeb));
@@ -157,13 +167,29 @@ public class BalanceSheet extends SheetInterface {
         long totalDebitFourn = 0;
         long totalCreditFourn = 0;
 
+        long totalDebitFournImmo = 0;
+        long totalCreditFournImmo = 0;
+
         String numCptClient = "411";
         String nomCptClient = "Clients";
         String numCptFourn = "401";
         String nomCptFourn = "Fournisseurs";
+        String numCptFournImmo = "404";
+        String nomCptFournImmo = "Fournisseurs d'immobilisations";
         boolean addedLine = false;
+        boolean addedLineImmo = false;
+        boolean addedLineFourn = false;
         int j = 0;
         String classe = "";
+
+        SQLSelect selCompte = new SQLSelect();
+        selCompte.addSelectStar(tableCompte);
+        List<SQLRow> compteRows = SQLRowListRSH.execute(selCompte);
+        Map<Integer, SQLRow> mapCompte = new HashMap<Integer, SQLRow>();
+        for (SQLRow sqlRow : compteRows) {
+            mapCompte.put(sqlRow.getID(), sqlRow);
+        }
+
         for (int i = 0; i < l.size();) {
 
             System.err.println("START NEW PAGE; POS : " + posLine);
@@ -180,12 +206,13 @@ public class BalanceSheet extends SheetInterface {
             for (j = 0; (j < endFill - debutFill + 1) && i < l.size(); j++) {
                 Object[] o = (Object[]) l.get(i);
                 int idCpt = Integer.parseInt(o[0].toString());
-                SQLRow rowCpt = tableCompte.getRow(idCpt);
+                // SQLRow rowCpt = tableCompte.getRow(idCpt);
+                SQLRow rowCpt = mapCompte.get(idCpt);
 
-                String numeroCpt = rowCpt.getString("NUMERO");
+                String numeroCpt = rowCpt.getString("NUMERO").trim();
                 String nomCpt = rowCpt.getString("NOM");
                 // Changement de classe de compte
-                if (classe.trim().length() != 0 && numeroCpt.trim().length() > 0 && !classe.trim().equalsIgnoreCase(numeroCpt.substring(0, 1))) {
+                if (classe.trim().length() != 0 && numeroCpt.length() > 0 && !classe.trim().equalsIgnoreCase(numeroCpt.substring(0, 1))) {
 
                     makeSousTotalClasse(posLine, sousTotalDebit, sousTotalCredit, classe);
 
@@ -213,9 +240,15 @@ public class BalanceSheet extends SheetInterface {
                         deb = totalDebitClient;
                         cred = totalCreditClient;
                     }
-
+                    // Centralisation compte fournisseur immo
+                    else if (this.centralFournImmo && (numeroCpt.equalsIgnoreCase("404") || numeroCpt.startsWith("404"))) {
+                        totalDebitFournImmo += deb;
+                        totalCreditFournImmo += cred;
+                        deb = totalDebitFournImmo;
+                        cred = totalCreditFournImmo;
+                    }
                     // Centralisation compte fournisseur
-                    if (this.centralFourn && (numeroCpt.equalsIgnoreCase("401") || numeroCpt.startsWith("401"))) {
+                    else if (this.centralFourn && (numeroCpt.equalsIgnoreCase("401") || numeroCpt.startsWith("401"))) {
                         totalDebitFourn += deb;
                         totalCreditFourn += cred;
                         deb = totalDebitFourn;
@@ -223,7 +256,7 @@ public class BalanceSheet extends SheetInterface {
                     }
 
                     if (this.centralClient && !numeroCpt.equalsIgnoreCase("411") && numeroCpt.startsWith("411")) {
-                        if (addedLine || !this.centralFourn) {
+                        if (addedLine || !this.centralFournImmo) {
                             posLine--;
                             j--;
                         } else {
@@ -231,18 +264,30 @@ public class BalanceSheet extends SheetInterface {
                         }
                         this.mCell.put("A" + posLine, numCptClient);
                         this.mCell.put("B" + posLine, nomCptClient);
-                    } else {
-                        if (this.centralFourn && !numeroCpt.equalsIgnoreCase("401") && numeroCpt.startsWith("401")) {
+                    } else if (this.centralFourn && !numeroCpt.equalsIgnoreCase("401") && numeroCpt.startsWith("401")) {
 
+                        if (addedLineFourn) {
                             posLine--;
                             j--;
-
-                            this.mCell.put("A" + posLine, numCptFourn);
-                            this.mCell.put("B" + posLine, nomCptFourn);
                         } else {
-                            this.mCell.put("A" + posLine, numeroCpt);
-                            this.mCell.put("B" + posLine, nomCpt);
+                            addedLineFourn = true;
                         }
+
+                        this.mCell.put("A" + posLine, numCptFourn);
+                        this.mCell.put("B" + posLine, nomCptFourn);
+                    } else if (this.centralFournImmo && !numeroCpt.equalsIgnoreCase("404") && numeroCpt.startsWith("404")) {
+                        if (addedLineImmo || !this.centralFourn) {
+                            posLine--;
+                            j--;
+                        } else {
+                            addedLineImmo = true;
+                        }
+
+                        this.mCell.put("A" + posLine, numCptFournImmo);
+                        this.mCell.put("B" + posLine, nomCptFournImmo);
+                    } else {
+                        this.mCell.put("A" + posLine, numeroCpt);
+                        this.mCell.put("B" + posLine, nomCpt);
                     }
 
                     this.mCell.put("C" + posLine, new Double(GestionDevise.currencyToString(deb, false)));

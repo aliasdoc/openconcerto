@@ -19,6 +19,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLSelect;
@@ -27,16 +28,14 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.EditPanel;
 import org.openconcerto.ui.DefaultGridBagConstraints;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import javax.swing.JLabel;
 import javax.swing.JTextField;
@@ -73,18 +72,8 @@ public class MouvementSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected Set<String> getChildren() {
-        final Set<String> set = new HashSet<String>(1);
-        set.add("ECRITURE");
-        return set;
-    }
-
-    @Override
-    public CollectionMap<String, String> getShowAs() {
-        CollectionMap<String, String> m = new CollectionMap<String, String>();
-        m.put(null, "NUMERO");
-        m.put(null, "ID_PIECE");
-        return m;
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NUMERO", "ID_PIECE");
     }
 
     @Override
@@ -109,19 +98,22 @@ public class MouvementSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected void archive(final SQLRow row, final boolean cutLinks) throws SQLException {
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        // TODO Auto-generated method stub
 
-        // si le mouvement n'est pas archive, on le supprime avec sa source
-        if (MouvementSQLElement.isEditable(row.getID())) {
-            super.archive(row, cutLinks);
-            final String source = row.getString("SOURCE");
-            final int idSource = row.getInt("IDSOURCE");
+        for (SQLRow row : trees.getRows()) {
+            // si le mouvement n'est pas archive, on le supprime avec sa source
+            if (MouvementSQLElement.isEditable(row.getID())) {
+                super.archive(new TreesOfSQLRows(this, row), cutLinks);
+                final String source = row.getString("SOURCE");
+                final int idSource = row.getInt("IDSOURCE");
 
-            if (source.trim().length() > 0 && idSource > 1) {
-                Configuration.getInstance().getDirectory().getElement(source).archive(idSource);
+                if (source.trim().length() > 0 && idSource > 1) {
+                    Configuration.getInstance().getDirectory().getElement(source).archive(idSource);
+                }
+            } else {
+                System.err.println("impossible d'arichiver le mouvement d'id [" + row.getID() + "] car il est validé.");
             }
-        } else {
-            System.err.println("impossible d'arichiver le mouvement d'id [" + row.getID() + "] car il est validé.");
         }
     }
 

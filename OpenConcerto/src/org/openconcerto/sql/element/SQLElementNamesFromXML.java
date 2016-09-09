@@ -18,22 +18,21 @@ import org.openconcerto.utils.i18n.Grammar;
 import org.openconcerto.utils.i18n.NounClass;
 import org.openconcerto.utils.i18n.Phrase;
 import org.openconcerto.utils.i18n.VariantKey;
-import org.openconcerto.xml.JDOMUtils;
+import org.openconcerto.xml.JDOM2Utils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
 
-import net.jcip.annotations.ThreadSafe;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
 
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.JDOMException;
-import org.jdom.input.SAXBuilder;
+import net.jcip.annotations.ThreadSafe;
 
 /**
  * Parses XML to create phrases.
@@ -62,9 +61,7 @@ public class SQLElementNamesFromXML extends SQLElementNamesMap.ByCode {
     public final void load(final InputStream ins) throws JDOMException, IOException {
         final Grammar gr = Grammar.getInstance(getLocale());
         final Document doc = new SAXBuilder().build(ins);
-        @SuppressWarnings("unchecked")
-        final List<Element> elements = doc.getRootElement().getChildren("element");
-        for (final Element elem : elements)
+        for (final Element elem : doc.getRootElement().getChildren("element"))
             this.load(gr, elem);
     }
 
@@ -101,9 +98,7 @@ public class SQLElementNamesFromXML extends SQLElementNamesMap.ByCode {
             if (plural != null)
                 res.putVariant(Grammar.PLURAL, plural);
         } else {
-            @SuppressWarnings("unchecked")
-            final List<Element> variantElems = nameElem.getChildren("variant");
-            for (final Element variantElem : variantElems) {
+            for (final Element variantElem : nameElem.getChildren("variant")) {
                 final String value = variantElem.getAttributeValue("value");
                 if (value == null) {
                     warning(refid, variantElem, "No value");
@@ -146,6 +141,6 @@ public class SQLElementNamesFromXML extends SQLElementNamesMap.ByCode {
     }
 
     private void warning(final String refid, final Element variantElem, final String msg) {
-        Log.get().warning(msg + " for variant of " + refid + " : " + JDOMUtils.output(variantElem));
+        Log.get().warning(msg + " for variant of " + refid + " : " + JDOM2Utils.output(variantElem));
     }
 }

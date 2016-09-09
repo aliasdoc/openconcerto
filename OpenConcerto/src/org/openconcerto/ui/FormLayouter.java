@@ -33,8 +33,8 @@ import com.jgoodies.forms.layout.FormLayout;
 import com.jgoodies.forms.layout.RowSpec;
 
 /**
- * Permet de disposer des champs avec labels en colonnes. Exemple : <img
- * src="doc-files/FormLayouter.png"/>.<br/>
+ * Permet de disposer des champs avec labels en colonnes. Exemple :
+ * <img src="doc-files/FormLayouter.png"/>.<br/>
  * 
  * Les champs sont placés grace aux add*().
  * 
@@ -66,7 +66,7 @@ public class FormLayouter {
     // le nombre de colonnes par défaut
     private final int defaultWidth;
     // le layout
-    private final FormLayout layout;
+    private FormLayout layout;
     private final CellConstraints constraints;
     private Alignment rowAlign;
     // les coordonnées de la prochaine cellule
@@ -80,8 +80,6 @@ public class FormLayouter {
         if (width < 1)
             throw new IllegalArgumentException("width must be at least 1 : " + width);
 
-        this.x = 0;
-        this.y = 0;
         this.constraints = new CellConstraints();
         // i.e. from ROW_HEIGHT
         this.rowAlign = CellConstraints.DEFAULT;
@@ -89,17 +87,32 @@ public class FormLayouter {
         this.co = co;
         this.width = width;
         this.defaultWidth = defaultWidth;
-        final String colSpec = BORDER_GAP + ", " + CollectionUtils.join(Collections.nCopies(width, "max(25dlu;p), 5dlu, d:g"), ", 5dlu, ") + ", " + BORDER_GAP;
+
+        this.clear();
+    }
+
+    /**
+     * Remove all children components of our container and reset this instance.
+     */
+    public void clear() {
+        if (this.layout != null && this.co.getComponentCount() == 0)
+            return;
+
+        this.x = 0;
+        this.y = 0;
+
+        final String colSpec = BORDER_GAP + ", " + CollectionUtils.join(Collections.nCopies(this.width, "max(25dlu;p), 5dlu, d:g"), ", 5dlu, ") + ", " + BORDER_GAP;
         final String rowSpec = BORDER_GAP + ", " + ROW_HEIGHT + ", " + BORDER_GAP;
         // tous les fields ont une taille égale
-        final int[] colGroups = new int[width];
-        for (int i = 0; i < width; i++) {
+        final int[] colGroups = new int[this.width];
+        for (int i = 0; i < this.width; i++) {
             colGroups[i] = CELL_WIDTH * (i + 1);
         }
 
         this.layout = new FormLayout(colSpec, rowSpec);
         this.layout.setColumnGroups(new int[][] { colGroups });
-        co.setLayout(this.layout);
+        this.co.removeAll();
+        this.co.setLayout(this.layout);
     }
 
     public final void setRowAlign(Alignment rowAlign) {

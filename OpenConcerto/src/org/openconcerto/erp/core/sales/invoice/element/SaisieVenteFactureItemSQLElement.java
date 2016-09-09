@@ -44,6 +44,12 @@ public class SaisieVenteFactureItemSQLElement extends ComptaSQLConfElement {
         super(tableName, singular, plural);
     }
 
+    @Override
+    protected String getParentFFName() {
+
+        return "ID_SAISIE_VENTE_FACTURE";
+    }
+
     /*
      * (non-Javadoc)
      * 

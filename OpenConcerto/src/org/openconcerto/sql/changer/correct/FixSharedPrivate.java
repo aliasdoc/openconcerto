@@ -17,17 +17,21 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.changer.Changer;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.element.SQLElementDirectory;
+import org.openconcerto.sql.element.SQLElementLink;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.model.DBSystemRoot;
 import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLSelect.ArchiveMode;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.sql.utils.SQLUtils.SQLFactory;
+import org.openconcerto.utils.cc.ITransformer;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -64,7 +68,7 @@ public class FixSharedPrivate extends Changer<SQLTable> {
     public final SQLElementDirectory getDir() {
         return this.dir;
     }
-    
+
     @Override
     protected void changeImpl(final SQLTable t) throws SQLException {
         getStream().print(t);
@@ -76,9 +80,14 @@ public class FixSharedPrivate extends Changer<SQLTable> {
             getStream().println("... ");
         }
 
-        for (final String pff : elem.getPrivateForeignFields()) {
+        for (final SQLElementLink elemLink : elem.getOwnedLinks().getByType(LinkType.COMPOSITION)) {
+            // e.g. to either MISSION (i.e. empty path) or MISSION_Q18
+            final Path pathToForeign = elemLink.getPath().minusLast();
+            // e.g. ID_Q18
+            final Step toPrivateStep = elemLink.getPath().getStep(-1);
+
             // eg Q18
-            final SQLElement privateElement = elem.getPrivateElement(pff);
+            final SQLElement privateElement = elemLink.getOwned();
             final SQLTable privateTable = privateElement.getTable();
             // SELECT q.ID FROM Ideation_2007.Q18 q
             // JOIN Ideation_2007.MISSION m on m.ID_Q18 = q.ID
@@ -88,13 +97,16 @@ public class FixSharedPrivate extends Changer<SQLTable> {
             final SQLSelect sel = new SQLSelect();
             sel.setArchivedPolicy(ArchiveMode.BOTH);
             sel.addSelect(privateTable.getKey());
-            sel.addBackwardJoin("INNER", "m", t.getField(pff), null);
+            // The last step of a ElementLink is always foreign, be it a simple foreign key or with
+            // a join table. Thus we don't need to go back to the main row to find duplicates.
+            assert toPrivateStep.isForeign();
+            sel.addJoin("INNER", null, toPrivateStep.reverse(), "m");
             final String req = sel.asString() + " GROUP BY " + privateTable.getKey().getFieldRef() + " HAVING count(" + privateTable.getKey().getFieldRef() + ")>1";
 
             @SuppressWarnings("unchecked")
             final List<Number> privateIDs = t.getDBSystemRoot().getDataSource().executeCol(req);
             if (privateIDs.size() > 0) {
-                getStream().println("\t" + pff + " fixing " + privateIDs.size() + " ... ");
+                getStream().println("\t" + elemLink + " fixing " + privateIDs.size() + " ... ");
                 final SQLField archF = t.getArchiveField();
                 final SQLField privateArchF = privateTable.getArchiveField();
                 if ((archF == null) != (privateArchF == null))
@@ -104,14 +116,25 @@ public class FixSharedPrivate extends Changer<SQLTable> {
                     public Object create() throws SQLException {
                         // for each private pointed by more than one parent
                         for (final Number privateID : privateIDs) {
-                            final SQLSelect fixSel = new SQLSelect();
-                            fixSel.setArchivedPolicy(ArchiveMode.BOTH);
-                            fixSel.addSelect(t.getKey());
+                            final SQLRowValues vals = new SQLRowValues(t);
                             if (archF != null)
-                                fixSel.addSelect(archF);
-                            fixSel.setWhere(new Where(t.getField(pff), "=", privateID));
-                            final List<SQLRow> tIDs = SQLRowListRSH.execute(fixSel);
-                            for (final SQLRow tID : tIDs) {
+                                vals.putNulls(archF.getName());
+                            // e.g. ID_OBSERVATION
+                            final SQLField ff = toPrivateStep.getSingleField();
+                            vals.assurePath(pathToForeign).putNulls(ff.getName());
+
+                            final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(vals);
+                            fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+                                @Override
+                                public SQLSelect transformChecked(SQLSelect fixSel) {
+                                    fixSel.setArchivedPolicy(ArchiveMode.BOTH);
+                                    fixSel.setWhere(new Where(fixSel.getAlias(ff), "=", privateID));
+                                    return fixSel;
+                                }
+                            });
+
+                            final List<SQLRowValues> tIDs = fetcher.fetch();
+                            for (final SQLRowValues tID : tIDs) {
                                 // the first one can keep its private
                                 final SQLRowValues reallyPrivate;
                                 if (tID == tIDs.get(0))
@@ -121,7 +144,7 @@ public class FixSharedPrivate extends Changer<SQLTable> {
                                 // keep archive coherence
                                 if (archF != null)
                                     reallyPrivate.put(privateArchF.getName(), tID.getObject(archF.getName()));
-                                new SQLRowValues(t).setID(tID.getIDNumber()).put(pff, reallyPrivate).update();
+                                new SQLRowValues(pathToForeign.getLast()).setID(tID.followPath(pathToForeign).getIDNumber()).put(ff.getName(), reallyPrivate).update();
                             }
                         }
                         return null;

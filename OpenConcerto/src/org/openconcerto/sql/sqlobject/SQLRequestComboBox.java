@@ -214,14 +214,23 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
                     updateListeners();
             }
         });
+
         // initial state ; since we're in the EDT, the DISPLAYABILITY cannot change between
         // addHierarchyListener() and here
         updateListeners();
+
         this.addAncestorListener(new AncestorListener() {
 
             @Override
             public void ancestorAdded(AncestorEvent event) {
-                SQLRequestComboBox.this.req.setOnScreen(true);
+
+                // Appel dans un invokeLater, sinon la frame peut passer en arriere plan (exemple :
+                // CloturePayeMensuellePanel)
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        SQLRequestComboBox.this.req.setOnScreen(true);
+                    }
+                });
             }
 
             @Override
@@ -234,7 +243,6 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
                 // don't care
             }
         });
-
         FontUtils.setFontFor(this.combo, "ComboBox", this.getRequest().getSeparatorsChars());
         // try to speed up that damned JList, as those fine Swing engineers put it "This is
         // currently hacky..."
@@ -280,8 +288,10 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
 
         this.uiLayout();
 
-        // Initialise UI : mode was set in the constructor, but the UI wasn't updated (since it is
-        // either not created or depending on the request). Do it before setRunning() since it might
+        // Initialise UI : mode was set in the constructor, but the UI wasn't updated (since it
+        // is
+        // either not created or depending on the request). Do it before setRunning() since it
+        // might
         // trigger setEnabled() and the one below would be unnecessary.
         if (!updateEnabled())
             this.setInteractionMode(this.getInteractionMode());
@@ -294,6 +304,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         // then this is made displayable => setRunning(true) => no change
         // finally made visible => setOnScreen(true) => not dirty => no update
         this.req.setRunning(true);
+
     }
 
     private final boolean updateEnabled() {
@@ -514,6 +525,7 @@ public class SQLRequestComboBox extends JPanel implements SQLForeignRowItemView,
         if (!priv && this.isDisabledState()) {
             this.modeToSelect = mode;
         } else {
+
             this.mode = mode;
             modeChanged(mode);
         }

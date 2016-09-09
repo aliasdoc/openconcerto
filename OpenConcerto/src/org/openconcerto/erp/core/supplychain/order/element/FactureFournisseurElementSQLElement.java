@@ -30,6 +30,11 @@ public class FactureFournisseurElementSQLElement extends ComptaSQLConfElement {
         super("FACTURE_FOURNISSEUR_ELEMENT", "un element de facture", "éléments de facture");
     }
 
+    @Override
+    protected String getParentFFName() {
+        return "ID_FACTURE_FOURNISSEUR";
+    }
+
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
         l.add("ID_STYLE");

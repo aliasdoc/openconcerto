@@ -113,8 +113,9 @@ public class Backup {
      * 
      * @param dir
      * @return le nombre d'erreurs
+     * @throws IOException
      */
-    public int applyTo(final File dir) {
+    public int applyTo(final File dir) throws IOException {
         getLogger().log(Level.INFO, "Copy start from " + dir + " to " + this.dest);
         processedDir = new HashSet<String>();
         final int applyTo = applyTo(dir, dir);
@@ -122,8 +123,8 @@ public class Backup {
         return applyTo;
     }
 
-    private int applyTo(final File origine, final File dir) {
-        final String dirPath = dir.getAbsolutePath();
+    private int applyTo(final File origine, final File dir) throws IOException {
+        final String dirPath = dir.getCanonicalPath();
         if (processedDir.contains(dirPath)) {
             return 0;
         }
@@ -212,14 +213,13 @@ public class Backup {
     private String getMD5(File f) {
         MessageDigest digest;
         String output = "";
-        InputStream is;
+        InputStream is = null;
         try {
             is = new FileInputStream(f);
-
             try {
+
                 digest = MessageDigest.getInstance("MD5");
 
-                is = new FileInputStream(f);
                 byte buffer[] = new byte[512 * 1024];
                 int read = 0;
 
@@ -236,19 +236,20 @@ public class Backup {
                 getLogger().log(Level.INFO, "Unable to process file for MD5. " + f);
                 throw new RuntimeException("Unable to process file for MD5", e);
             } catch (NoSuchAlgorithmException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
-            } finally {
-                try {
-                    is.close();
-                } catch (IOException e) {
-                    getLogger().log(Level.INFO, "Unable to close file at the end of MD5. " + f);
-                    e.printStackTrace();
-                }
             }
         } catch (FileNotFoundException e1) {
             getLogger().log(Level.INFO, "File not found for MD5. " + f);
             e1.printStackTrace();
+        } finally {
+            try {
+                if (is != null) {
+                    is.close();
+                }
+            } catch (IOException e) {
+                getLogger().log(Level.INFO, "Unable to close file at the end of MD5. " + f);
+                e.printStackTrace();
+            }
         }
 
         return output;

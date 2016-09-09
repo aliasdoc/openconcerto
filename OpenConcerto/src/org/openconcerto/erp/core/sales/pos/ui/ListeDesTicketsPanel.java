@@ -13,8 +13,7 @@
  
  package org.openconcerto.erp.core.sales.pos.ui;
 
-import org.openconcerto.erp.core.sales.pos.Caisse;
-import org.openconcerto.erp.core.sales.pos.io.TicketPrinter;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
 import org.openconcerto.erp.core.sales.pos.model.Ticket;
 import org.openconcerto.ui.DefaultListModel;
 import org.openconcerto.ui.touch.ScrollableList;
@@ -82,7 +81,7 @@ public class ListeDesTicketsPanel extends JPanel implements ListSelectionListene
         c.gridheight = 2;
 
         ticketLlistModel = new DefaultListModel();
-        ticketLlistModel.addAll(new Vector<Ticket>(Caisse.allTickets()));
+        ticketLlistModel.addAll(new Vector<Ticket>(POSConfiguration.getInstance().allTickets()));
         final Font f = new Font("Arial", Font.PLAIN, 24);
         ticketList = new ScrollableList(ticketLlistModel) {
             @Override
@@ -184,8 +183,7 @@ public class ListeDesTicketsPanel extends JPanel implements ListSelectionListene
         if (selectedIndex == 0) {
             // Imprimer
             if (selectedValue != null) {
-                TicketPrinter prt = Caisse.getTicketPrinter();
-                ((Ticket) selectedValue).print(prt);
+                POSConfiguration.getInstance().print(((Ticket) selectedValue));
             }
         } else if (selectedIndex == 1) {
             // Effacer
@@ -227,7 +225,7 @@ public class ListeDesTicketsPanel extends JPanel implements ListSelectionListene
     public void setSelectedTicket(Object selectedValue) {
         ticketP.clear();
         if (selectedValue != null) {
-            ((Ticket) selectedValue).print(ticketP);
+            POSConfiguration.getInstance().print(((Ticket) selectedValue));
             try {
                 ticketP.printBuffer();
             } catch (Exception e1) {

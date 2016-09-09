@@ -46,6 +46,8 @@ public class DeleteOrphans extends Changer<SQLTable> {
             return;
         }
 
+        if (true)
+            throw new UnsupportedOperationException("Need to be converted to SQLElementLink and use SQLElement.archive()");
         final SQLField parentF = elem.getParentForeignField();
         if (parentF != null) {
             final SQLTable elemT = elem.getTable();

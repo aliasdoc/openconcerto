@@ -13,12 +13,21 @@
  
  package org.openconcerto.ui.light;
 
-public class LightUIButtonWithContext extends LightUIElement {
+import net.minidev.json.JSONObject;
 
-    public LightUIButtonWithContext(String id, String label) {
-        setType(LightUIElement.TYPE_BUTTON_WITH_CONTEXT);
-        setId(id);
-        setGridWidth(1);
-        setLabel(label);
+public abstract class LightUIButtonWithContext extends LightUIButton {
+    public LightUIButtonWithContext(final JSONObject json) {
+        super(json);
     }
+
+    public LightUIButtonWithContext(final String id) {
+        super(id, TYPE_BUTTON_WITH_CONTEXT);
+    }
+
+    public LightUIButtonWithContext(final LightUIButtonWithContext button) {
+        super(button);
+    }
+
+    @Override
+    public abstract LightUIElement clone();
 }

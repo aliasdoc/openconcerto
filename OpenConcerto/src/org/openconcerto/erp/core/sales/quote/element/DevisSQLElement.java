@@ -29,10 +29,11 @@ import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.erp.utils.KDUtils;
 import org.openconcerto.erp.utils.KDUtils.Folder;
 import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.PropsConfiguration;
 import org.openconcerto.sql.element.GlobalMapper;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
 import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLInjector;
@@ -46,7 +47,6 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.sqlobject.ElementComboBoxUtils;
-import org.openconcerto.sql.ui.light.GroupToLightUIConvertor;
 import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.view.EditFrame;
@@ -64,9 +64,8 @@ import org.openconcerto.ui.light.ColumnSpec;
 import org.openconcerto.ui.light.ColumnsSpec;
 import org.openconcerto.ui.light.CustomEditorProvider;
 import org.openconcerto.ui.light.LightControler;
-import org.openconcerto.ui.light.LightUIComboElement;
+import org.openconcerto.ui.light.LightUIComboBox;
 import org.openconcerto.ui.light.LightUIElement;
-import org.openconcerto.ui.light.LightUIFrame;
 import org.openconcerto.ui.light.LightUILine;
 import org.openconcerto.ui.light.LightUIPanel;
 import org.openconcerto.ui.light.LightUITable;
@@ -76,7 +75,6 @@ import org.openconcerto.ui.light.RowSelectionSpec;
 import org.openconcerto.ui.light.TableContent;
 import org.openconcerto.ui.light.TableSpec;
 import org.openconcerto.ui.table.TimestampTableCellRenderer;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ExceptionHandler;
@@ -98,6 +96,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.swing.AbstractAction;
@@ -106,9 +105,9 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.SwingWorker;
 
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.input.DOMBuilder;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.input.DOMBuilder;
 
 public class DevisSQLElement extends ComptaSQLConfElement {
 
@@ -117,8 +116,8 @@ public class DevisSQLElement extends ComptaSQLConfElement {
 
     public static enum Month {
 
-        JANVIER("01", "Janvier"), FEVRIER("02", "Février"), MARS("03", "Mars"), AVRIL("04", "Avril"), MAI("05", "Mai"), JUIN("06", "Juin"), JUILLET("07", "Juillet"), AOUT("08", "Août"), SEPTEMBRE(
-                "09", "Septembre"), OCTOBRE("10", "Octobre"), NOVEMBRE("11", "Novembre"), DECEMBRE("12", "Décembre");
+        JANVIER("01", "Janvier"), FEVRIER("02", "Février"), MARS("03", "Mars"), AVRIL("04", "Avril"), MAI("05", "Mai"), JUIN("06", "Juin"), JUILLET("07", "Juillet"), AOUT("08",
+                "Août"), SEPTEMBRE("09", "Septembre"), OCTOBRE("10", "Octobre"), NOVEMBRE("11", "Novembre"), DECEMBRE("12", "Décembre");
 
         private String number;
         private String name;
@@ -491,35 +490,35 @@ public class DevisSQLElement extends ComptaSQLConfElement {
                     // rowArticle.loadAllSafe(rowEltFact);
                     int idArticle = ReferenceArticleSQLElement.getIdForCNM(rowArticle, true);
                     SQLRow rowArticleFind = eltArticle.getTable().getRow(idArticle);
+                    if (rowArticleFind != null) {
+                        SQLInjector inj = SQLInjector.getInjector(rowArticle.getTable(), tableCmdElt);
+                        SQLRowValues rowValsElt = new SQLRowValues(inj.createRowValuesFrom(rowArticleFind));
+                        rowValsElt.put("ID_STYLE", sqlRow.getObject("ID_STYLE"));
+                        rowValsElt.put("QTE", sqlRow.getObject("QTE"));
+                        rowValsElt.put("T_POIDS", rowValsElt.getLong("POIDS") * rowValsElt.getInt("QTE"));
+                        rowValsElt.put("T_PA_HT", ((BigDecimal) rowValsElt.getObject("PA_HT")).multiply(new BigDecimal(rowValsElt.getInt("QTE"), DecimalUtils.HIGH_PRECISION)));
+                        rowValsElt.put("T_PA_TTC",
+                                ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal(rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0), DecimalUtils.HIGH_PRECISION));
 
-                    SQLInjector inj = SQLInjector.getInjector(rowArticle.getTable(), tableCmdElt);
-                    SQLRowValues rowValsElt = new SQLRowValues(inj.createRowValuesFrom(rowArticleFind));
-                    rowValsElt.put("ID_STYLE", sqlRow.getObject("ID_STYLE"));
-                    rowValsElt.put("QTE", sqlRow.getObject("QTE"));
-                    rowValsElt.put("T_POIDS", rowValsElt.getLong("POIDS") * rowValsElt.getInt("QTE"));
-                    rowValsElt.put("T_PA_HT", ((BigDecimal) rowValsElt.getObject("PA_HT")).multiply(new BigDecimal(rowValsElt.getInt("QTE"), DecimalUtils.HIGH_PRECISION)));
-                    rowValsElt.put("T_PA_TTC",
-                            ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal(rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0), DecimalUtils.HIGH_PRECISION));
-
-                    // gestion de la devise
-                    rowDeviseF = sqlRow.getForeignRow("ID_DEVISE");
-                    SQLRow rowDeviseHA = rowArticleFind.getForeignRow("ID_DEVISE_HA");
-                    BigDecimal qte = new BigDecimal(rowValsElt.getInt("QTE"));
-                    if (rowDeviseF != null && !rowDeviseF.isUndefined()) {
-                        if (rowDeviseF.getID() == rowDeviseHA.getID()) {
-                            rowValsElt.put("PA_DEVISE", rowArticleFind.getObject("PA_DEVISE"));
-                            rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowArticleFind.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
-                            rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
-                        } else {
-                            BigDecimal taux = (BigDecimal) rowDeviseF.getObject("TAUX");
-                            rowValsElt.put("PA_DEVISE", taux.multiply((BigDecimal) rowValsElt.getObject("PA_HT")));
-                            rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowValsElt.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
-                            rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
+                        // gestion de la devise
+                        rowDeviseF = sqlRow.getForeignRow("ID_DEVISE");
+                        SQLRow rowDeviseHA = rowArticleFind.getForeignRow("ID_DEVISE_HA");
+                        BigDecimal qte = new BigDecimal(rowValsElt.getInt("QTE"));
+                        if (rowDeviseF != null && !rowDeviseF.isUndefined()) {
+                            if (rowDeviseF.getID() == rowDeviseHA.getID()) {
+                                rowValsElt.put("PA_DEVISE", rowArticleFind.getObject("PA_DEVISE"));
+                                rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowArticleFind.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
+                                rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
+                            } else {
+                                BigDecimal taux = (BigDecimal) rowDeviseF.getObject("TAUX");
+                                rowValsElt.put("PA_DEVISE", taux.multiply((BigDecimal) rowValsElt.getObject("PA_HT")));
+                                rowValsElt.put("PA_DEVISE_T", ((BigDecimal) rowValsElt.getObject("PA_DEVISE")).multiply(qte, DecimalUtils.HIGH_PRECISION));
+                                rowValsElt.put("ID_DEVISE", rowDeviseF.getID());
+                            }
                         }
+
+                        map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
                     }
-
-                    map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
-
                 }
                 MouvementStockSQLElement.createCommandeF(map, rowDeviseF);
             }
@@ -594,38 +593,25 @@ public class DevisSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-
-        CollectionMap<String, String> map = new CollectionMap<String, String>();
-        map.put(null, "NUMERO");
-        return map;
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NUMERO");
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(getTable(), getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-
-                graphToFetch.put("ID_ETAT_DEVIS", null);
-
-            }
-        };
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("ID_ETAT_DEVIS");
     }
 
     @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("DEVIS_ELEMENT");
-        return set;
-    }
-
-    @Override
-    protected List<String> getPrivateFields() {
-        List<String> s = new ArrayList<String>(1);
-        s.add("ID_ADRESSE");
-        return s;
+    protected void setupLinks(SQLElementLinksSetup links) {
+        super.setupLinks(links);
+        if (getTable().contains("ID_ADRESSE")) {
+            links.get("ID_ADRESSE").setType(LinkType.ASSOCIATION);
+        }
+        if (getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            links.get("ID_ADRESSE_LIVRAISON").setType(LinkType.ASSOCIATION);
+        }
     }
 
     /*
@@ -660,34 +646,21 @@ public class DevisSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public LightUIFrame createUIFrameForModification(PropsConfiguration configuration, long id, long userId) {
-        final GroupToLightUIConvertor convertor = new GroupToLightUIConvertor(configuration);
-        convertor.setCustomEditorProvider("sales.quote.items.list", getItemsCustomEditorProvider(configuration, id));
-        final LightUIFrame desc = convertor.convert(getGroupForModification());
-        return desc;
-    }
-
-    public LightUIFrame createUIFrameForCreation(final PropsConfiguration configuration, final long userId) {
-        final GroupToLightUIConvertor convertor = new GroupToLightUIConvertor(configuration);
-        convertor.setCustomEditorProvider("sales.quote.items.list", getItemsCustomEditorProvider(configuration, -1));
-        final LightUIFrame desc = convertor.convert(getGroupForCreation());
-        return desc;
-    }
-
-    CustomEditorProvider getItemsCustomEditorProvider(final PropsConfiguration configuration, final long quoteId) throws IllegalArgumentException {
-        return new CustomEditorProvider() {
+    protected Map<String, CustomEditorProvider> getDefaultCustomEditorProvider(final Configuration configuration, final SQLRowValues sqlRow, long userId) throws IllegalArgumentException {
+        final Map<String, CustomEditorProvider> map = super.getDefaultCustomEditorProvider(configuration, sqlRow, userId);
+        map.put("sales.quote.items.list", new CustomEditorProvider() {
 
             @Override
-            public LightUIElement createUIElement(String id) {
+            public LightUIElement createUIElement(final String id) {
 
-                final ColumnSpec c1 = new ColumnSpec("sales.quote.item.style", StringWithId.class, "Style", new StringWithId(2, "Normal"), true, new LightUIComboElement("sales.quote.item.style"));
+                final ColumnSpec c1 = new ColumnSpec("sales.quote.item.style", StringWithId.class, "Style", new StringWithId(2, "Normal"), true, new LightUIComboBox("sales.quote.item.style"));
                 final ColumnSpec c2 = new ColumnSpec("sales.quote.item.code", String.class, "Code", "", true, new LightUITextField("sales.quote.item.code"));
                 final ColumnSpec c3 = new ColumnSpec("sales.quote.item.label", String.class, "Nom", "", true, new LightUITextField("sales.quote.item.name"));
                 final ColumnSpec c4 = new ColumnSpec("sales.quote.item.description", String.class, "Descriptif", "", true, new LightUITextField("sales.quote.item.description"));
-                final ColumnSpec c5 = new ColumnSpec("sales.quote.item.purchase.unit.price", BigDecimal.class, "P.U. Achat HT", new BigDecimal(0), true, new LightUITextField(
-                        "sales.quote.item.purchase.unit.price"));
-                final ColumnSpec c6 = new ColumnSpec("sales.quote.item.sales.unit.price", BigDecimal.class, "P.U. Vente HT", new BigDecimal(0), true, new LightUITextField(
-                        "sales.quote.item.sales.unit.price"));
+                final ColumnSpec c5 = new ColumnSpec("sales.quote.item.purchase.unit.price", BigDecimal.class, "P.U. Achat HT", new BigDecimal(0), true,
+                        new LightUITextField("sales.quote.item.purchase.unit.price"));
+                final ColumnSpec c6 = new ColumnSpec("sales.quote.item.sales.unit.price", BigDecimal.class, "P.U. Vente HT", new BigDecimal(0), true,
+                        new LightUITextField("sales.quote.item.sales.unit.price"));
                 final ColumnSpec c7 = new ColumnSpec("sales.quote.item.quantity", Integer.class, "Quantité", new BigDecimal(1), true, new LightUITextField("sales.quote.item.quantity"));
 
                 final List<ColumnSpec> columnsSpec = new ArrayList<ColumnSpec>();
@@ -715,8 +688,8 @@ public class DevisSQLElement extends ComptaSQLConfElement {
                         columnsPrefs = in.build(w3cDoc);
                     }
                 } catch (Exception ex) {
-                    throw new IllegalArgumentException("DevisSQLElement getItemsCustomEditorProvider - Failed to get ColumnPrefs for descriptor " + lId + " and for user " + userId + "\n"
-                            + ex.getMessage());
+                    throw new IllegalArgumentException(
+                            "DevisSQLElement getItemsCustomEditorProvider - Failed to get ColumnPrefs for descriptor " + lId + " and for user " + userId + "\n" + ex.getMessage());
                 }
 
                 final Element rootElement = columnsPrefs.getRootElement();
@@ -772,7 +745,7 @@ public class DevisSQLElement extends ComptaSQLConfElement {
                 final TableSpec tSpec = new TableSpec(id, selectionSpec, cSpec);
                 tSpec.setColumns(cSpec);
 
-                if (quoteId > 0) {
+                if (sqlRow != null) {
                     // send: id,value
                     final SQLTable table = configuration.getDirectory().getElement("DEVIS_ELEMENT").getTable();
                     final List<SQLField> fieldsToFetch = new ArrayList<SQLField>();
@@ -786,8 +759,9 @@ public class DevisSQLElement extends ComptaSQLConfElement {
                         }
                     }
 
-                    final Where where = new Where(table.getKey(), "=", quoteId);
-                    List<SQLRowValues> fetchedRows = ElementComboBoxUtils.fetchRows(configuration, table, fieldsToFetch, where);
+                    final Where where = new Where(table.getKey(), "=", sqlRow.getID());
+                    final SQLRowValues graph = ElementComboBoxUtils.getGraphToFetch(configuration, table, fieldsToFetch);
+                    List<SQLRowValues> fetchedRows = ElementComboBoxUtils.fetchRows(graph, where);
 
                     List<Row> rows = new ArrayList<Row>();
                     for (final SQLRowValues vals : fetchedRows) {
@@ -830,70 +804,68 @@ public class DevisSQLElement extends ComptaSQLConfElement {
                 final LightUITable eList = new LightUITable(id);
                 eList.setTableSpec(tSpec);
 
-                LightUIPanel desc = new LightUIPanel("sales.quote.items.list");
-                desc.setGridWidth(1);
-                desc.setFillWidth(true);
+                LightUIPanel panel = new LightUIPanel("sales.quote.items.list");
+                panel.setGridWidth(1);
+                panel.setFillWidth(true);
 
                 LightUILine toolbarLine = new LightUILine();
 
-                LightUIElement b1 = new LightUIElement();
+                LightUIElement b1 = new LightUIElement("up");
                 b1.setType(LightUIElement.TYPE_BUTTON_UNMANAGED);
-                b1.setId("up");
                 b1.setGridWidth(1);
                 b1.setIcon("up.png");
-                desc.addControler(new ActivationOnSelectionControler(id, b1.getId()));
-                desc.addControler(new LightControler(LightControler.TYPE_UP, id, b1.getId()));
-                toolbarLine.add(b1);
+                panel.addControler(new ActivationOnSelectionControler(id, b1.getId()));
+                panel.addControler(new LightControler(LightControler.TYPE_UP, id, b1.getId()));
+                toolbarLine.addChild(b1);
 
-                LightUIElement b2 = new LightUIElement();
+                final LightUIElement b2 = new LightUIElement("down");
                 b2.setType(LightUIElement.TYPE_BUTTON_UNMANAGED);
-                b2.setId("down");
                 b2.setGridWidth(1);
                 b2.setIcon("down.png");
-                desc.addControler(new ActivationOnSelectionControler(id, b2.getId()));
-                desc.addControler(new LightControler(LightControler.TYPE_DOWN, id, b2.getId()));
-                toolbarLine.add(b2);
+                panel.addControler(new ActivationOnSelectionControler(id, b2.getId()));
+                panel.addControler(new LightControler(LightControler.TYPE_DOWN, id, b2.getId()));
+                toolbarLine.addChild(b2);
                 // Add
                 LightUIElement addButton = createButton("add", "Ajouter une ligne");
-                desc.addControler(new LightControler(LightControler.TYPE_ADD_DEFAULT, id, addButton.getId()));
-                toolbarLine.add(addButton);
+                panel.addControler(new LightControler(LightControler.TYPE_ADD_DEFAULT, id, addButton.getId()));
+                toolbarLine.addChild(addButton);
                 // Insert
                 LightUIElement insertButton = createButton("insert", "Insérer une ligne");
-                desc.addControler(new LightControler(LightControler.TYPE_INSERT_DEFAULT, id, insertButton.getId()));
-                toolbarLine.add(insertButton);
+                panel.addControler(new LightControler(LightControler.TYPE_INSERT_DEFAULT, id, insertButton.getId()));
+                toolbarLine.addChild(insertButton);
 
                 // Copy
                 LightUIElement copyButton = createButton("copy", "Dupliquer");
-                desc.addControler(new ActivationOnSelectionControler(id, copyButton.getId()));
-                desc.addControler(new LightControler(LightControler.TYPE_COPY, id, copyButton.getId()));
-                toolbarLine.add(copyButton);
+                panel.addControler(new ActivationOnSelectionControler(id, copyButton.getId()));
+                panel.addControler(new LightControler(LightControler.TYPE_COPY, id, copyButton.getId()));
+                toolbarLine.addChild(copyButton);
 
                 // Remove
                 LightUIElement removeButton = createButton("remove", "Supprimer");
-                desc.addControler(new ActivationOnSelectionControler(id, removeButton.getId()));
-                desc.addControler(new LightControler(LightControler.TYPE_REMOVE, id, removeButton.getId()));
-                toolbarLine.add(removeButton);
+                panel.addControler(new ActivationOnSelectionControler(id, removeButton.getId()));
+                panel.addControler(new LightControler(LightControler.TYPE_REMOVE, id, removeButton.getId()));
+                toolbarLine.addChild(removeButton);
 
-                desc.addLine(toolbarLine);
+                panel.addChild(toolbarLine);
                 final LightUILine listLine = new LightUILine();
                 listLine.setWeightY(1);
                 listLine.setFillHeight(true);
-                listLine.add(eList);
+                listLine.addChild(eList);
 
                 //
-                desc.addLine(listLine);
+                panel.addChild(listLine);
 
-                return desc;
+                return panel;
             }
 
             LightUIElement createButton(String id, String label) {
-                LightUIElement b1 = new LightUIElement();
+                final LightUIElement b1 = new LightUIElement(id);
                 b1.setType(LightUIElement.TYPE_BUTTON_UNMANAGED);
-                b1.setId(id);
                 b1.setGridWidth(1);
                 b1.setLabel(label);
                 return b1;
             }
-        };
+        });
+        return map;
     }
 }

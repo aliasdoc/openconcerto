@@ -43,6 +43,11 @@ public class ClassementConventionnelSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
         l.add("NIVEAU");

@@ -110,9 +110,9 @@ public class Gestion {
         try {
             FileUtils.openFile(f);
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(null, "Impossible d'ouvrir le fichier " + f
-                    + ".\nVérifiez qu'un logiciel pour lire les fichiers PDF est installé sur votre ordinateur.\nVoir http://get.adobe.com/fr/reader.", "Erreur d'ouverture du PDF",
-                    JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(null,
+                    "Impossible d'ouvrir le fichier " + f + ".\nVérifiez qu'un logiciel pour lire les fichiers PDF est installé sur votre ordinateur.\nVoir http://get.adobe.com/fr/reader.",
+                    "Erreur d'ouverture du PDF", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -201,6 +201,7 @@ public class Gestion {
         ExceptionHandler.setForceUI(true);
         ExceptionHandler.setForumURL("http://www.openconcerto.org/forum");
         ExceptionHandler.setSoftwareInformations(SoftwareInfoPanel.FACTORY);
+        ExceptionHandler.setShowProbably(true);
 
         System.setProperty(PropsConfiguration.REDIRECT_TO_FILE, "true");
         // Mac
@@ -234,12 +235,15 @@ public class Gestion {
 
         System.setProperty(ITextCombo.SIMPLE_TRAVERSAL, "true");
 
-        RemoteShell.startDefaultInstance();
         ComboSQLRequest.setDefaultItemsOrder(CompareUtils.<IComboSelectionItem> naturalOrder());
         // Initialisation du splashScreen
         // ne pas oublier en param -splash:image.png
         SplashScreen.getSplashScreen();
 
+
+        // must be done before creating UserRightsManager (which is done by
+        // PropsConfiguration.getRoot())
+        UserRightsManager.DEFAULT_MACRO_RIGHTS.add(new ComptaTotalUserRight());
 
         // Init des caches
         long t1 = System.currentTimeMillis();
@@ -278,6 +282,8 @@ public class Gestion {
         }
 
 
+        RemoteShell.startDefaultInstance(conf.getDirectory(), conf.getRoot());
+
         // Restore L&F and colors
         UIPreferencePanel.initUIFromPreferences();
 
@@ -286,7 +292,6 @@ public class Gestion {
         Toolkit.getDefaultToolkit().setDynamicLayout(true);
 
         ComboSQLRequest.setDefaultFieldSeparator(" ");
-        UserRightsManager.DEFAULT_MACRO_RIGHTS.add(new ComptaTotalUserRight());
 
         long t4 = System.currentTimeMillis();
         System.out.println("Ip:" + conf.getServerIp());

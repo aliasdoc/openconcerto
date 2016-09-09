@@ -22,6 +22,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
@@ -48,6 +49,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -175,6 +177,13 @@ public class VariablePayeSQLElement extends ConfSQLElement {
         l.add("SAL_BRUT_C");
         l.add("NET_A_PAYER_C");
         l.add("NET_IMP_C");
+
+        l.add("COEFF");
+        l.add("ECHELON");
+        l.add("NIVEAU");
+        l.add("POSITION");
+        l.add("INDICE");
+
         return l;
     }
 
@@ -215,6 +224,10 @@ public class VariablePayeSQLElement extends ConfSQLElement {
         l.add(tableInfos.getField("SALAIRE_MOIS"));
         l.add(tableInfos.getField("TAUX_AT"));
         l.add(tableInfos.getField("CONGES_PAYES"));
+        if (tableInfos.contains("BASE_FILLON_ANNUELLE")) {
+            l.add(tableInfos.getField("BASE_FILLON_ANNUELLE"));
+        }
+
         if (tableInfos.contains("PRIME_TRANSPORT")) {
             l.add(tableInfos.getField("PRIME_LOGEMENT"));
             l.add(tableInfos.getField("PRIME_PANIER"));
@@ -233,8 +246,27 @@ public class VariablePayeSQLElement extends ConfSQLElement {
         l2.add(tableFichePaye.getField("NET_IMP"));
         l2.add(tableFichePaye.getField("NET_A_PAYER"));
         l2.add(tableFichePaye.getField("CSG"));
+
         mapTree.put("Contenu paye", l2);
 
+        List<SQLField> l3 = new ArrayList<SQLField>();
+        SQLTable tableClassement = base.getTable("CLASSEMENT_CONVENTIONNEL");
+        l3.add(tableClassement.getField("COEFF"));
+        l3.add(tableClassement.getField("ECHELON"));
+        l3.add(tableClassement.getField("NIVEAU"));
+        l3.add(tableClassement.getField("POSITION"));
+        l3.add(tableClassement.getField("INDICE"));
+        mapTree.put("Classement conventionnel", l3);
+
+        List<SQLField> l4 = new ArrayList<SQLField>();
+        SQLTable tableCoeff = base.getTable("COEFF_PRIME");
+        if (tableCoeff != null) {
+            l4.add(tableCoeff.getField("PRIME_PERSO"));
+            l4.add(tableCoeff.getField("PRIME_RECONSTRUCTION"));
+            l4.add(tableCoeff.getField("PRIME_ANCIENNETE"));
+            l4.add(tableCoeff.getField("PRIME_DEROULEMENT"));
+            mapTree.put("Coefficient de prime", l4);
+        }
         /*
          * List lEtat = new ArrayList(); SQLTable tableEtat =
          * Configuration.getInstance().getBase().getTable("ETAT_CIVIL");
@@ -616,33 +648,34 @@ public class VariablePayeSQLElement extends ConfSQLElement {
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
-        secureArchiveVariable(row.getID());
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        for (SQLRow row : trees.getRows()) {
+            secureArchiveVariable(row, cutLinks);
+        }
     }
 
     // Archive la variable si elle n'est pas utilisé dans une formule
-    private void secureArchiveVariable(int id) throws SQLException {
-        SQLRow row = getTable().getRow(id);
+    private void secureArchiveVariable(SQLRow row, boolean cutLinks) throws SQLException {
 
         // FIXME verifier que la variable n'est pas utilisée dans une rubrique
         if (row != null) {
-            SQLSelect sel = new SQLSelect(getTable().getBase());
+            SQLSelect sel = new SQLSelect();
             sel.addSelect(getTable().getField("ID"));
             System.err.println("Check variable");
             sel.setWhere(new Where(getTable().getField("FORMULE"), "LIKE", "%" + row.getString("NOM") + "%"));
-            sel.andWhere(new Where(getTable().getField("ID"), "!=", id));
+            sel.andWhere(new Where(getTable().getField("ID"), "!=", row.getID()));
 
             String req = sel.asString();
             List l = (List) getTable().getBase().getDataSource().execute(req, new ArrayListHandler());
             if (l.size() == 0) {
-                super.archive(getTable().getRow(id));
+                super.archive(new TreesOfSQLRows(this, row), true);
             } else {
                 System.err.println("Suppression impossible, cette variable est référencée par une autre.");
                 ExceptionHandler.handle("Suppression impossible, cette variable est référencée par une autre.");
             }
 
         } else {
-            super.archive(getTable().getRow(id), true);
+            super.archive(new TreesOfSQLRows(this, row), true);
         }
     }
 

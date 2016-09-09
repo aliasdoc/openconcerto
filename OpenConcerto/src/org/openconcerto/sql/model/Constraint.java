@@ -14,6 +14,7 @@
  package org.openconcerto.sql.model;
 
 import org.openconcerto.sql.model.SQLSyntax.ConstraintType;
+import org.openconcerto.utils.cc.HashingStrategy;
 import org.openconcerto.xml.JDOMUtils;
 import org.openconcerto.xml.XMLCodecUtils;
 
@@ -105,6 +106,33 @@ public final class Constraint {
     @Override
     public int hashCode() {
         return this.m.hashCode();
+    }
+
+    static private final HashingStrategy<Constraint> INTERSYSTEM_STRATEGY = new HashingStrategy<Constraint>() {
+        @Override
+        public boolean equals(Constraint c1, Constraint c2) {
+            return c1.getType().equals(c2.getType()) && c1.getCols().equals(c2.getCols());
+        }
+
+        @Override
+        public int computeHashCode(Constraint c) {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + c.getType().hashCode();
+            result = prime * result + c.getCols().hashCode();
+            return result;
+        }
+    };
+
+    /**
+     * Only use {@link #getType()} and {@link #getCols()} when comparing. {@link #equals(Object)
+     * Equals} uses all properties but some properties may not be supported on all systems, or have
+     * different syntax (e.g. DEFINITION).
+     * 
+     * @return a simpler strategy.
+     */
+    static public final HashingStrategy<Constraint> getInterSystemHashStrategy() {
+        return INTERSYSTEM_STRATEGY;
     }
 
     @Override

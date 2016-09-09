@@ -13,10 +13,9 @@
  
  package org.openconcerto.ui.light;
 
-import java.util.List;
-
 import org.openconcerto.utils.io.JSONConverter;
 import org.openconcerto.utils.io.Transferable;
+
 import net.minidev.json.JSONObject;
 
 public class TableSpec implements Transferable {
@@ -25,11 +24,19 @@ public class TableSpec implements Transferable {
     private TableContent content;
     private RowSelectionSpec selection;
     private SearchSpec search;
+    private Boolean variableColumnsCount = false;
 
     public TableSpec(final String tableId, final RowSelectionSpec selection, final ColumnsSpec columns) {
         this.id = tableId + ".spec";
+        if (selection == null) {
+            throw new IllegalArgumentException("null RowSelectionSpec");
+        }
+        if (columns == null) {
+            throw new IllegalArgumentException("null ColumnsSpec");
+        }
         this.selection = selection;
         this.columns = columns;
+        this.content = new TableContent(tableId);
     }
 
     public TableSpec(final JSONObject json) {
@@ -76,54 +83,12 @@ public class TableSpec implements Transferable {
         this.search = search;
     }
 
-    public void setRowEditorFromColumnSpec() {
-        if (this.columns == null) {
-            throw new IllegalArgumentException("ColumnsSpec must not be null for run thsi function");
-        }
+    public Boolean isVariableColumnsCount() {
+        return this.variableColumnsCount;
+    }
 
-        if (this.content != null) {
-            final int columnsSize = this.columns.getColumnCount();
-            final List<Row> listRow = this.content.getRows();
-
-            if (listRow != null && listRow.size() > 0) {
-                final int listRowSize = listRow.size();
-                for (int k = 0; k < columnsSize; k++) {
-                    final ColumnSpec columnSpec = this.columns.getColumn(k);
-                    final LightUIElement columnEditor = columnSpec.getEditor();
-
-                    if (columnEditor != null) {
-                        System.out.println("TableSpec.setRowEditorFromColumnSpec() - Editor found for table: " + this.id + " and column: " + columnSpec.getId());
-                        for (int l = 0; l < listRowSize; l++) {
-                            final Row row = listRow.get(l);
-                            if (row == null) {
-                                throw new IllegalArgumentException("Table: " + this.id + " has one or more rows null");
-                            }
-                            final List<Object> rowValues = row.getValues();
-                            if (rowValues == null) {
-                                throw new IllegalArgumentException("Table: " + this.id + " has null values for row " + row.getId());
-                            }
-                            if (rowValues.size() < k) {
-                                throw new IllegalArgumentException("Table: " + this.id + " has incorrect values count for row " + row.getId());
-                            }
-                            final LightUIElement rowEditor = columnEditor.clone();
-                            rowEditor.setId(columnEditor.getId() + "." + String.valueOf(row.getId()));
-
-                            final Object value = rowValues.get(k);
-                            if (value != null) {
-                                rowEditor.setValue(rowValues.get(k).toString());
-                            } else {
-                                rowEditor.setValue(null);
-                            }
-                            rowValues.set(k, rowEditor);
-                        }
-                    }
-                }
-            } else {
-                System.out.println("TableSpec.setRowEditorFromColumnSpec() - TableContent without Row for table: " + this.id);
-            }
-        } else {
-            System.out.println("TableSpec.setRowEditorFromColumnSpec() - TableContent null for table: " + this.id);
-        }
+    public void setVariableColumnsCount(final Boolean variableColumnsCount) {
+        this.variableColumnsCount = variableColumnsCount;
     }
 
     @Override
@@ -131,10 +96,22 @@ public class TableSpec implements Transferable {
         final JSONObject result = new JSONObject();
         result.put("class", "TableSpec");
         result.put("id", this.id);
-        result.put("columns", JSONConverter.getJSON(this.columns));
-        result.put("content", JSONConverter.getJSON(this.content));
-        result.put("selection", JSONConverter.getJSON(this.selection));
-        result.put("search", JSONConverter.getJSON(this.search));
+        if (this.columns != null) {
+            result.put("columns", JSONConverter.getJSON(this.columns));
+        }
+        if (this.content != null) {
+            result.put("content", JSONConverter.getJSON(this.content));
+        }
+        if (this.selection != null) {
+            result.put("selection", JSONConverter.getJSON(this.selection));
+        }
+        if (this.search != null) {
+            result.put("search", JSONConverter.getJSON(this.search));
+        }
+        if (this.variableColumnsCount) {
+            result.put("variable-columns-count", JSONConverter.getJSON(true));
+        }
+
         return result;
     }
 
@@ -154,11 +131,15 @@ public class TableSpec implements Transferable {
         final JSONObject jsonSelection = (JSONObject) JSONConverter.getParameterFromJSON(json, "selection", JSONObject.class);
         if (jsonSelection != null) {
             this.selection = new RowSelectionSpec(jsonSelection);
+        } else {
+            throw new IllegalArgumentException("null selection");
         }
 
         final JSONObject jsonSearch = (JSONObject) JSONConverter.getParameterFromJSON(json, "search", JSONObject.class);
         if (jsonSearch != null) {
             this.search = new SearchSpec(jsonSearch);
         }
+
+        this.variableColumnsCount = (Boolean) JSONConverter.getParameterFromJSON(json, "variable-columns-count", Boolean.class);
     }
 }

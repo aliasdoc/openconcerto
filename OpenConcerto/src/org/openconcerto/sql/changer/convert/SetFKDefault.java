@@ -40,7 +40,7 @@ public class SetFKDefault extends Changer<SQLTable> {
 
     @Override
     protected void changeImpl(SQLTable t) throws SQLException {
-        final Set<Link> foreignLinks = t.getDBSystemRoot().getGraph().getForeignLinks(t);
+        final Set<Link> foreignLinks = t.getForeignLinks();
         final AlterTable alter = new AlterTable(t);
         for (final Link link : foreignLinks) {
             final int colCount = link.getCols().size();

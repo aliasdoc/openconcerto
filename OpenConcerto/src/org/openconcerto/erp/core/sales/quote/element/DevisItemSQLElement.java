@@ -47,26 +47,35 @@ public class DevisItemSQLElement extends ComptaSQLConfElement {
 
     }
 
+    @Override
+    protected String getParentFFName() {
+
+        return "ID_DEVIS";
+    }
+
 
     protected List<String> getListFields() {
         List<String> l = new ArrayList<String>();
         l.add("ID_DEVIS");
-        l.add("CODE");
-        l.add("NOM");
-        String articleAdvanced = DefaultNXProps.getInstance().getStringProperty("ArticleModeVenteAvance");
-        Boolean bArticleAdvanced = Boolean.valueOf(articleAdvanced);
-        if (bArticleAdvanced) {
-            l.add("PRIX_METRIQUE_VT_1");
-            l.add("ID_MODE_VENTE_ARTICLE");
-        }
-        if (UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
-            l.add("PA_HT");
-        }
-        l.add("PV_HT");
+        {
+            l.add("CODE");
+            l.add("NOM");
+            String articleAdvanced = DefaultNXProps.getInstance().getStringProperty("ArticleModeVenteAvance");
+            Boolean bArticleAdvanced = Boolean.valueOf(articleAdvanced);
+            if (bArticleAdvanced) {
+                l.add("PRIX_METRIQUE_VT_1");
+                l.add("ID_MODE_VENTE_ARTICLE");
+            }
+            if (UserRightsManager.getCurrentUserRights().haveRight(AbstractVenteArticleItemTable.SHOW_PRIX_ACHAT_CODE)) {
+                l.add("PA_HT");
+            }
+            l.add("PV_HT");
 
-        l.add("QTE");
-        l.add("T_PV_HT");
-        l.add("T_PV_TTC");
+            l.add("QTE");
+            l.add("T_PV_HT");
+            l.add("T_PV_TTC");
+        }
+
         return l;
     }
 
@@ -74,6 +83,7 @@ public class DevisItemSQLElement extends ComptaSQLConfElement {
     protected SQLTableModelSourceOnline createTableSource() {
 
         SQLTableModelSourceOnline table = super.createTableSource();
+
         return table;
     }
 

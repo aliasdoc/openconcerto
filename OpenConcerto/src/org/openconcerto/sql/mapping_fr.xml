@@ -10,6 +10,8 @@
 		<FIELD name="ADMIN" label="Administrateur" titlelabel="Admin." />
 		<FIELD name="ID_USER_RIGHT_COMMON" label="Droits utilisateur" titlelabel="Droits utilisateur" />
 		<FIELD name="MAIL" label="E-Mail" titlelabel="E-Mail" />
+		<FIELD name="DISABLED" label="Compte désactivé" />
+		<FIELD name="TEL" label="Téléphone" titlelabel="Téléphone" />
 	</TABLE>
 	<TABLE name="RIGHT">
 		<FIELD name="CODE" label="Code" titlelabel="Code" />
@@ -20,7 +22,7 @@
 		<FIELD name="ID_USER_COMMON" label="Utilisateur" titlelabel="Utilis." />
 		<FIELD name="ID_RIGHT" label="Droit" />
 		<FIELD name="OBJECT" label="Objet" />
-		<FIELD name="user.right.parameters.editor" label="Objet" />		
+		<FIELD name="user.right.parameters.editor" label="Objet" />
 		<FIELD name="HAVE_RIGHT" label="Droit accordé" titlelabel="Accordé" />
 	</TABLE>
 </ROOT>

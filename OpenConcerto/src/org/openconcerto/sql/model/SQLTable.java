@@ -36,6 +36,7 @@ import org.openconcerto.utils.Tuple2;
 import org.openconcerto.utils.Tuple3;
 import org.openconcerto.utils.Value;
 import org.openconcerto.utils.cc.CopyOnWriteMap;
+import org.openconcerto.utils.cc.CustomEquals;
 import org.openconcerto.utils.change.CollectionChangeEventCreator;
 import org.openconcerto.xml.JDOMUtils;
 
@@ -47,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -61,11 +63,11 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import net.jcip.annotations.GuardedBy;
-import net.jcip.annotations.Immutable;
-
 import org.apache.commons.dbutils.ResultSetHandler;
 import org.jdom2.Element;
+
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.Immutable;
 
 /**
  * Une table SQL. Connait ses champs, notamment sa clef primaire et ses clefs externes. Une table
@@ -81,6 +83,9 @@ import org.jdom2.Element;
  * @see #getRow(int)
  */
 public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
+
+    private static final String UNDEF_TABLE_TABLENAME_FIELD = "TABLENAME";
+    private static final String UNDEF_TABLE_ID_FIELD = "UNDEFINED_ID";
 
     /**
      * The {@link DBRoot#setMetadata(String, String) meta data} configuring the policy regarding
@@ -101,7 +106,16 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     public static final String undefTable = SQLSchema.FWK_TABLENAME_PREFIX + "UNDEFINED_IDS";
     // {SQLSchema=>{TableName=>UndefID}}
     private static final Map<SQLSchema, Map<String, Number>> UNDEFINED_IDs = new HashMap<SQLSchema, Map<String, Number>>();
-    private static final boolean AUTOFIX_UNDEFINED = false;
+    private static final ResultSetHandler UNDEF_RSH = new ResultSetHandler() {
+        @Override
+        public Object handle(ResultSet rs) throws SQLException {
+            final Map<String, Number> res = new HashMap<String, Number>();
+            while (rs.next()) {
+                res.put(rs.getString(UNDEF_TABLE_TABLENAME_FIELD), (Number) rs.getObject(UNDEF_TABLE_ID_FIELD));
+            }
+            return res;
+        }
+    };
 
     @SuppressWarnings("unchecked")
     private static final Map<String, Number> getUndefIDs(final SQLSchema schema) {
@@ -111,15 +125,8 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                 final SQLBase b = schema.getBase();
                 final SQLTable undefT = schema.getTable(undefTable);
                 final SQLSelect sel = new SQLSelect().addSelectStar(undefT);
-                r = (Map<String, Number>) b.getDataSource().execute(sel.asString(), new ResultSetHandler() {
-                    public Object handle(ResultSet rs) throws SQLException {
-                        final Map<String, Number> res = new HashMap<String, Number>();
-                        while (rs.next()) {
-                            res.put(rs.getString("TABLENAME"), (Number) rs.getObject("UNDEFINED_ID"));
-                        }
-                        return res;
-                    }
-                });
+                // don't use the cache as the result is stored in UNDEFINED_IDs
+                r = (Map<String, Number>) b.getDataSource().execute(sel.asString(), new IResultSetHandler(UNDEF_RSH, false));
                 // be called early, since it's more likely that some transaction will create table,
                 // set its undefined ID, then use it in requests, than some other transaction
                 // needing the undefined ID. TODO The real fix is one tree per transaction.
@@ -155,9 +162,9 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
 
     private static final SQLCreateMoveableTable getCreateUndefTable(SQLSyntax syntax) {
         final SQLCreateMoveableTable createTable = new SQLCreateMoveableTable(syntax, undefTable);
-        createTable.addVarCharColumn("TABLENAME", 250);
-        createTable.addColumn("UNDEFINED_ID", syntax.getIDType());
-        createTable.setPrimaryKey("TABLENAME");
+        createTable.addVarCharColumn(UNDEF_TABLE_TABLENAME_FIELD, 250);
+        createTable.addColumn(UNDEF_TABLE_ID_FIELD, syntax.getIDType());
+        createTable.setPrimaryKey(UNDEF_TABLE_TABLENAME_FIELD);
         return createTable;
     }
 
@@ -180,7 +187,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     public static final int setUndefIDs(SQLSchema schema, Map<String, ? extends Number> values) throws SQLException {
         synchronized (UNDEFINED_IDs) {
             final SQLTable undefT = getUndefTable(schema, true);
-            final SQLType undefType = undefT.getField("UNDEFINED_ID").getType();
+            final SQLType undefType = undefT.getField(UNDEF_TABLE_ID_FIELD).getType();
             final List<List<String>> toInsert = new ArrayList<List<String>>();
             final List<List<String>> toUpdate = new ArrayList<List<String>>();
             final Map<String, Number> currentValues = getUndefIDs(schema);
@@ -210,7 +217,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             final SQLSyntax syntax = system.getSyntax();
             if (toInsert.size() > 0) {
                 // INSERT
-                SQLRowValues.insertCount(undefT, "(\"TABLENAME\", \"UNDEFINED_ID\") " + syntax.getValues(toInsert, 2));
+                SQLRowValues.insertCount(undefT, "(" + SQLSyntax.quoteIdentifiers(Arrays.asList(UNDEF_TABLE_TABLENAME_FIELD, UNDEF_TABLE_ID_FIELD)) + ") " + syntax.getValues(toInsert, 2));
             }
             if (toUpdate.size() > 0) {
                 // UPDATE
@@ -218,8 +225,8 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                 if (system == SQLSystem.H2) {
                     final StringBuilder updates = new StringBuilder();
                     for (final List<String> l : toUpdate) {
-                        final UpdateBuilder update = new UpdateBuilder(undefT).set("UNDEFINED_ID", l.get(1));
-                        update.setWhere(Where.createRaw(undefT.getField("TABLENAME").getFieldRef() + " = " + l.get(0)));
+                        final UpdateBuilder update = new UpdateBuilder(undefT).set(UNDEF_TABLE_ID_FIELD, l.get(1));
+                        update.setWhere(Where.createRaw(undefT.getField(UNDEF_TABLE_TABLENAME_FIELD).getFieldRef() + " = " + l.get(0)));
                         updates.append(update.asString());
                         updates.append(";\n");
                     }
@@ -228,8 +235,8 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                     final UpdateBuilder update = new UpdateBuilder(undefT);
                     final String constantTableAlias = "newUndef";
                     update.addRawTable(syntax.getConstantTable(toUpdate, constantTableAlias, Arrays.asList("t", "v")), null);
-                    update.setWhere(Where.createRaw(undefT.getField("TABLENAME").getFieldRef() + " = " + new SQLName(constantTableAlias, "t").quote()));
-                    update.set("UNDEFINED_ID", new SQLName(constantTableAlias, "v").quote());
+                    update.setWhere(Where.createRaw(undefT.getField(UNDEF_TABLE_TABLENAME_FIELD).getFieldRef() + " = " + new SQLName(constantTableAlias, "t").quote()));
+                    update.set(UNDEF_TABLE_ID_FIELD, new SQLName(constantTableAlias, "v").quote());
                     schema.getDBSystemRoot().getDataSource().execute(update.asString());
                 }
             }
@@ -250,9 +257,18 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     static public final class ListenerAndConfig {
 
         private final SQLTableModifiedListener l;
-        private final boolean afterTx;
+        private final Boolean afterTx;
 
-        public ListenerAndConfig(SQLTableModifiedListener l, boolean afterTx) {
+        /**
+         * Create a new instance.
+         * 
+         * @param l the listener.
+         * @param afterTx <code>true</code> if <code>l</code> should only be called once a
+         *        transaction is committed, <code>false</code> to be called in real-time (i.e.
+         *        called a second time if a transaction is aborted), <code>null</code> to be called
+         *        both in real-time and after the transaction succeeds.
+         */
+        public ListenerAndConfig(SQLTableModifiedListener l, Boolean afterTx) {
             super();
             if (l == null)
                 throw new NullPointerException("Null listener");
@@ -264,7 +280,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             return this.l;
         }
 
-        public final boolean callOnlyAfterTx() {
+        public final Boolean callOnlyAfterTx() {
             return this.afterTx;
         }
 
@@ -272,7 +288,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + (this.afterTx ? 1231 : 1237);
+            result = prime * result + (this.afterTx == null ? 0 : this.afterTx.hashCode());
             result = prime * result + this.l.hashCode();
             return result;
         }
@@ -286,7 +302,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             if (getClass() != obj.getClass())
                 return false;
             final ListenerAndConfig other = (ListenerAndConfig) obj;
-            return this.afterTx == other.afterTx && this.l.equals(other.l);
+            return CompareUtils.equals(this.afterTx, other.afterTx) && this.l.equals(other.l);
         }
     }
 
@@ -336,7 +352,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         this.txListener = new TransactionListener() {
             @Override
             public void transactionEnded(TransactionPoint point) {
-                fireFromTransaction(point, point.getCommitted());
+                fireFromTransaction(point);
             }
         };
         // needed for getOrderedFields()
@@ -530,16 +546,12 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                 // empty table
                 throw new IllegalStateException(this + " is empty, can not infer UNDEFINED_ID");
             } else {
-                final String update = "INSERT into " + new SQLName(this.getDBRoot().getName(), undefTable) + " (\"TABLENAME\",\"UNDEFINED_ID\") VALUES('" + this.getName() + "', " + undef + ");";
+                final String update = SQLSyntax.get(this).getInsertOne(new SQLName(this.getDBRoot().getName(), undefTable), Arrays.asList(UNDEF_TABLE_TABLENAME_FIELD, UNDEF_TABLE_ID_FIELD),
+                        getBase().quoteString(this.getName()), String.valueOf(undef));
                 Log.get().config("the first row (which should be the undefined):\n" + update);
                 return undef.intValue();
             }
         } else if ("inDB".equals(policy)) {
-            if (AUTOFIX_UNDEFINED) {
-                final String update = "INSERT into " + new SQLName(this.getDBRoot().getName(), undefTable) + " (\"TABLENAME\",\"UNDEFINED_ID\")  VALUES ('" + this.getName() + "',null );";
-                this.getDBSystemRoot().getDataSource().execute(update);
-                return SQLRow.NONEXISTANT_ID;
-            }
             throw new IllegalStateException("Not in " + new SQLName(this.getDBRoot().getName(), undefTable) + " : " + this.getName());
         } else if (policy != null && !"nonexistant".equals(policy)) {
             final int res = Integer.parseInt(policy);
@@ -673,7 +685,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     /**
      * The CHECK and UNIQUE constraints on this table. This is useful since types
      * {@link ConstraintType#FOREIGN_KEY FOREIGN_KEY} and {@link ConstraintType#PRIMARY_KEY
-     * PRIMARY_KEY} are already available through {@link #getForeignKeys()} and
+     * PRIMARY_KEY} are already available through {@link #getForeignLinks()} and
      * {@link #getPrimaryKeys()} ; type {@link ConstraintType#DEFAULT DEFAULT} through
      * {@link SQLField#getDefaultValue()}.
      * 
@@ -753,6 +765,10 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         return Collections.unmodifiableSet(this.primaryKeys);
     }
 
+    public final Set<Link> getForeignLinks() {
+        return this.getDBSystemRoot().getGraph().getForeignLinks(this);
+    }
+
     /**
      * Return the foreign keys of this table.
      * 
@@ -763,7 +779,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     }
 
     public Set<String> getForeignKeysNames() {
-        return DatabaseGraph.getNames(this.getDBSystemRoot().getGraph().getForeignLinks(this));
+        return DatabaseGraph.getNames(this.getForeignLinks());
     }
 
     public Set<List<SQLField>> getForeignKeysFields() {
@@ -794,9 +810,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
      */
     public synchronized Set<SQLField> getKeys() {
         if (this.keys == null) {
-            // getForeignKeys cree un nouveau set a chaque fois, pas besoin de dupliquer
-            this.keys = this.getForeignKeys();
-            this.keys.addAll(this.getPrimaryKeys());
+            this.keys = this.getFields(VirtualFields.KEYS);
         }
         return this.keys;
     }
@@ -864,7 +878,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             for (final String field : this.getFieldsName()) {
                 res.put(field, new FieldGroup(null, field));
             }
-            for (final Link l : this.getDBSystemRoot().getGraph().getForeignLinks(this)) {
+            for (final Link l : this.getForeignLinks()) {
                 indexKey(res, SQLKey.createForeignKey(l));
             }
             final SQLKey pk = SQLKey.createPrimaryKey(this);
@@ -924,10 +938,113 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         return new HashSet<SQLField>(this.fields.values());
     }
 
-    static public enum VirtualFields {
+    /**
+     * An immutable set of fields.
+     * 
+     * @author Sylvain
+     */
+    @Immutable
+    static public final class VirtualFields {
+
+        static public final VirtualFields ORDER = new VirtualFields(VirtualFieldPartition.ORDER);
+        static public final VirtualFields ARCHIVE = new VirtualFields(VirtualFieldPartition.ARCHIVE);
+        static public final VirtualFields METADATA = new VirtualFields(VirtualFieldPartition.METADATA);
+        static public final VirtualFields PRIMARY_KEY = new VirtualFields(VirtualFieldPartition.PRIMARY_KEY);
+        static public final VirtualFields FOREIGN_KEYS = new VirtualFields(VirtualFieldPartition.FOREIGN_KEYS);
+        /**
+         * All specific fields of this table without keys.
+         */
+        static public final VirtualFields LOCAL_CONTENT = new VirtualFields(VirtualFieldPartition.LOCAL_CONTENT);
+
+        /**
+         * {@link #LOCAL_CONTENT local content fields} with {@link #FOREIGN_KEYS}.
+         */
+        static public final VirtualFields CONTENT = LOCAL_CONTENT.union(FOREIGN_KEYS);
+        /**
+         * {@link #CONTENT content fields} with {@link #METADATA}.
+         */
+        static public final VirtualFields CONTENT_AND_METADATA = CONTENT.union(METADATA);
+        /**
+         * {@link #PRIMARY_KEY} with {@link #FOREIGN_KEYS}.
+         */
+        static public final VirtualFields KEYS = PRIMARY_KEY.union(FOREIGN_KEYS);
+        static public final VirtualFields NONE = new VirtualFields(EnumSet.noneOf(VirtualFieldPartition.class));
+        static public final VirtualFields ALL = new VirtualFields(EnumSet.allOf(VirtualFieldPartition.class));
+
+        private final EnumSet<VirtualFieldPartition> set;
+
+        // use constants above
+        private VirtualFields(final VirtualFieldPartition single) {
+            this(EnumSet.of(single));
+        }
+
+        // private since parameter is not copied
+        private VirtualFields(final EnumSet<VirtualFieldPartition> set) {
+            if (set == null)
+                throw new NullPointerException("Null set");
+            this.set = set;
+        }
+
+        public final VirtualFields union(VirtualFields... other) {
+            final EnumSet<VirtualFieldPartition> set = this.set.clone();
+            for (final VirtualFields o : other)
+                set.addAll(o.set);
+            return new VirtualFields(set);
+        }
+
+        public final VirtualFields intersection(VirtualFields... other) {
+            final EnumSet<VirtualFieldPartition> set = this.set.clone();
+            for (final VirtualFields o : other)
+                set.retainAll(o.set);
+            return new VirtualFields(set);
+        }
+
+        public final VirtualFields difference(VirtualFields... other) {
+            final EnumSet<VirtualFieldPartition> set = this.set.clone();
+            for (final VirtualFields o : other)
+                set.removeAll(o.set);
+            return new VirtualFields(set);
+        }
+
+        public final VirtualFields complement() {
+            // optimizations
+            if (this == ALL)
+                return NONE;
+            else if (this == NONE)
+                return ALL;
+            return new VirtualFields(EnumSet.complementOf(this.set));
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            return prime + this.set.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            final VirtualFields other = (VirtualFields) obj;
+            return this.set.equals(other.set);
+        }
+    }
+
+    /**
+     * A partition of the fields (except that some can be empty). Being a partition allow to use
+     * {@link EnumSet#complementOf(EnumSet)}.
+     * 
+     * @author Sylvain
+     * @see VirtualFields
+     */
+    static public enum VirtualFieldPartition {
         ORDER {
             @Override
-            public Set<SQLField> getFields(SQLTable t) {
+            Set<SQLField> getFields(SQLTable t) {
                 final SQLField orderField = t.getOrderField();
                 return orderField == null ? Collections.<SQLField> emptySet() : Collections.singleton(orderField);
             }
@@ -959,17 +1076,8 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         },
         FOREIGN_KEYS {
             @Override
-            public Set<SQLField> getFields(SQLTable t) {
-                return t.getForeignKeys();
-            }
-        },
-        /**
-         * {@link SQLTable#getContentFields(boolean) content fields} without {@link #METADATA}.
-         */
-        CONTENT {
-            @Override
-            public Set<SQLField> getFields(SQLTable t) {
-                return t.getContentFields(false);
+            Set<SQLField> getFields(SQLTable t) {
+                return DatabaseGraph.getColsUnion(t.getForeignLinks());
             }
         },
         /**
@@ -977,40 +1085,45 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
          */
         LOCAL_CONTENT {
             @Override
-            public Set<SQLField> getFields(SQLTable t) {
-                return t.getLocalContentFields();
+            Set<SQLField> getFields(SQLTable t) {
+                throw new IllegalStateException(this + " is any field not in another set");
             }
         };
 
         abstract Set<SQLField> getFields(final SQLTable t);
     }
 
-    public final Set<SQLField> getFields(final VirtualFields vf) {
-        return vf.getFields(this);
+    public final Set<SQLField> getFields(final VirtualFields vfs) {
+        return getFields(vfs.set);
     }
 
-    public final Set<SQLField> getFields(final Set<VirtualFields> vf) {
-        final Set<SQLField> res = new HashSet<SQLField>();
-        for (final VirtualFields v : vf) {
-            res.addAll(this.getFields(v));
-        }
-        return res;
-    }
+    final Set<SQLField> getFields(final Set<VirtualFieldPartition> vf) {
+        if (vf.isEmpty())
+            return Collections.emptySet();
 
-    public final Set<String> getFieldsNames(final Set<VirtualFields> vf) {
-        final Set<String> res = new HashSet<String>();
-        for (final VirtualFields v : vf) {
-            for (final SQLField f : this.getFields(v)) {
-                res.add(f.getName());
+        final Set<SQLField> res;
+        // LOCAL_CONTENT is just ALL minus every other set
+        if (!vf.contains(VirtualFieldPartition.LOCAL_CONTENT)) {
+            res = new HashSet<SQLField>();
+            for (final VirtualFieldPartition v : vf) {
+                res.addAll(v.getFields(this));
+            }
+        } else {
+            res = this.getFields();
+            // don't use EnumSet.complementOf(EnumSet.copyOf()) as it makes multiple copies
+            for (final VirtualFieldPartition v : VirtualFieldPartition.values()) {
+                if (!vf.contains(v)) {
+                    res.removeAll(v.getFields(this));
+                }
             }
         }
         return res;
     }
 
-    public final Set<SQLField> getFieldsExcluding(final Set<VirtualFields> vf) {
-        final Set<SQLField> res = getFields();
-        for (final VirtualFields v : vf) {
-            res.removeAll(this.getFields(v));
+    public final Set<String> getFieldsNames(final VirtualFields vfs) {
+        final Set<String> res = new HashSet<String>();
+        for (final SQLField f : this.getFields(vfs)) {
+            res.add(f.getName());
         }
         return res;
     }
@@ -1020,20 +1133,14 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
      * champs d'archive et d'ordre.
      * 
      * @return les champs du contenu de cette table.
+     * @see VirtualFields#CONTENT
      */
     public Set<SQLField> getContentFields() {
         return this.getContentFields(false);
     }
 
     public synchronized Set<SQLField> getContentFields(final boolean includeMetadata) {
-        final Set<SQLField> res = this.getFields();
-        res.removeAll(this.getPrimaryKeys());
-        res.remove(this.getArchiveField());
-        res.remove(this.getOrderField());
-        if (!includeMetadata) {
-            res.removeAll(this.getFields(VirtualFields.METADATA));
-        }
-        return res;
+        return this.getFields(includeMetadata ? VirtualFields.CONTENT_AND_METADATA : VirtualFields.CONTENT);
     }
 
     /**
@@ -1044,9 +1151,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
      * @see #getContentFields()
      */
     public synchronized Set<SQLField> getLocalContentFields() {
-        Set<SQLField> res = this.getContentFields();
-        res.removeAll(this.getForeignKeys());
-        return res;
+        return this.getFields(VirtualFields.LOCAL_CONTENT);
     }
 
     /**
@@ -1475,7 +1580,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         private DispatchingState createDispatchingState(final Boolean callbackAfterTxListeners, final boolean oppositeEvt) {
             final List<SQLTableModifiedListener> listeners = new LinkedList<SQLTableModifiedListener>();
             for (final ListenerAndConfig l : get0()) {
-                if (callbackAfterTxListeners == null || callbackAfterTxListeners == l.callOnlyAfterTx())
+                if (callbackAfterTxListeners == null || l.callOnlyAfterTx() == null || callbackAfterTxListeners == l.callOnlyAfterTx())
                     listeners.add(l.getListener());
             }
             return new DispatchingState(listeners, oppositeEvt ? get1().opposite() : get1());
@@ -1515,8 +1620,10 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
     }
 
     private void fireTableModified(final SQLTableEvent evt) {
+        if (evt.getTable() != this)
+            throw new IllegalArgumentException("Wrong table : " + this + " ; " + evt);
         final FireState fireState;
-        final TransactionPoint point = this.getDBSystemRoot().getDataSource().getTransactionPoint();
+        final TransactionPoint point = evt.getTransactionPoint();
         final Boolean callbackAfterTxListeners;
         synchronized (this.listenersMutex) {
             // no need to copy since this.tableModifiedListeners is immutable
@@ -1524,27 +1631,53 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             if (point == null) {
                 // call back every listener
                 callbackAfterTxListeners = null;
-            } else {
-                if (!this.transactions.containsKey(point))
-                    point.addListener(this.txListener);
-                this.transactions.add(point, fireState);
+            } else if (point.isActive()) {
+                addFireStates(point, Collections.singleton(fireState));
                 callbackAfterTxListeners = false;
+                // to free DB resources, it is allowed to fire events after the transaction ended
+            } else if (!point.wasCommitted()) {
+                throw new IllegalStateException("Fire after an aborted transaction point");
+            } else if (point.getSavePoint() != null) {
+                addFireStates(point, Collections.singleton(fireState));
+                callbackAfterTxListeners = false;
+            } else {
+                callbackAfterTxListeners = null;
             }
         }
         fireTableModified(fireState.createDispatchingState(callbackAfterTxListeners, false));
     }
 
+    private void addFireStates(TransactionPoint point, final Collection<FireState> fireStates) {
+        assert Thread.holdsLock(this.listenersMutex) : "Unsafe to access this.transactions";
+        // if multiple save points are released before firing, we must go back to the still active
+        // point
+        while (!point.isActive())
+            point = point.getPrevious();
+        if (!this.transactions.containsKey(point))
+            point.addListener(this.txListener);
+        this.transactions.addAll(point, fireStates);
+    }
+
     // a transaction was committed or aborted, we must either notify listeners that wanted the
     // transaction to commit, or re-notify the listeners that didn't want to wait
-    protected void fireFromTransaction(final TransactionPoint point, final boolean committed) {
+    protected void fireFromTransaction(final TransactionPoint point) {
+        final boolean committed = point.wasCommitted();
+        // if it's a released savePoint, add all our states to the previous point (and thus don't
+        // fire now)
+        final boolean releasedSavePoint = committed && point.getSavePoint() != null;
         final List<FireState> states;
         synchronized (this.listenersMutex) {
             states = this.transactions.remove(point);
+            if (releasedSavePoint) {
+                this.addFireStates(point, states);
+            }
         }
-        final ListIterator<FireState> iter = CollectionUtils.getListIterator(states, !committed);
-        while (iter.hasNext()) {
-            final FireState state = iter.next();
-            fireTableModified(state.createDispatchingState(committed, !committed));
+        if (!releasedSavePoint) {
+            final ListIterator<FireState> iter = CollectionUtils.getListIterator(states, !committed);
+            while (iter.hasNext()) {
+                final FireState state = iter.next();
+                fireTableModified(state.createDispatchingState(committed, !committed));
+            }
         }
     }
 
@@ -1608,7 +1741,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         return new SQLTableModifiedListener() {
             @Override
             public void tableModified(SQLTableEvent evt) {
-                l.dataChanged();
+                l.dataChanged(evt);
             }
         };
     }
@@ -1672,7 +1805,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         // }
         final boolean checkComment = otherSystem == null || this.getServer().getSQLSystem().isTablesCommentSupported() && otherSystem.isTablesCommentSupported();
         if (checkComment && !CompareUtils.equals(this.getComment(), o.getComment()))
-            return "comment unequal : '" + this.getComment() + "' != '" + o.getComment() + "'";
+            return "comment unequal : " + SQLBase.quoteStringStd(this.getComment()) + " != " + SQLBase.quoteStringStd(o.getComment());
         return this.equalsChildren(o, otherSystem);
     }
 
@@ -1685,10 +1818,11 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             return noLink;
 
         // foreign keys
-        final Set<Link> thisLinks = this.getDBSystemRoot().getGraph().getForeignLinks(this);
-        final Set<Link> oLinks = o.getDBSystemRoot().getGraph().getForeignLinks(o);
+        final Set<Link> thisLinks = this.getForeignLinks();
+        final Set<Link> oLinks = o.getForeignLinks();
         if (thisLinks.size() != oLinks.size())
             return "different number of foreign keys " + thisLinks + " != " + oLinks;
+        final SQLSystem thisSystem = this.getServer().getSQLSystem();
         for (final Link l : thisLinks) {
             final Link ol = o.getDBSystemRoot().getGraph().getForeignLink(o, l.getCols());
             if (ol == null)
@@ -1699,7 +1833,6 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
                 return "unequal path size : " + thisPath + " != " + oPath;
             if (!thisPath.getName().equals(oPath.getName()))
                 return "unequal referenced table name : " + thisPath.getName() + " != " + oPath.getName();
-            final SQLSystem thisSystem = this.getServer().getSQLSystem();
             if (!getRule(l.getUpdateRule(), thisSystem, otherSystem).equals(getRule(ol.getUpdateRule(), thisSystem, otherSystem)))
                 return "unequal update rule for " + l + ": " + l.getUpdateRule() + " != " + ol.getUpdateRule();
             if (!getRule(l.getDeleteRule(), thisSystem, otherSystem).equals(getRule(ol.getDeleteRule(), thisSystem, otherSystem)))
@@ -1722,7 +1855,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
             // MAYBE fetch indexes with the rest to avoid exn now
             return "couldn't get indexes: " + ExceptionUtils.getStackTrace(e);
         }
-        if (!CompareUtils.equals(thisConstraints, otherConstraints))
+        if (!CustomEquals.equals(thisConstraints, otherConstraints, otherSystem == null || otherSystem.equals(thisSystem) ? null : Constraint.getInterSystemHashStrategy()))
             return "constraints unequal : '" + thisConstraints + "' != '" + otherConstraints + "'";
 
         return null;
@@ -1803,7 +1936,7 @@ public final class SQLTable extends SQLIdentifier implements SQLData, TableRef {
         // primary keys
         res.setPrimaryKey(getPKsNames());
         // foreign keys
-        for (final Link l : this.getDBSystemRoot().getGraph().getForeignLinks(this))
+        for (final Link l : this.getForeignLinks())
             // don't generate explicit CREATE INDEX for fk, we generate all indexes below
             // (this also avoid creating a fk index that wasn't there)
             res.addForeignConstraint(l, false);

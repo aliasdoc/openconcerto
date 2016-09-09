@@ -80,6 +80,7 @@ public class ListeAddPanel extends IListPanel {
     protected final EditFrame getEditFrame() {
         if (this.editFrame == null) {
             this.editFrame = new EditFrame(this.element, EditPanel.MODIFICATION);
+            this.editFrame.getPanel().setIListe(getListe());
         }
         return this.editFrame;
     }

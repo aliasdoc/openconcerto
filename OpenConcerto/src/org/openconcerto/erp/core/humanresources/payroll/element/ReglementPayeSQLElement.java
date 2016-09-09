@@ -62,6 +62,11 @@ public class ReglementPayeSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     /*
      * protected List getPrivateFields() { final List l = new ArrayList();
      * l.add("ID_MODE_REGLEMENT"); return l; }

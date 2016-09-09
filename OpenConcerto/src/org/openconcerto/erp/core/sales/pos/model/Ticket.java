@@ -16,7 +16,7 @@
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.ui.TotalCalculator;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
-import org.openconcerto.erp.core.sales.pos.Caisse;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
 import org.openconcerto.erp.core.sales.pos.io.DefaultTicketPrinter;
 import org.openconcerto.erp.core.sales.pos.io.TicketPrinter;
 import org.openconcerto.erp.core.sales.pos.ui.TicketCellRenderer;
@@ -39,12 +39,12 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-import org.jdom.Attribute;
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.input.SAXBuilder;
-import org.jdom.output.Format;
-import org.jdom.output.XMLOutputter;
+import org.jdom2.Attribute;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.input.SAXBuilder;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
 
 public class Ticket {
 
@@ -93,7 +93,6 @@ public class Ticket {
             t.setNumber(receiptCode.getDayIndex());
 
             // article
-            @SuppressWarnings("unchecked")
             final List<Element> children = root.getChildren("article");
             for (Element element : children) {
                 int qte = Integer.parseInt(element.getAttributeValue("qte"));
@@ -110,17 +109,16 @@ public class Ticket {
 
                 int id = valueID == null || valueID.trim().length() == 0 ? tableArticle.getUndefinedID() : Integer.parseInt(valueID);
                 Article art = new Article(cat, name, id);
-                art.setPriceInCents(prix_unitaire_cents);
+                art.setPriceWithTax(prix_unitaire_cents);
                 art.setCode(codeArt);
-                art.setPriceHTInCents(prix_unitaire_cents_ht);
+                art.setPriceWithoutTax(prix_unitaire_cents_ht);
                 art.setIdTaxe(idTaxe);
-                art.barCode = codebarre;
+                art.setBarCode(codebarre);
                 Pair<Article, Integer> line = new Pair<Article, Integer>(art, qte);
                 t.items.add(line);
 
             }
             // paiement
-            @SuppressWarnings("unchecked")
             final List<Element> payChildren = root.getChildren("paiement");
             for (Element element : payChildren) {
 
@@ -209,8 +207,8 @@ public class Ticket {
             Element e = new Element("article");
             e.setAttribute("qte", String.valueOf(item.getSecond()));
             // Prix unitaire
-            e.setAttribute("prix", String.valueOf(item.getFirst().getPriceInCents()));
-            e.setAttribute("prixHT", String.valueOf(item.getFirst().getPriceHTInCents()));
+            e.setAttribute("prix", String.valueOf(item.getFirst().getPriceWithTax()));
+            e.setAttribute("prixHT", String.valueOf(item.getFirst().getPriceWithoutTax()));
             e.setAttribute("idTaxe", String.valueOf(item.getFirst().getIdTaxe()));
             e.setAttribute("categorie", item.getFirst().getCategorie().getName());
             e.setAttribute("codebarre", item.getFirst().getBarCode());
@@ -249,12 +247,12 @@ public class Ticket {
 
     }
 
-    public void print(TicketPrinter prt) {
-        int maxWidth = Caisse.getTicketWidth();
+    public void print(TicketPrinter prt, int ticketWidth) {
+        int maxWidth = ticketWidth;
         int MAX_PRICE_WIDTH = 8;
         int MAX_QTE_WIDTH = 5;
-
-        List<TicketLine> headers = Caisse.getHeaders();
+        prt.clearBuffer();
+        List<TicketLine> headers = POSConfiguration.getInstance().getHeaderLines();
         for (TicketLine line : headers) {
             prt.addToBuffer(line);
         }
@@ -270,7 +268,7 @@ public class Ticket {
             final Integer nb = item.getSecond();
             Float tauxFromId = TaxeCache.getCache().getTauxFromId(article.getIdTaxe());
             BigDecimal tauxTVA = new BigDecimal(tauxFromId).movePointLeft(2).add(BigDecimal.ONE);
-            BigDecimal multiply = article.getPriceHTInCents().multiply(new BigDecimal(nb), DecimalUtils.HIGH_PRECISION).multiply(tauxTVA, DecimalUtils.HIGH_PRECISION);
+            BigDecimal multiply = article.getPriceWithoutTax().multiply(new BigDecimal(nb), DecimalUtils.HIGH_PRECISION).multiply(tauxTVA, DecimalUtils.HIGH_PRECISION);
 
             if (article.getCode() != null && !article.getCode().isEmpty()) {
                 // 2 lines
@@ -303,9 +301,8 @@ public class Ticket {
         int totalTTCInCents = calc.getTotalTTC().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValue();
         int totalTVHAInCents = calc.getTotalTVA().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValue();
 
-        prt.addToBuffer(
-                DefaultTicketPrinter.formatRight(maxWidth - MAX_PRICE_WIDTH, "MONTANT TOTAL TTC (Euros) : ")
-                        + DefaultTicketPrinter.formatRight(MAX_PRICE_WIDTH, TicketCellRenderer.centsToString(totalTTCInCents)), DefaultTicketPrinter.BOLD);
+        prt.addToBuffer(DefaultTicketPrinter.formatRight(maxWidth - MAX_PRICE_WIDTH, "MONTANT TOTAL TTC (Euros) : ")
+                + DefaultTicketPrinter.formatRight(MAX_PRICE_WIDTH, TicketCellRenderer.centsToString(totalTTCInCents)), DefaultTicketPrinter.BOLD);
         prt.addToBuffer(
                 DefaultTicketPrinter.formatRight(maxWidth - MAX_PRICE_WIDTH, "Dont TVA : ") + DefaultTicketPrinter.formatRight(MAX_PRICE_WIDTH, TicketCellRenderer.centsToString(totalTVHAInCents)),
                 DefaultTicketPrinter.NORMAL);
@@ -345,7 +342,7 @@ public class Ticket {
         }
         prt.addToBuffer("");
         // Footer
-        List<TicketLine> footers = Caisse.getFooters();
+        List<TicketLine> footers = POSConfiguration.getInstance().getFooterLines();
         for (TicketLine line : footers) {
             prt.addToBuffer(line);
         }
@@ -419,7 +416,8 @@ public class Ticket {
 
     public int getTotalInCents() {
         final TotalCalculator calc = getTotalCalculator();
-        return calc.getTotalTTC().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValue();
+        final BigDecimal totalTTC = calc.getTotalTTC();
+        return totalTTC.movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValue();
     }
 
     public TotalCalculator getTotalCalculator() {
@@ -434,9 +432,9 @@ public class Ticket {
             final int count = line.getSecond();
             final Article art = line.getFirst();
             final SQLRowValues rowVals = new SQLRowValues(tableElt);
-            rowVals.put("T_PV_HT", art.getPriceHTInCents().multiply(new BigDecimal(count)));
+            rowVals.put("T_PV_HT", art.getPriceWithoutTax().multiply(new BigDecimal(count)));
             rowVals.put("QTE", count);
-            rowVals.put("ID_TAXE", art.idTaxe);
+            rowVals.put("ID_TAXE", art.getIdTaxe());
             calc.addLine(rowVals, tableArticle.getRow(art.getId()), i, false);
 
         }

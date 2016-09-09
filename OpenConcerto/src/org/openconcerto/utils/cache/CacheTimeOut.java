@@ -13,20 +13,20 @@
  
  package org.openconcerto.utils.cache;
 
-import java.util.TimerTask;
+import org.openconcerto.utils.cache.CacheItem.RemovalType;
 
 // allow to clear the cache after some period of time
-final class CacheTimeOut<K> extends TimerTask {
+final class CacheTimeOut implements Runnable {
 
-    private final ICache<K, ?, ?> c;
-    private final K key;
+    private final CacheItem<?, ?, ?> val;
 
-    public CacheTimeOut(ICache<K, ?, ?> c, K key) {
-        this.c = c;
-        this.key = key;
+    public CacheTimeOut(CacheItem<?, ?, ?> val) {
+        this.val = val;
     }
 
+    @Override
     public void run() {
-        this.c.clear(this.key);
+        final boolean die = this.val.getCache().getSupp().isDying();
+        this.val.setRemovalType(die ? RemovalType.CACHE_DEATH : RemovalType.TIMEOUT);
     }
 }

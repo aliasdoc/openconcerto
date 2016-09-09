@@ -27,6 +27,8 @@ import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.Matrix;
 import org.openconcerto.utils.RecursionType;
 import org.openconcerto.utils.SetMap;
+import org.openconcerto.utils.StringUtils;
+import org.openconcerto.utils.StringUtils.Side;
 import org.openconcerto.utils.cc.Closure;
 import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
@@ -48,6 +50,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import net.jcip.annotations.Immutable;
 
 /**
  * A set of linked SQLRowValues.
@@ -315,11 +319,11 @@ public class SQLRowValuesCluster {
         }
     }
 
-    final SQLRowValues deepCopy(SQLRowValues v) {
-        return this.deepCopy(v, false);
+    final SQLRowValues deepCopy(SQLRowValues v, final boolean freeze) {
+        return deepCopy(freeze).get(v);
     }
 
-    final SQLRowValues deepCopy(SQLRowValues v, final boolean freeze) {
+    public final Map<SQLRowValues, SQLRowValues> deepCopy(final boolean freeze) {
         // copy all rowValues of this graph
         final Map<SQLRowValues, SQLRowValues> noLinkCopy = new IdentityHashMap<SQLRowValues, SQLRowValues>();
         // don't copy foreigns, but we want to preserve the order of all fields. This works because
@@ -346,13 +350,13 @@ public class SQLRowValuesCluster {
             }
         }
 
-        final SQLRowValues res = noLinkCopy.get(v);
+        final SQLRowValues res = noLinkCopy.values().iterator().next();
         // only force graph creation if needed
         if (freeze)
             res.getGraph().freeze();
         assert res.isFrozen() == freeze;
 
-        return res;
+        return noLinkCopy;
     }
 
     public final StoreResult insert() throws SQLException {
@@ -369,9 +373,42 @@ public class SQLRowValuesCluster {
 
     // checkValidity false useful when we want to avoid loading the graph
     public final StoreResult store(final StoreMode mode, final boolean checkValidity) throws SQLException {
-        final Map<SQLRowValues, Node> nodes = new IdentityHashMap<SQLRowValues, Node>(this.size());
-        for (final SQLRowValues vals : this.getItems()) {
+        return this.store(mode, null, null, checkValidity);
+    }
+
+    /**
+     * Store this graph into the DB.
+     * 
+     * @param mode how to store.
+     * @param start when storing a subset, the start of <code>pruneGraph</code> in this, can be
+     *        <code>null</code>.
+     * @param pruneGraph the maximum graph to store, can be <code>null</code>.
+     * @param checkValidity <code>true</code> to check if foreign keys point to valid rows.
+     * @return the store result.
+     * @throws SQLException if an exception occurs.
+     * @see {@link #prune(SQLRowValues, SQLRowValues)}
+     */
+    public final StoreResult store(final StoreMode mode, final SQLRowValues start, final SQLRowValues pruneGraph, final boolean checkValidity) throws SQLException {
+        final Map<SQLRowValues, SQLRowValues> prune2orig;
+        final SQLRowValuesCluster toStore;
+        final boolean prune = pruneGraph != null;
+        if (!prune) {
+            toStore = this;
+            prune2orig = null;
+        } else {
+            final Map<SQLRowValues, SQLRowValues> orig2prune = this.pruneMap(start, pruneGraph, true);
+            toStore = orig2prune.get(start).getGraph();
+            prune2orig = CollectionUtils.invertMap(new IdentityHashMap<SQLRowValues, SQLRowValues>(), orig2prune);
+        }
+        final Map<SQLRowValues, Node> nodes = new IdentityHashMap<SQLRowValues, Node>(toStore.size());
+        final Map<SQLRowValues, Node> res = prune ? new IdentityHashMap<SQLRowValues, Node>(toStore.size()) : nodes;
+        for (final SQLRowValues vals : toStore.getItems()) {
             nodes.put(vals, new Node(vals));
+            if (prune) {
+                final SQLRowValues src = prune2orig.get(vals);
+                assert this.contains(src);
+                res.put(src, nodes.get(vals));
+            }
         }
         // check validity first, avoid beginning a transaction for nothing
         // do it after reset otherwise check previous values
@@ -409,8 +446,8 @@ public class SQLRowValuesCluster {
          * 
          * And finally, s will be updated.
          */
-        final List<StoringLink> storingLinks = new ArrayList<StoringLink>(this.links.size());
-        for (final Link l : this.links)
+        final List<StoringLink> storingLinks = new ArrayList<StoringLink>(toStore.links.size());
+        for (final Link l : toStore.links)
             storingLinks.add(new StoringLink(l));
 
         // store the whole graph atomically
@@ -474,7 +511,7 @@ public class SQLRowValuesCluster {
                 }
                 return res;
             }
-        }, true);
+        });
         // fire events
         for (final SQLTableEvent n : events) {
             // MAYBE put a Map<SQLRowValues, SQLTableEvent> to know how our fellow values have been
@@ -482,7 +519,7 @@ public class SQLRowValuesCluster {
             n.getTable().fire(n);
         }
 
-        return new StoreResult(nodes);
+        return new StoreResult(res);
     }
 
     static public final class WalkOptions {
@@ -690,18 +727,27 @@ public class SQLRowValuesCluster {
         return null;
     }
 
+    @Immutable
     static public final class IndexedRows {
         private final List<State<?>> flatList;
         private final Map<SQLRowValues, Integer> indexes;
 
-        public IndexedRows(List<State<?>> flatList, Map<SQLRowValues, Integer> indexes) {
+        // optimization
+        private IndexedRows(final SQLRowValues sole) {
+            this(Collections.<State<?>> singletonList(new State<Object>(Collections.singletonList(sole), Path.get(sole.getTable()), null, null)), Collections.singletonMap(sole, 0));
+            if (sole.getGraphSize() != 1)
+                throw new IllegalArgumentException("Row is not alone : " + sole.printGraph());
+        }
+
+        // private to make sure the arguments are immutable
+        private IndexedRows(List<State<?>> flatList, Map<SQLRowValues, Integer> indexes) {
             super();
             this.flatList = flatList;
             this.indexes = indexes;
             assert flatList.size() == indexes.size();
         }
 
-        public List<State<?>> getStates() {
+        List<State<?>> getStates() {
             return this.flatList;
         }
 
@@ -709,7 +755,7 @@ public class SQLRowValuesCluster {
             return this.flatList.size();
         }
 
-        public State<?> getFirstState(int i) {
+        State<?> getFirstState(int i) {
             return this.flatList.get(i);
         }
 
@@ -832,13 +878,19 @@ public class SQLRowValuesCluster {
      * This :
      *       /- ID_CONTACT_RAPPORT \
      *  SITE -- ID_CONTACT_CHEF ---> CONTACT
-     * </pre>
+     *        </pre>
      * 
      *        If <code>true</code> keep the union of all fields, if <code>false</code> the
      *        intersection.
      * @return a copy of this no larger than <code>graph</code>, e.g. RECEPTEUR {DESIGNATION="rec"}.
      */
     public final SQLRowValues prune(final SQLRowValues start, final SQLRowValues graph, final boolean keepUnionOfFields) {
+        return pruneMap(start, graph, keepUnionOfFields).get(start);
+    }
+
+    // private since result isn't trimmed, the values are still all there, not all in the pruned
+    // graph
+    private final Map<SQLRowValues, SQLRowValues> pruneMap(final SQLRowValues start, final SQLRowValues graph, final boolean keepUnionOfFields) {
         this.containsCheck(start);
         if (!start.getTable().equals(graph.getTable()))
             throw new IllegalArgumentException(start + " is not from the same table as " + graph);
@@ -846,7 +898,8 @@ public class SQLRowValuesCluster {
         if (!graph.getGraph().hasOneRowPerPath())
             throw new IllegalArgumentException("More than one row for " + graph.printGraph());
 
-        final SQLRowValues res = start.deepCopy();
+        final Map<SQLRowValues, SQLRowValues> map = start.getGraph().deepCopy(false);
+        final SQLRowValues res = map.get(start);
 
         final SetMap<SQLRowValues, String> toRetain = new SetMap<SQLRowValues, String>(new IdentityHashMap<SQLRowValues, Set<String>>(), Mode.NULL_FORBIDDEN);
         // BREADTH_FIRST to stop as soon as this no longer have rows in the graph
@@ -907,7 +960,7 @@ public class SQLRowValuesCluster {
         }
         assert res.getGraph().getItems().equals(toRetain.keySet());
 
-        return res;
+        return map;
     }
 
     final void grow(final SQLRowValues start, final SQLRowValues toGrow, final boolean checkFields) {
@@ -1047,10 +1100,10 @@ public class SQLRowValuesCluster {
     public final String printNodes() {
         final StringBuilder sb = new StringBuilder(this.getClass().getSimpleName() + " of " + size() + " nodes:\n");
         for (final SQLRowValues n : getItems()) {
-            sb.append(System.identityHashCode(n));
-            sb.append(" ");
+            StringUtils.appendFixedWidthString(sb, String.valueOf(System.identityHashCode(n)), 12, Side.LEFT, ' ', true);
+            sb.append(' ');
             sb.append(n.getTable());
-            sb.append("\t");
+            sb.append('\t');
             for (final Map.Entry<String, SQLRowValues> e : n.getForeigns().entrySet()) {
                 sb.append(e.getKey());
                 sb.append(" -> ");
@@ -1063,22 +1116,125 @@ public class SQLRowValuesCluster {
         return sb.toString();
     }
 
-    final String getFirstDifference(final SQLRowValues vals, final SQLRowValues other, final boolean useForeignsOrder, final boolean useFieldsOrder) {
+    @Immutable
+    public static final class DiffResult {
+
+        private final String firstDiff;
+        private final SQLRowValues vals, otherVals;
+        // null if difference is trivial
+        private final IndexedRows thisRows, otherRows;
+
+        private DiffResult(final String firstDiff, final SQLRowValues vals, final SQLRowValues otherVals) {
+            this.firstDiff = firstDiff;
+            this.thisRows = null;
+            this.otherRows = null;
+            this.vals = vals;
+            this.otherVals = otherVals;
+        }
+
+        private DiffResult(final String firstDiff, final IndexedRows thisRows, final IndexedRows otherRows) {
+            super();
+            this.firstDiff = firstDiff;
+            this.thisRows = thisRows;
+            this.otherRows = otherRows;
+            assert !this.isEqual() || this.getRows1().getSize() == this.getRows2().getSize();
+            this.vals = thisRows.getRow(0);
+            this.otherVals = otherRows.getRow(0);
+        }
+
+        public String getFirstDifference() {
+            return this.firstDiff;
+        }
+
+        public final boolean isEqual() {
+            return this.getFirstDifference() == null;
+        }
+
+        public SQLRowValues getRow1() {
+            return this.vals;
+        }
+
+        public IndexedRows getRows1() {
+            return this.thisRows;
+        }
+
+        public SQLRowValues getRow2() {
+            return this.otherVals;
+        }
+
+        public IndexedRows getRows2() {
+            return this.otherRows;
+        }
+
+        public final void fillRowMap(final Map<SQLRow, SQLRow> m, final boolean fromFirst) {
+            if (!this.isEqual())
+                throw new IllegalStateException("Rows are not equal : " + this.getFirstDifference());
+            final int stop = this.getRows1().getSize();
+            final IndexedRows i1, i2;
+            if (fromFirst) {
+                i1 = this.getRows1();
+                i2 = this.getRows2();
+            } else {
+                i1 = this.getRows2();
+                i2 = this.getRows1();
+            }
+            for (int i = 0; i < stop; i++) {
+                final SQLRow key = i1.getRow(i).asRow();
+                final SQLRow value = i2.getRow(i).asRow();
+                final SQLRow prev = m.put(key, value);
+                if (prev != null)
+                    throw new IllegalStateException(key + " already encountered in this : " + this.getRow1());
+            }
+        }
+    }
+
+    private static final class DiffResultBuilder {
+        private final SQLRowValues vals, other;
+        private IndexedRows valsRows, otherRows;
+
+        private DiffResultBuilder(SQLRowValues vals, SQLRowValues other) {
+            super();
+            this.vals = vals;
+            this.other = other;
+        }
+
+        private void setRows(IndexedRows thisRows, IndexedRows otherRows) {
+            assert thisRows.getRow(0) == this.vals;
+            assert otherRows.getRow(0) == this.other;
+            this.valsRows = thisRows;
+            this.otherRows = otherRows;
+        }
+
+        private DiffResult build(final String firstDiff) {
+            if (this.valsRows != null && this.otherRows != null) {
+                return new DiffResult(firstDiff, this.valsRows, this.otherRows);
+            } else if (firstDiff == null) {
+                // if rows are equal but there's no IndexedRows, then the graphs have only one row
+                return new DiffResult(firstDiff, new IndexedRows(this.vals), new IndexedRows(this.other));
+            } else {
+                return new DiffResult(firstDiff, this.vals, this.other);
+            }
+        }
+    }
+
+    public final DiffResult getFirstDifference(final SQLRowValues vals, final SQLRowValues other, final boolean useForeignsOrder, final boolean useFieldsOrder, final boolean usePK) {
         this.containsCheck(vals);
+        final DiffResultBuilder b = new DiffResultBuilder(vals, other);
         if (vals == other)
-            return null;
+            return b.build(null);
         final int size = this.size();
         // don't call walk() if we can avoid as it is quite costly
         if (size != other.getGraph().size())
-            return "different size : " + size + " != " + other.getGraph().size();
-        else if (!vals.equalsJustThis(other, useFieldsOrder))
-            return "unequal :\n" + vals + " !=\n" + other;
+            return b.build("different size : " + size + " != " + other.getGraph().size());
+        else if (!vals.equalsJustThis(other, useFieldsOrder, false, usePK))
+            return b.build("unequal :\n" + vals + " !=\n" + other);
         if (size == 1)
-            return null;
+            return b.build(null);
 
         // BREADTH_FIRST no need to go deep if the first values are not equals
         final IndexedRows thisRows = this.getIndexedRows(vals, RecursionType.BREADTH_FIRST, useForeignsOrder);
         final IndexedRows otherRows = other.getGraph().getIndexedRows(other, RecursionType.BREADTH_FIRST, useForeignsOrder);
+        b.setRows(thisRows, otherRows);
 
         // now check that each row is equal
         // (this works because walk() always goes with the same order, see #FIELD_COMPARATOR and
@@ -1090,31 +1246,31 @@ public class SQLRowValuesCluster {
             final Path oPath = otherRows.getFirstPath(i);
 
             if (!thisPath.equals(oPath))
-                return ("unequal graph at index " + i + " " + thisPath + " != " + oPath);
+                return b.build("unequal graph at index " + i + " " + thisPath + " != " + oPath);
 
             // no need to check again
             assert i != 0 || (thisVals == vals && oVals == other);
             // don't use foreign ID, foreign rows are checked below
-            if (i != 0 && !thisVals.equalsJustThis(oVals, useFieldsOrder, false)) {
-                return "unequal local values at " + thisPath + " :\n" + thisVals + " !=\n" + oVals;
+            if (i != 0 && !thisVals.equalsJustThis(oVals, useFieldsOrder, false, usePK)) {
+                return b.build("unequal local values at " + thisPath + " :\n" + thisVals + " !=\n" + oVals);
             }
             final Map<String, SQLRowValues> thisForeigns = thisVals.getForeigns();
             final Map<String, SQLRowValues> otherForeigns = oVals.getForeigns();
             if (!thisForeigns.keySet().equals(otherForeigns.keySet()))
-                return "unequal foreigns at " + thisPath + " :\n" + thisForeigns.keySet() + " !=\n" + otherForeigns.keySet();
+                return b.build("unequal foreigns at " + thisPath + " :\n" + thisForeigns.keySet() + " !=\n" + otherForeigns.keySet());
 
             for (final Entry<String, SQLRowValues> e : thisForeigns.entrySet()) {
                 final String ff = e.getKey();
                 final SQLRowValues thisForeign = e.getValue();
                 final SQLRowValues otherForeign = otherForeigns.get(ff);
                 if (thisRows.getIndex(thisForeign) != otherRows.getIndex(otherForeign))
-                    return "unequal foreign " + ff + " at " + thisPath + " for " + thisVals + " and " + oVals;
+                    return b.build("unequal foreign " + ff + " at " + thisPath + " for " + thisVals + " and " + oVals);
                 // since they point to the same index, the equality will be checked by the time this
                 // loop ends
             }
         }
 
-        return null;
+        return b.build(null);
     }
 
     static public final class StopRecurseException extends RuntimeException {

@@ -418,8 +418,13 @@ public abstract class CollectionMap2<K, C extends Collection<V>, V> extends Abst
     }
 
     public void putAllCollections(final Map<? extends K, ? extends Collection<? extends V>> m) {
+        this.putAllCollections(m, false);
+    }
+
+    public void putAllCollections(final Map<? extends K, ? extends Collection<? extends V>> m, final boolean removeEmptyCollections) {
         for (final Map.Entry<? extends K, ? extends Collection<? extends V>> e : m.entrySet()) {
-            this.putCollection(e.getKey(), e.getValue());
+            if (!removeEmptyCollections || !e.getValue().isEmpty())
+                this.putCollection(e.getKey(), e.getValue());
         }
     }
 

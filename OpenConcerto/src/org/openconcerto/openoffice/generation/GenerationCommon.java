@@ -16,7 +16,6 @@
  */
 package org.openconcerto.openoffice.generation;
 
-import org.openconcerto.openoffice.ODPackage;
 import org.openconcerto.openoffice.ODSingleXMLDocument;
 import org.openconcerto.openoffice.OOXML;
 import org.openconcerto.openoffice.XMLVersion;
@@ -25,7 +24,6 @@ import org.openconcerto.openoffice.generation.desc.part.GeneratorReportPart;
 import org.openconcerto.openoffice.generation.generator.ExtractGenerator;
 
 import java.io.File;
-import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.HashMap;
@@ -59,11 +57,7 @@ public class GenerationCommon<R extends ReportGeneration<?>> {
 
     public final OOXML getOOXML() {
         if (this.xml == null) {
-            try {
-                this.xml = new ODPackage(this.getRg().getReportType().getTemplate()).getFormatVersion().getXML();
-            } catch (IOException e) {
-                throw new IllegalStateException("Couldn't read template", e);
-            }
+            this.xml = this.getRg().getFormatVersion().getXML();
         }
         return this.xml;
     }
@@ -76,7 +70,7 @@ public class GenerationCommon<R extends ReportGeneration<?>> {
      * 
      *         <pre>
      *     &lt;text:span&gt;hi how &lt;text:span text:style-name=&quot;bold&quot;&gt;are&lt;/text:span&gt; you ?&lt;/text:span&gt;
-     * </pre>
+     *         </pre>
      * 
      */
     protected final Element encodeRT(String s) {

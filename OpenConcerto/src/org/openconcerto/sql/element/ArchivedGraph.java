@@ -13,24 +13,25 @@
  
  package org.openconcerto.sql.element;
 
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValues.CreateMode;
 import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLSelect.ArchiveMode;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.SQLTable.VirtualFields;
 import org.openconcerto.sql.model.Where;
-import org.openconcerto.sql.model.graph.Link;
+import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.SetMap;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +46,7 @@ import java.util.Set;
  */
 final class ArchivedGraph {
 
-    static private final EnumSet<VirtualFields> ARCHIVE_AND_FOREIGNS = EnumSet.of(VirtualFields.FOREIGN_KEYS, VirtualFields.ARCHIVE);
+    static final VirtualFields ARCHIVE_AND_FOREIGNS = VirtualFields.ARCHIVE.union(VirtualFields.FOREIGN_KEYS);
 
     private final SQLElementDirectory dir;
     private final SQLRowValues graph;
@@ -71,8 +72,12 @@ final class ArchivedGraph {
             if (prev != null)
                 throw new IllegalStateException("Duplicated row : " + v.asRow());
         }
-        assert this.graphRows.size() == this.graph.getGraph().size();
+        assert isIndexCoherent();
         this.toExpand = new HashSet<SQLRow>(this.graphRows.keySet());
+    }
+
+    private boolean isIndexCoherent() {
+        return this.graphRows.size() == this.graph.getGraphSize();
     }
 
     private final SQLElement getElement(final SQLTable t) {
@@ -87,9 +92,9 @@ final class ArchivedGraph {
         for (final Entry<SQLTable, Set<Number>> e : idsToExpandPrivate.entrySet()) {
             final SQLElement elem = getElement(e.getKey());
             final Set<Number> ids = e.getValue();
-            final SQLRowValues privateGraph = elem.getPrivateGraph(ARCHIVE_AND_FOREIGNS);
-            // if the element has privates to expand
-            if (privateGraph.getGraph().size() > 1) {
+            final SQLRowValues privateGraph = elem.getPrivateGraph(ARCHIVE_AND_FOREIGNS, false, true);
+            // if the element has privates or joins to expand
+            if (privateGraph.getGraphSize() > 1) {
                 // fetch the main row and its privates
                 final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(privateGraph, false);
                 setWhereAndArchivePolicy(fetcher, ids, ArchiveMode.BOTH);
@@ -103,10 +108,12 @@ final class ArchivedGraph {
                         if (v == valsFetched) {
                             // get the row already in the graph
                             final SQLRowValues toExpandVals = this.graphRows.get(row);
-                            // load local values and foreign rows
-                            toExpandVals.load(valsFetched, null);
-                            assert valsFetched.getFields().isEmpty();
-                            // load referents rows
+                            // only load private foreign rows, do not overwrite other foreign rows.
+                            // I.e. toExpandVals has a foreign row for its parent and an ID for its
+                            // private, while valsFetched has the reverse.
+                            toExpandVals.load(valsFetched, valsFetched.getForeigns().keySet());
+                            assert !valsFetched.hasForeigns();
+                            // load referents private rows
                             if (valsFetched.hasReferents()) {
                                 for (final Entry<SQLField, ? extends Collection<SQLRowValues>> refEntry : new ListMap<SQLField, SQLRowValues>(valsFetched.getReferentsMap()).entrySet()) {
                                     final SQLField refField = refEntry.getKey();
@@ -132,89 +139,119 @@ final class ArchivedGraph {
         expandPrivates();
 
         while (!this.toExpand.isEmpty()) {
+            assert isIndexCoherent();
+
             // find required archived rows
             final SetMap<SQLTable, Number> toFetch = new SetMap<SQLTable, Number>();
+            // rows pointing to private are apart since their main rows need to be fetched
             final SetMap<SQLTable, Number> privateToFetch = new SetMap<SQLTable, Number>();
-            final Map<SQLTable, Set<Link>> foreignFields = new HashMap<SQLTable, Set<Link>>();
-            final SetMap<SQLRow, String> nonEmptyFieldsPointingToPrivates = new SetMap<SQLRow, String>();
+            // for each ASSOCIATION to a private, its last step and all the rows that point to the
+            // private
+            final ListMap<Step, SQLRowValues> nonEmptyFieldsPointingToPrivates = new ListMap<Step, SQLRowValues>();
+
             for (final SQLRow rowToExpand : this.toExpand) {
                 final SQLTable t = rowToExpand.getTable();
-                Set<Link> ffs = foreignFields.get(t);
-                if (ffs == null) {
-                    ffs = t.getDBSystemRoot().getGraph().getForeignLinks(t);
-                    foreignFields.put(t, ffs);
-                }
-                for (final Link ff : ffs) {
-                    final String fieldName = ff.getLabel().getName();
-                    if (!rowToExpand.isForeignEmpty(fieldName)) {
-                        final SQLRow foreignRow = new SQLRow(ff.getTarget(), rowToExpand.getInt(fieldName));
-                        final SQLRowValues existingRow = this.graphRows.get(foreignRow);
-                        if (existingRow != null) {
-                            this.graphRows.get(rowToExpand).put(fieldName, existingRow);
-                        } else {
-                            final SQLElement elem = getElement(foreignRow.getTable());
-                            final SetMap<SQLTable, Number> map;
-                            if (elem.getPrivateParentReferentFields().size() > 0) {
-                                // if foreignRow is part of private graph, fetch it later from
-                                // the main row
-                                nonEmptyFieldsPointingToPrivates.add(rowToExpand, fieldName);
-                                map = privateToFetch;
+                for (final SQLElementLink ff : getElement(t).getOwnedLinks().getByPath().values()) {
+                    // privates are always fetched alongside main rows
+                    // nothing to do if we point to a row that cannot be archived
+                    if (ff.getLinkType().equals(LinkType.COMPOSITION) || !ff.getOwned().getTable().isArchivable())
+                        continue;
+                    final SQLElement elem = ff.getOwned();
+                    final Step lastStep = ff.getPath().getStep(-1);
+                    assert lastStep.isForeign();
+                    final String fieldName = lastStep.getSingleField().getName();
+                    // OK since we included joins in getPrivateGraph()
+                    final Collection<SQLRowValues> rowsWithForeign = this.graphRows.get(rowToExpand).followPath(ff.getPath().minusLast(), CreateMode.CREATE_NONE, false);
+                    for (final SQLRowValues rowWithForeign : rowsWithForeign) {
+                        if (!rowWithForeign.isForeignEmpty(fieldName)) {
+                            final SQLRow foreignRow = rowWithForeign.getForeign(fieldName).asRow();
+                            final SQLRowValues existingRow = this.graphRows.get(foreignRow);
+                            if (existingRow != null) {
+                                rowWithForeign.put(fieldName, existingRow);
                             } else {
-                                map = toFetch;
+                                final SetMap<SQLTable, Number> map;
+                                if (elem.isPrivate()) {
+                                    // if foreignRow is part of private graph, fetch it later from
+                                    // the main row
+                                    nonEmptyFieldsPointingToPrivates.add(lastStep, rowWithForeign);
+                                    map = privateToFetch;
+                                } else {
+                                    map = toFetch;
+                                }
+                                map.add(foreignRow.getTable(), foreignRow.getIDNumber());
                             }
-                            map.add(foreignRow.getTable(), foreignRow.getIDNumber());
                         }
                     }
                 }
             }
 
+            assert isIndexCoherent();
+
+            // ** find ASSOCIATION to non-privates
             final Map<SQLRow, SQLRowValues> archivedForeignRows = fetch(toFetch);
 
             // attach to existing graph
             final Map<SQLRow, SQLRowValues> added = new HashMap<SQLRow, SQLRowValues>();
             for (final SQLRow rowToExpand : this.toExpand) {
                 final SQLTable t = rowToExpand.getTable();
-                final Set<Link> ffs = foreignFields.get(t);
-                assert ffs != null;
-                for (final Link ff : ffs) {
-                    final String fieldName = ff.getLabel().getName();
-                    if (!rowToExpand.isForeignEmpty(fieldName)) {
-                        final SQLRow foreignRow = new SQLRow(ff.getTarget(), rowToExpand.getInt(fieldName));
-                        final SQLRowValues valsFetched = archivedForeignRows.get(foreignRow);
-                        // null meaning excluded because it wasn't archived or points to a
-                        // private
-                        if (valsFetched != null && valsFetched.isArchived()) {
-                            attach(rowToExpand, fieldName, valsFetched, added);
-                            // rows were fetched from a different link
-                            nonEmptyFieldsPointingToPrivates.remove(rowToExpand, fieldName);
-                            privateToFetch.remove(foreignRow.getTable(), foreignRow.getIDNumber());
+                for (final SQLElementLink ff : getElement(t).getOwnedLinks().getByPath().values()) {
+                    final Step lastStep = ff.getPath().getStep(-1);
+                    assert lastStep.isForeign();
+                    final String fieldName = lastStep.getSingleField().getName();
+                    final Collection<SQLRowValues> rowsWithForeign = this.graphRows.get(rowToExpand).followPath(ff.getPath().minusLast(), CreateMode.CREATE_NONE, false);
+                    for (final SQLRowValues rowWithForeign : rowsWithForeign) {
+                        if (!rowWithForeign.isForeignEmpty(fieldName)) {
+                            final SQLRow foreignRow = rowWithForeign.getForeign(fieldName).asRow();
+                            final SQLRowValues existingOwnedRow = this.graphRows.get(foreignRow);
+                            if (existingOwnedRow != null) {
+                                // fetched by previous foreign key
+                                rowWithForeign.put(fieldName, existingOwnedRow);
+                            } else {
+                                final SQLRowValues valsFetched = archivedForeignRows.get(foreignRow);
+                                // null meaning excluded because it wasn't archived or points to a
+                                // private
+                                if (valsFetched != null) {
+                                    assert valsFetched.isArchived() : "Not archived : " + valsFetched;
+                                    attach(rowWithForeign, lastStep, valsFetched, added, privateToFetch);
+                                }
+                            }
                         }
                     }
                 }
             }
 
+            assert isIndexCoherent();
+
+            // ** find ASSOCIATION to privates
+
             // only referenced archived rows
             final Map<SQLRow, SQLRowValues> privateFetched = fetch(privateToFetch);
             toFetch.clear();
             for (final SQLRow r : privateFetched.keySet()) {
-                final SQLRowAccessor privateRoot = getElement(r.getTable()).getPrivateRoot(r, ArchiveMode.BOTH);
+                final SQLRowAccessor privateRoot = getElement(r.getTable()).fetchPrivateRoot(r, ArchiveMode.BOTH);
                 toFetch.add(privateRoot.getTable(), privateRoot.getIDNumber());
             }
             // then fetch private graph (even if the private row referenced is archived its main
             // row might not be)
             final Map<SQLRow, SQLRowValues> mainRowFetched = fetch(toFetch, ArchiveMode.BOTH);
             // attach to existing graph
-            for (final Entry<SQLRow, Set<String>> e : nonEmptyFieldsPointingToPrivates.entrySet()) {
-                final SQLRow rowToExpand = e.getKey();
-                final SQLTable t = rowToExpand.getTable();
-                for (final String fieldName : e.getValue()) {
-                    assert !rowToExpand.isForeignEmpty(fieldName);
-                    final SQLRow foreignRow = new SQLRow(t.getForeignTable(fieldName), rowToExpand.getInt(fieldName));
-                    final SQLRowValues valsFetched = mainRowFetched.get(foreignRow);
-                    if (valsFetched != null) {
-                        // since we kept only archived ones in privateFetched
-                        assert valsFetched.isArchived();
-                        attach(rowToExpand, fieldName, valsFetched, added);
+            for (final Entry<Step, List<SQLRowValues>> e : nonEmptyFieldsPointingToPrivates.entrySet()) {
+                final Step step = e.getKey();
+                final String fieldName = step.getSingleField().getName();
+                for (final SQLRowValues rowWithForeign : e.getValue()) {
+                    assert !rowWithForeign.isForeignEmpty(fieldName);
+                    final SQLRow foreignRow = rowWithForeign.getForeign(fieldName).asRow();
+                    final SQLRowValues existingOwnedRow = this.graphRows.get(foreignRow);
+                    if (existingOwnedRow != null) {
+                        // fetched by previous foreign key
+                        rowWithForeign.put(fieldName, existingOwnedRow);
+                    } else {
+                        final SQLRowValues valsFetched = mainRowFetched.get(foreignRow);
+                        if (valsFetched != null) {
+                            // since we kept only archived ones in privateFetched
+                            assert valsFetched.isArchived() : "Not archived : " + valsFetched;
+                            attach(rowWithForeign, step, valsFetched, added, null);
+                        }
                     }
                 }
             }
@@ -225,19 +262,22 @@ final class ArchivedGraph {
         return this.graph;
     }
 
-    // add a link through fieldName and if this joins 2 graphs, index the new rows.
-    private void attach(final SQLRow rowToExpand, final String fieldName, final SQLRowValues valsFetched, final Map<SQLRow, SQLRowValues> added) {
-        final boolean alreadyLinked = this.graph.getGraph() == valsFetched.getGraph();
-        this.graphRows.get(rowToExpand).put(fieldName, valsFetched);
-        if (!alreadyLinked) {
-            // put all values of valsFetched
-            for (final SQLRowValues v : valsFetched.getGraph().getItems()) {
-                final SQLRow row = v.asRow();
-                added.put(row, v);
-                this.graphRows.put(row, v);
-            }
+    // add a link through step and index the new rows.
+    private void attach(final SQLRowValues existingRow, final Step step, final SQLRowValues graphToAdd, final Map<SQLRow, SQLRowValues> added, final SetMap<SQLTable, Number> privateToFetch) {
+        assert existingRow.getGraph() != graphToAdd.getGraph() : "Already attached";
+        assert this.graphRows.get(existingRow.asRow()) == existingRow;
+        assert !this.graphRows.containsKey(graphToAdd.asRow());
+        for (final SQLRowValues v : graphToAdd.getGraph().getItems()) {
+            final SQLRow row = v.asRow();
+            added.put(row, v);
+            final SQLRowValues prev = this.graphRows.put(row, v);
+            assert prev == null : "Duplicate " + row + " in " + this.graph.printGraph();
+            // rows were fetched from a different link
+            if (privateToFetch != null)
+                privateToFetch.remove(v.getTable(), v.getIDNumber());
         }
-        assert this.graphRows.size() == this.graph.getGraph().size();
+        existingRow.put(step, graphToAdd);
+        assert isIndexCoherent();
     }
 
     private void setWhereAndArchivePolicy(final SQLRowValuesListFetcher fetcher, final Set<Number> ids, final ArchiveMode archiveMode) {
@@ -245,7 +285,7 @@ final class ArchivedGraph {
             f.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
                 @Override
                 public SQLSelect transformChecked(SQLSelect input) {
-                    if (f == fetcher) {
+                    if (f == fetcher && ids != null) {
                         input.andWhere(new Where(fetcher.getGraph().getTable().getKey(), ids));
                     }
                     input.setArchivedPolicy(archiveMode);
@@ -268,10 +308,11 @@ final class ArchivedGraph {
             final SQLElement elem = getElement(table);
             final SQLRowValuesListFetcher fetcher;
             // don't fetch partial data
-            if (elem.getPrivateParentReferentFields().isEmpty())
-                fetcher = SQLRowValuesListFetcher.create(elem.getPrivateGraph(ARCHIVE_AND_FOREIGNS));
+            if (!elem.isPrivate())
+                fetcher = SQLRowValuesListFetcher.create(elem.getPrivateGraph(ARCHIVE_AND_FOREIGNS, false, true));
             else
-                fetcher = new SQLRowValuesListFetcher(new SQLRowValues(table).putNulls(table.getFieldsNames(ARCHIVE_AND_FOREIGNS)));
+                // only needs IDs
+                fetcher = new SQLRowValuesListFetcher(new SQLRowValues(table).putNulls(table.getFieldsNames(VirtualFields.ARCHIVE)));
             setWhereAndArchivePolicy(fetcher, ids, archiveMode);
             for (final SQLRowValues fetchedVals : fetcher.fetch()) {
                 for (final SQLRowValues v : fetchedVals.getGraph().getItems()) {

@@ -13,7 +13,7 @@
  
  package org.openconcerto.erp.core.sales.pos.ui;
 
-import org.openconcerto.erp.core.sales.pos.Caisse;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
 import org.openconcerto.utils.ExceptionHandler;
 
 import java.awt.Color;
@@ -104,10 +104,13 @@ public class CaisseMenuPanel extends JPanel implements ListSelectionListener {
                 break;
             case 3:
                 // Clôture
-                Caisse.commitAll(Caisse.allTickets());
+                frame.getControler().setLCD("Cloture", "En cours...", 0);
+                POSConfiguration.getInstance().commitAll(POSConfiguration.getInstance().allTickets());
+                frame.getControler().setLCD("Cloture", "Terminee", 0);
                 break;
             case 5:
                 // Fermeture
+                frame.getControler().setLCD("   CAISSE FERMEE    ", "", 0);
                 frame.dispose();
                 Frame[] l = Frame.getFrames();
                 for (int i = 0; i < l.length; i++) {

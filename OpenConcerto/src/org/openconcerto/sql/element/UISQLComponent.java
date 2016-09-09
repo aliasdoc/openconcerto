@@ -17,6 +17,7 @@
 package org.openconcerto.sql.element;
 
 import org.openconcerto.sql.TM;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.request.RowItemDesc;
 import org.openconcerto.sql.request.SQLRowItemView;
 import org.openconcerto.ui.FormLayouter;
@@ -134,7 +135,7 @@ public abstract class UISQLComponent extends BaseSQLComponent {
     }
 
     private String getDefaultWhere(SQLRowItemView obj) {
-        if (obj.getFields().size() == 1 && getElement().getPrivateForeignFields().contains(obj.getField().getName()))
+        if (obj.getFields().size() == 1 && getElement().getOwnedLink(obj.getField().getName(), LinkType.COMPOSITION) != null)
             return "bordered";
         return null;
     }

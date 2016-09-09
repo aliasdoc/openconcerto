@@ -18,7 +18,6 @@ import org.openconcerto.erp.config.Gestion;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.model.SommeCompte;
 import org.openconcerto.erp.preferences.TemplateNXProps;
-import org.openconcerto.map.model.Ville;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRow;
@@ -34,7 +33,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
 import javax.swing.SwingUtilities;
 

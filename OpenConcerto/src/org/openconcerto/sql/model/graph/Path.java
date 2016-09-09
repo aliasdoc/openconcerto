@@ -57,7 +57,8 @@ public final class Path extends AbstractPath<Path> {
         // garbage collected. So we should have listened to dropped events of system roots to clear
         // the cache. But at this point we should have done one lookup with system root plus one
         // with the table to find the cached path. Since single item paths are generally
-        // short-lived (mostly used when building a longer path) and by definition small this doesn't
+        // short-lived (mostly used when building a longer path) and by definition small this
+        // doesn't
         // seem worthwhile.
         return new Path(first);
     }
@@ -449,6 +450,19 @@ public final class Path extends AbstractPath<Path> {
     }
 
     public boolean startsWith(Path other) {
-        return this.length() >= other.length() && this.subPath(0, other.length()).equals(other);
+        final int otherL = other.length();
+        // avoid allocation
+        if (otherL == 0)
+            return this.getFirst() == other.getFirst();
+        return this.length() >= otherL && this.subPath(0, otherL).equals(other);
+    }
+
+    public boolean endsWith(Path other) {
+        final int thisL = this.length();
+        final int otherL = other.length();
+        // avoid allocation
+        if (otherL == 0)
+            return this.getLast() == other.getLast();
+        return thisL >= otherL && this.subPath(thisL - otherL, thisL).equals(other);
     }
 }

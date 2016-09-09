@@ -169,9 +169,9 @@ public class RowValuesTableModel extends AbstractTableModel {
             validate = this.getRowValuesAt(rowIndex).getBoolean(this.validationField.getName());
         }
         if (validate && fieldValidate) {
-            return this.list.get(columnIndex).isCellEditable(this.getRowValuesAt(rowIndex));
+            return this.list.get(columnIndex).isCellEditable(this.getRowValuesAt(rowIndex), rowIndex, columnIndex);
         } else {
-            return (!validate) && this.list.get(columnIndex).isCellEditable(this.getRowValuesAt(rowIndex));
+            return (!validate) && this.list.get(columnIndex).isCellEditable(this.getRowValuesAt(rowIndex), rowIndex, columnIndex);
         }
     }
 
@@ -190,7 +190,12 @@ public class RowValuesTableModel extends AbstractTableModel {
         } else {
             SQLRowValues val = this.rowValues.get(rowIndex);
             SQLTableElement sqlTableElem = this.list.get(columnIndex);
+            Object storedObject = val.getObject(sqlTableElem.getRowField());
             result = sqlTableElem.getValueFrom(val);
+            if (sqlTableElem.getElementClass() != null && Number.class.isAssignableFrom(sqlTableElem.getElementClass()) && !CompareUtils.equals(result, storedObject)) {
+                fireTableDataChanged();
+            }
+
         }
 
         return result;
@@ -345,6 +350,9 @@ public class RowValuesTableModel extends AbstractTableModel {
         }
 
         final SQLRowValues newRowParDefaut = new SQLRowValues(RowValuesTableModel.this.defautRow);
+        if (index > 0 && index < getRowCount() && newRowParDefaut.getTable().contains("NIVEAU")) {
+            newRowParDefaut.put("NIVEAU", this.rowValues.get(index - 1).getObject("NIVEAU"));
+        }
         RowValuesTableModel.this.rowValues.add(index, newRowParDefaut);
 
         final int size = RowValuesTableModel.this.tableModelListeners.size();

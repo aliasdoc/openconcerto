@@ -261,11 +261,6 @@ public final class SQLRowValues extends SQLRowAccessor {
         this(vals.getTable(), vals.getAllValues(copyForeigns));
     }
 
-    @Override
-    public SQLRowValues createEmptyUpdateRow() {
-        return new SQLRowValues(this.getTable()).setID(this.getID());
-    }
-
     /**
      * Copy this rowValues and all others connected to it. Ie contrary to
      * {@link #SQLRowValues(SQLRowValues)} the result will not point to the same rowValues, but to
@@ -274,7 +269,7 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @return a copy of this.
      */
     public final SQLRowValues deepCopy() {
-        return this.getGraph().deepCopy(this);
+        return this.getGraph().deepCopy(this, false);
     }
 
     /**
@@ -493,7 +488,11 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @return this.
      */
     public final SQLRowValues clearReferents() {
-        return this.changeReferents(null, false);
+        return this.changeReferents(ForeignCopyMode.NO_COPY);
+    }
+
+    public final SQLRowValues changeReferents(final ForeignCopyMode mode) {
+        return this.changeReferents(null, false, mode);
     }
 
     public final SQLRowValues removeReferents(final SQLField f) {
@@ -504,19 +503,34 @@ public final class SQLRowValues extends SQLRowAccessor {
         return this;
     }
 
-    public final SQLRowValues retainReferents(final SQLField f) {
-        return this.changeReferents(f, true);
+    public final SQLRowValues removeReferentFields(final Collection<SQLField> fields) {
+        return this.changeReferents(fields, false);
     }
 
-    private final SQLRowValues changeReferents(final SQLField f, final boolean retain) {
-        return this.changeReferents(f, retain, ForeignCopyMode.NO_COPY);
+    public final SQLRowValues retainReferentFields(final Collection<SQLField> fields) {
+        return this.changeReferents(fields, true);
     }
 
-    private final SQLRowValues changeReferents(final SQLField f, final boolean retain, final ForeignCopyMode mode) {
-        if ((f != null || !retain) && mode != ForeignCopyMode.COPY_ROW) {
+    private final SQLRowValues changeReferents(final Collection<SQLField> fields, final boolean retain) {
+        return this.changeReferents(fields, retain, ForeignCopyMode.NO_COPY);
+    }
+
+    /**
+     * Change referents. NOTE : depending on the {@link ForeignCopyMode mode} this method may detach
+     * this row from some of its referents.
+     * 
+     * @param fields the fields to change or to exclude from change.
+     * @param exclude <code>true</code> if fields passed to this method must be excluded from the
+     *        change, <code>false</code> to only change fields passed to this method.
+     * @param mode how the referent row will be changed.
+     * @return this.
+     */
+    public final SQLRowValues changeReferents(final Collection<SQLField> fields, final boolean exclude, final ForeignCopyMode mode) {
+        if (!isEmpty(fields, exclude) && mode != ForeignCopyMode.COPY_ROW) {
             // copy otherwise ConcurrentModificationException
             for (final Entry<SQLField, Set<SQLRowValues>> e : CopyUtils.copy(this.getReferents()).entrySet()) {
-                if (f == null || e.getKey().equals(f) != retain) {
+                // fields == null means !retain thanks to the above if
+                if (fields == null || fields.contains(e.getKey()) != exclude) {
                     for (final SQLRowValues ref : e.getValue()) {
                         ref.flatten(e.getKey().getName(), mode);
                     }
@@ -575,16 +589,6 @@ public final class SQLRowValues extends SQLRowAccessor {
 
     @Override
     public final Object getObject(String fieldName) {
-        return this.getObject(fieldName, false);
-    }
-
-    private Object getContainedObject(String fieldName) throws IllegalArgumentException {
-        return this.getObject(fieldName, true);
-    }
-
-    private Object getObject(String fieldName, final boolean mustBePresent) throws IllegalArgumentException {
-        if (mustBePresent && !this.values.containsKey(fieldName))
-            throw new IllegalArgumentException("Field " + fieldName + " not present in this : " + this.getFields());
         return this.values.get(fieldName);
     }
 
@@ -594,9 +598,18 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     protected final Map<String, Object> getAllValues(ForeignCopyMode copyForeigns) {
+        return this.getAllValues(copyForeigns, false);
+    }
+
+    private final Map<String, Object> getAllValues(ForeignCopyMode copyForeigns, final boolean copy) {
         final Map<String, Object> toAdd;
         if (copyForeigns == ForeignCopyMode.COPY_ROW || this.foreigns.size() == 0) {
-            toAdd = this.values;
+            if (copy) {
+                toAdd = createLinkedHashMap(this.size());
+                toAdd.putAll(this.values);
+            } else {
+                toAdd = this.values;
+            }
         } else {
             final Set<Entry<String, Object>> entrySet = this.values.entrySet();
             toAdd = createLinkedHashMap(entrySet.size());
@@ -614,7 +627,7 @@ public final class SQLRowValues extends SQLRowAccessor {
                 }
             }
         }
-        return Collections.unmodifiableMap(toAdd);
+        return copy ? toAdd : Collections.unmodifiableMap(toAdd);
     }
 
     /**
@@ -654,8 +667,13 @@ public final class SQLRowValues extends SQLRowAccessor {
      */
     @Override
     public final SQLRowAccessor getForeign(String fieldName) throws IllegalArgumentException, ClassCastException {
-        // keep getForeignTable at the 1st line since it does the check
-        final SQLTable foreignTable = this.getForeignTable(fieldName);
+        return this.getForeign(this.getForeignLink(Collections.singletonList(fieldName)));
+    }
+
+    public final SQLRowAccessor getForeign(final Link l) throws IllegalArgumentException {
+        if (!l.getSource().equals(this.getTable()))
+            throw new IllegalArgumentException(l + " not from " + this);
+        final String fieldName = l.getSingleField().getName();
         final Object val = this.getContainedObject(fieldName);
         if (val instanceof SQLRowAccessor) {
             return (SQLRowAccessor) val;
@@ -666,7 +684,7 @@ public final class SQLRowValues extends SQLRowAccessor {
         } else if (this.isDefault(fieldName)) {
             throw new IllegalStateException(fieldName + " is DEFAULT");
         } else {
-            return new SQLRow(foreignTable, this.getInt(fieldName));
+            return new SQLRow(l.getTarget(), this.getInt(fieldName));
         }
     }
 
@@ -764,17 +782,19 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     private final SQLRowValues changeFields(Collection<String> fields, final boolean retain) {
-        // retains all == no-op
-        if (retain && fields == null)
-            return this;
-        // remove nothing == no-op
-        if (!retain && fields != null && fields.isEmpty())
+        return this.changeFields(fields, retain, false);
+    }
+
+    public final SQLRowValues changeFields(Collection<String> fields, final boolean retain, final boolean protectGraph) {
+        if (isEmpty(fields, retain))
             return this;
         // clear all on an empty values == no-op
         if (!retain && fields == null && this.size() == 0)
             return this;
 
         final Set<String> toRm = new HashSet<String>(this.values.keySet());
+        if (protectGraph)
+            toRm.removeAll(this.foreigns.keySet());
         // fields == null => !retain => clear()
         if (fields != null) {
             if (retain) {
@@ -792,7 +812,7 @@ public final class SQLRowValues extends SQLRowAccessor {
             if (fieldGroups.get(fieldName).getKeyType() == Type.FOREIGN_KEY)
                 this._put(fieldName, null);
         }
-        if (fields == null) {
+        if (fields == null && !protectGraph) {
             assert !retain && toRm.equals(this.values.keySet());
             this.values.clear();
         } else {
@@ -849,6 +869,60 @@ public final class SQLRowValues extends SQLRowAccessor {
                 iter.remove();
         }
         return values;
+    }
+
+    /**
+     * Change foreign and referent rows. NOTE : this doesn't change all foreign keys, only those
+     * that contain an {@link SQLRowValues}.
+     * 
+     * @param paths the first steps are to be changed or to be excluded from change,
+     *        <code>null</code> meaning all.
+     * @param exclude <code>true</code> if steps passed to this method must be excluded from the
+     *        change, <code>false</code> to only change steps passed to this method.
+     * @param mode how the rows will be changed.
+     * @return this.
+     */
+    public final SQLRowValues changeGraph(final Collection<Path> paths, final boolean exclude, ForeignCopyMode mode) {
+        if (this.getGraphSize() == 1)
+            return this;
+
+        final Set<SQLField> refFields;
+        final Set<String> foreignFields;
+        if (paths == null) {
+            refFields = null;
+            foreignFields = null;
+        } else {
+            refFields = new HashSet<SQLField>();
+            foreignFields = new HashSet<String>();
+            for (final Path p : paths) {
+                if (p.getFirst() != this.getTable())
+                    throw new IllegalArgumentException("Path not from this : " + p);
+                if (p.length() > 0) {
+                    final Step step = p.getStep(0);
+                    for (final Link l : step.getLinks()) {
+                        if (step.getDirection(l) == Direction.REFERENT)
+                            refFields.addAll(l.getFields());
+                        else
+                            foreignFields.addAll(l.getCols());
+                    }
+                }
+            }
+        }
+        changeForeigns(foreignFields, exclude, mode);
+        changeReferents(refFields, exclude, mode);
+        return this;
+    }
+
+    public final void detach() {
+        // keep the most information
+        this.detach(ForeignCopyMode.COPY_ID_OR_RM);
+    }
+
+    public final void detach(final ForeignCopyMode mode) {
+        if (mode.compareTo(ForeignCopyMode.COPY_ID_OR_ROW) >= 0)
+            throw new IllegalArgumentException("Might keep row and not detach : " + mode);
+        this.changeGraph(null, false, mode);
+        assert this.getGraphSize() == 1;
     }
 
     // puts
@@ -988,13 +1062,24 @@ public final class SQLRowValues extends SQLRowAccessor {
         for (final Link l : step.getLinks()) {
             final Direction dir = step.getDirection(l);
             if (dir == Direction.REFERENT) {
-                vals.put(l.getSingleField().getName(), this);
+                vals._putForeign(l, this);
             } else {
                 assert dir == Direction.FOREIGN;
-                this.put(l.getSingleField().getName(), vals);
+                this._putForeign(l, vals);
             }
         }
         return vals;
+    }
+
+    private final SQLRowValues _putForeign(final Link l, SQLRowValues vals) {
+        this.put(l.getSingleField().getName(), vals);
+        return vals;
+    }
+
+    public final SQLRowValues putForeign(final Link l, SQLRowValues vals) throws IllegalArgumentException {
+        if (!l.getSource().equals(this.getTable()))
+            throw new IllegalArgumentException(l + " not from " + this);
+        return _putForeign(l, vals);
     }
 
     public final void remove(final Step step) {
@@ -1002,7 +1087,7 @@ public final class SQLRowValues extends SQLRowAccessor {
             if (step.getDirection(l) == Direction.FOREIGN)
                 this.removeForeignKey(l);
             else
-                this.removeReferents(l.getSingleField());
+                this.removeReferentFields(l.getFields());
         }
     }
 
@@ -1147,8 +1232,13 @@ public final class SQLRowValues extends SQLRowAccessor {
 
     private final SQLRowValues loadAll(Map<String, ?> m, final Collection<String> keys, final boolean required, final FillMode fillMode) {
         final Collection<String> keySet = keys == null ? m.keySet() : keys;
-        if (!this.getTable().getFieldsName().containsAll(keySet))
-            throw new IllegalArgumentException("fields " + keySet + " are not a subset of " + this.getTable() + " : " + this.getTable().getFieldsName());
+        if (!this.getTable().getFieldsName().containsAll(keySet)) {
+            final List<String> l1 = new ArrayList<String>(keySet);
+            final List<String> l2 = new ArrayList<String>(this.getTable().getFieldsName());
+            Collections.sort(l1);
+            Collections.sort(l2);
+            throw new IllegalArgumentException("fields " + l1 + " are not a subset of " + this.getTable() + " : " + l2);
+        }
         // copy before passing to fire()
         final Map<String, Object> toLoad = new LinkedHashMap<String, Object>(m);
         if (keys != null) {
@@ -1390,8 +1480,8 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     /**
-     * Create all rows on the passed path and add them to this. There's
-     * {@link CreateMode#CREATE_ONE one row} per step.
+     * Create all rows on the passed path and add them to this. There's {@link CreateMode#CREATE_ONE
+     * one row} per step.
      * 
      * @param p the path.
      * @return the row at the end of the path.
@@ -1432,7 +1522,8 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @throws IllegalStateException if <code>onlyOne</code> and there's more than one row on the
      *         path.
      */
-    public final Collection<SQLRowValues> followPath(final Path p, final CreateMode create, final boolean onlyOne, final boolean allowBackTrack) throws IllegalArgumentException, IllegalStateException {
+    public final Collection<SQLRowValues> followPath(final Path p, final CreateMode create, final boolean onlyOne, final boolean allowBackTrack)
+            throws IllegalArgumentException, IllegalStateException {
         return followPath(p, create, false, onlyOne, allowBackTrack ? null : new LinkedIdentitySet<SQLRowValues>());
     }
 
@@ -1560,23 +1651,27 @@ public final class SQLRowValues extends SQLRowAccessor {
         }
     }
 
-    public final SQLRowValues flatten() {
-        return this.flatten(false);
+    public final SQLRowValues changeForeigns(ForeignCopyMode mode) {
+        return this.changeForeigns(null, false, mode);
     }
 
-    /**
-     * Replace each foreign rowValues with its ID.
-     * 
-     * @param rmNoID <code>true</code> if a rowValues without an ID should be removed.
-     * @return this.
-     */
-    public final SQLRowValues flatten(boolean rmNoID) {
-        final Map<String, SQLRowValues> copy = new HashMap<String, SQLRowValues>(this.getForeigns());
-        for (final Map.Entry<String, SQLRowValues> e : copy.entrySet()) {
-            if (e.getValue().hasID())
-                this.put(e.getKey(), e.getValue().getID());
-            else if (rmNoID)
-                this.remove(e.getKey());
+    static private final boolean isEmpty(final Collection<?> coll, final boolean exclude) {
+        if (exclude) {
+            return coll == null;
+        } else {
+            return coll != null && coll.isEmpty();
+        }
+    }
+
+    public final SQLRowValues changeForeigns(final Collection<String> fields, final boolean exclude, final ForeignCopyMode mode) {
+        if (!isEmpty(fields, exclude) && mode != ForeignCopyMode.COPY_ROW) {
+            // copy otherwise ConcurrentModificationException
+            for (final String ff : new ArrayList<String>(this.getForeigns().keySet())) {
+                // fields == null means include all thanks to the above if
+                if (fields == null || fields.contains(ff) != exclude) {
+                    this.flatten(ff, mode);
+                }
+            }
         }
         return this;
     }
@@ -1622,7 +1717,7 @@ public final class SQLRowValues extends SQLRowAccessor {
      * @param row the row to load values from.
      * @param fieldsNames what fields to load, <code>null</code> meaning all.
      */
-    public void load(SQLRowAccessor row, final Set<String> fieldsNames) {
+    public void load(SQLRowAccessor row, final Collection<String> fieldsNames) {
         // make sure we only define keys that row has
         // allow load( {'A':a, 'B':b}, {'A', 'B', 'C' } ) to not define 'C' to null
         final Map<String, Object> m = new LinkedHashMap<String, Object>(row.getAbsolutelyAll());
@@ -1662,7 +1757,7 @@ public final class SQLRowValues extends SQLRowAccessor {
      */
     public Object[] getInvalid() {
         final Map<SQLField, Link> foreignLinks = new HashMap<SQLField, Link>();
-        for (final Link foreignLink : this.getTable().getDBSystemRoot().getGraph().getForeignLinks(this.getTable())) {
+        for (final Link foreignLink : this.getTable().getForeignLinks()) {
             for (final SQLField f : foreignLink.getFields()) {
                 foreignLinks.put(f, foreignLink);
             }
@@ -1948,7 +2043,7 @@ public final class SQLRowValues extends SQLRowAccessor {
     public final String getGraphFirstDifference(final SQLRowValues other, final boolean useOrder) {
         if (this == other)
             return null;
-        return this.getGraph().getFirstDifference(this, other, useOrder, useOrder);
+        return this.getGraph().getFirstDifference(this, other, useOrder, useOrder, true).getFirstDifference();
     }
 
     public final boolean equalsJustThis(final SQLRowValues o) {
@@ -1974,6 +2069,10 @@ public final class SQLRowValues extends SQLRowAccessor {
     }
 
     final boolean equalsJustThis(final SQLRowValues o, final boolean useFieldsOrder, final boolean useForeignID) {
+        return this.equalsJustThis(o, useFieldsOrder, useForeignID, true);
+    }
+
+    final boolean equalsJustThis(final SQLRowValues o, final boolean useFieldsOrder, final boolean useForeignID, final boolean usePK) {
         if (this == o)
             return true;
         if (!this.getTable().equals(o.getTable()))
@@ -1988,8 +2087,13 @@ public final class SQLRowValues extends SQLRowAccessor {
         }
         // fields are already checked so if IDs are not wanted, just omit foreign rows
         final ForeignCopyMode copyMode = useForeignID ? ForeignCopyMode.COPY_ID_OR_RM : ForeignCopyMode.NO_COPY;
-        final Map<String, Object> thisVals = this.getAllValues(copyMode);
-        final Map<String, Object> oVals = o.getAllValues(copyMode);
+        final Map<String, Object> thisVals = this.getAllValues(copyMode, !usePK);
+        final Map<String, Object> oVals = o.getAllValues(copyMode, !usePK);
+        if (!usePK) {
+            final List<String> pk = this.getTable().getPKsNames();
+            thisVals.keySet().removeAll(pk);
+            oVals.keySet().removeAll(pk);
+        }
         // LinkedHashMap.equals() does not compare the order of entries
         return thisVals.equals(oVals);
     }

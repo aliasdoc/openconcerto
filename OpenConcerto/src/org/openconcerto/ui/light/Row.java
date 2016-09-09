@@ -13,6 +13,10 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONAble;
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.ui.StringWithId;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -20,15 +24,13 @@ import java.io.ObjectOutput;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.openconcerto.utils.io.JSONAble;
-import org.openconcerto.utils.io.JSONConverter;
-import org.openconcerto.utils.ui.StringWithId;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
 public class Row implements Externalizable, JSONAble {
 
     private long id;
+    private String extendId;
     private List<Object> values;
     
     private Boolean fillWidth = false;
@@ -45,11 +47,19 @@ public class Row implements Externalizable, JSONAble {
 
     public Row(long id, int valueCount) {
         this.id = id;
-        if (valueCount > 0)
-            this.values = new ArrayList<Object>(valueCount);
+        this.values = new ArrayList<Object>();
+        if (valueCount > 0) {
+            for(int i = 0; i < valueCount; i++) {
+                this.values.add(null);
+            }
+        }
     }
 
     public Row(long id) {
+        this.id = id;
+    }
+    
+    public void setId(final long id) {
         this.id = id;
     }
 
@@ -64,7 +74,15 @@ public class Row implements Externalizable, JSONAble {
     public long getId() {
         return this.id;
     }
-
+    
+    public String getExtendId() {
+        return this.extendId;
+    }
+    
+    public void setExtendId(final String extendId) {
+        this.extendId = extendId;
+    }
+    
     public void addValue(Object v) {
         this.values.add(v);
     }
@@ -100,6 +118,7 @@ public class Row implements Externalizable, JSONAble {
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         out.writeLong(this.id);
+        out.writeUTF(this.extendId);
         out.writeObject(this.values);
         out.writeBoolean(this.fillWidth);
         out.writeBoolean(this.toggleable);
@@ -109,6 +128,7 @@ public class Row implements Externalizable, JSONAble {
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         this.id = in.readLong();
+        this.extendId = in.readUTF();
         this.values = (List<Object>) in.readObject();
         this.fillWidth = in.readBoolean();
         this.toggleable = in.readBoolean();
@@ -121,6 +141,9 @@ public class Row implements Externalizable, JSONAble {
 
         result.put("class", "Row");
         result.put("id", this.id);
+        if(this.extendId != null) {
+            result.put("extend-id", this.extendId);
+        }
         if(!this.values.isEmpty()) {
             result.put("values", JSONConverter.getJSON(this.values));
         }
@@ -140,6 +163,7 @@ public class Row implements Externalizable, JSONAble {
     @Override
     public void fromJSON(final JSONObject json) {
         this.id = (Long) JSONConverter.getParameterFromJSON(json, "id", Long.class);
+        this.extendId = (String) JSONConverter.getParameterFromJSON(json, "extend-id", String.class);
         this.fillWidth = (Boolean) JSONConverter.getParameterFromJSON(json, "fill-width", Boolean.class, false);
         this.toggleable = (Boolean) JSONConverter.getParameterFromJSON(json, "toggleable", Boolean.class, false);
         this.visible = (Boolean) JSONConverter.getParameterFromJSON(json, "visible", Boolean.class, true);
@@ -159,7 +183,7 @@ public class Row implements Externalizable, JSONAble {
                     if(valueClassName.equals(StringWithId.class.getSimpleName())) {
                         objValue = new StringWithId(jsonValue);
                     } else if (valueClassName.equals(LightUIElement.class.getSimpleName())) {
-                        objValue = LightUIElement.createUIElementFromJSON(jsonValue);
+                        objValue = JSONToLightUIConvertorManager.getInstance().createUIElementFromJSON(jsonValue);
                     } else {
                         throw new IllegalArgumentException("invalid value for 'values', StringWithId or LightUIElement expected");
                     }

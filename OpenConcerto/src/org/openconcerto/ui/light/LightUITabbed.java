@@ -13,106 +13,52 @@
  
  package org.openconcerto.ui.light;
 
-import java.util.LinkedHashMap;
-import java.util.Map.Entry;
-
 import org.openconcerto.utils.io.JSONConverter;
-import net.minidev.json.JSONArray;
+
 import net.minidev.json.JSONObject;
 
-public class LightUITabbed extends LightUIElement {
-    LinkedHashMap<String, LightUIPanel> tabs = new LinkedHashMap<String, LightUIPanel>();
-    String selectedTab;
-    
+public abstract class LightUITabbed extends LightUIContainer implements IUserControlContainer {
     // Init from json constructor
     public LightUITabbed(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
+
     // Clone constructor
     public LightUITabbed(final LightUITabbed tabbedElement) {
         super(tabbedElement);
-        this.tabs = tabbedElement.tabs;
-        this.selectedTab = tabbedElement.selectedTab;
     }
-    
+
     public LightUITabbed(final String id) {
-        super();
-        
-        this.setId(id);
+        super(id);
         this.setType(TYPE_TABBED_UI);
+        this.setWeightX(1);
+        this.setFillWidth(true);
     }
-    
-    public LightUIPanel getTab(final String title) {
-        return this.tabs.get(title);
+
+    /**
+     * This function allow dynamic load of tab. If the loading of one tab take a while, you can load
+     * others after or in other thread
+     * 
+     * @param tabId: id of tab which you want to load. The tab id must match with a tab contained in
+     *        childs
+     */
+    public abstract void loadTab(final String tabId);
+
+    @Override
+    public void setValue(final String value) {
+        super.setValue(value);
     }
-    
-    public LightUIPanel getTab(final int index) {
-        final Object o = this.tabs.values().toArray()[index];
-        if(!(o instanceof LightUIPanel)) {
-            throw new IllegalArgumentException("the value at " + String.valueOf(index) + " is not valid");
-        }
-        return (LightUIPanel) o;
-    }
-    
-    public void addTab(final String title, final LightUIPanel panel) {
-        this.tabs.put(title, panel);
-    }
-    
-    public void setSelectedTab(final String selectedTab) {
-        this.selectedTab = selectedTab;
-    }
-    
-    public int getTabsCount() {
-        return this.tabs.size();
-    }
-    
-    public LightUIElement getElementById(final String id) {
-        for(final LightUIPanel tab : this.tabs.values()) {
-            final LightUIElement result = tab.getElementById(id);
-            if(result != null) {
-                return result;
-            }
-        }
-        return null;
-    }
-    
-    @Override 
-    public LightUIElement clone() {
-        return new LightUITabbed(this);
-    }
-    
-    @Override public JSONObject toJSON() {
-        final JSONObject json = super.toJSON();
-        json.put("selected-tab", this.selectedTab);
-        
-        final JSONArray jsonTabs = new JSONArray();
-        for(final Entry<String, LightUIPanel> entry : this.tabs.entrySet()) {
-            final JSONObject jsonTab = new JSONObject();
-            jsonTab.put("title", entry.getKey());
-            jsonTab.put("panel", entry.getValue().toJSON());
-            jsonTabs.add(jsonTab);
-        }
-        
-        json.put("tabs", jsonTabs);
-        
-        return json;
-    }
-    
-    @Override public void fromJSON(final JSONObject json) {
-        super.fromJSON(json);
-        this.selectedTab = (String) JSONConverter.getParameterFromJSON(json, "selected-tab", String.class);
-        
-        final JSONArray jsonTabs = (JSONArray) JSONConverter.getParameterFromJSON(json, "tabs", JSONArray.class);
-        this.tabs.clear();
-        if(jsonTabs != null) {
-            for(final Object objTab : jsonTabs) {
-                if(!(objTab instanceof JSONObject)) {
-                    throw new IllegalArgumentException("value for 'selected-tab' is invalid");
-                }
-                final JSONObject jsonTab = (JSONObject) objTab;
-                final String title = (String) JSONConverter.getParameterFromJSON(jsonTab, "title", String.class);
-                final LightUIPanel panel = new LightUIPanel((JSONObject) JSONConverter.getParameterFromJSON(jsonTab, "panel", JSONObject.class));
-                this.tabs.put(title, panel);
+
+    @Override
+    public void setValueFromContext(final Object value) {
+        final JSONObject jsonContext = (JSONObject) JSONConverter.getObjectFromJSON(value, JSONObject.class);
+        final int childCount = this.getChildrenCount();
+        for (int i = 0; i < childCount; i++) {
+            final LightUITab child = this.getChild(i, LightUITab.class);
+            if (jsonContext.containsKey(child.getUUID())) {
+                child.setValueFromContext(jsonContext.get(child.getUUID()));
+            } else {
+                System.out.println("LightUITabbed.setValueFromContext() - Context doesn't contains value for UUID: " + child.getUUID() + " ID: " + child.getId());
             }
         }
     }

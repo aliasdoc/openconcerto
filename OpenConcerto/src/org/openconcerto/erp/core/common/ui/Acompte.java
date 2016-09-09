@@ -13,6 +13,8 @@
  
  package org.openconcerto.erp.core.common.ui;
 
+import org.openconcerto.erp.core.finance.accounting.model.Currency;
+import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.GestionDevise;
 import org.openconcerto.utils.StringUtils;
@@ -23,6 +25,7 @@ import java.text.DecimalFormat;
 public class Acompte {
     protected BigDecimal montant;
     protected BigDecimal percent;
+    private CurrencyConverter converter = new CurrencyConverter();
 
     public final static Acompte HUNDRED_PERCENT = new Acompte(new BigDecimal(100), null);
 
@@ -41,13 +44,17 @@ public class Acompte {
         this.percent = percent;
     }
 
-    public String toPlainString() {
+    public String toPlainString(boolean withCurrencySymbol) {
         if (percent != null) {
             DecimalFormat format = new DecimalFormat("##0.00");
             return format.format(percent) + "%";
         } else if (montant != null) {
             DecimalFormat format = new DecimalFormat("###,##0.00");
-            return format.format(montant);
+            String string = format.format(montant);
+            if (withCurrencySymbol) {
+                string = string + Currency.getSymbol(converter.getCompanyCurrencyCode());
+            }
+            return string;
         } else {
             return "";
         }

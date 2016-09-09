@@ -48,7 +48,7 @@ public class SheetUtils {
     }
 
     public static File convertToOldFile(DBRoot root, String fileName, File pathDest, File fDest, String extension) {
-       return convertToOldFile(root, fileName, pathDest, fDest, extension, true);
+        return convertToOldFile(root, fileName, pathDest, fDest, extension, true);
     }
 
     /**
@@ -153,8 +153,10 @@ public class SheetUtils {
             renderer.setIgnoreMargins(false);
             renderer.setPaintMaxResolution(true);
 
-            // Scale the renderer to fit width
-            renderer.setResizeFactor(renderer.getPrintWidth() / document.getPageSize().getWidth());
+            // Scale the renderer to fit width or height
+            final double widthFactor = renderer.getPrintWidth() / document.getPageSize().getWidth();
+            final double heightFactor = renderer.getPrintHeight() / document.getPageSize().getHeight();
+            renderer.setResizeFactor(Math.max(widthFactor, heightFactor));
 
             // Print pages
             for (int i = 0; i < renderer.getPrintedPagesNumber(); i++) {
@@ -163,6 +165,9 @@ public class SheetUtils {
 
                 // If you want to prevent copy/paste, you can use
                 // g2 = tp.createGraphicsShapes(w, h, true, 0.9f);
+
+                // centrage horizontal, alignement vertical en haut
+                g2.translate((PageSize.A4.getWidth() - renderer.getPrintWidthInPixel()) / 2.0, 0);
 
                 // Render
                 renderer.setCurrentPage(i);
@@ -190,7 +195,7 @@ public class SheetUtils {
      * 
      * @param the file (ex: Test.ods)
      * @param the extension (ex: pdf)
-     * */
+     */
     static File getFileWithExtension(File file, String extension) {
         if (!extension.startsWith(".")) {
             extension = "." + extension;

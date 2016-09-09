@@ -68,18 +68,6 @@ public class SalarieSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_ETAT_CIVIL");
-        l.add("ID_REGLEMENT_PAYE");
-        l.add("ID_INFOS_SALARIE_PAYE");
-        l.add("ID_FICHE_PAYE");
-        l.add("ID_CUMULS_CONGES");
-        l.add("ID_CUMULS_PAYE");
-        l.add("ID_VARIABLE_SALARIE");
-        return l;
-    }
-
     /*
      * (non-Javadoc)
      * 

@@ -15,24 +15,26 @@
 
 public class SimpleTextLine extends LightUILine {
 
-    public SimpleTextLine(final String cellId, final String text) {
-        this(cellId, text, false, LightUIElement.HALIGN_LEFT);
+    public SimpleTextLine(final String text) {
+        this(text, false, LightUIElement.HALIGN_LEFT);
     }
 
-    public SimpleTextLine(final String cellId, final String text, final boolean title, final int horizontalAlignement) {
-        final LightUILabel element = new LightUILabel(cellId, text, title);
+    public SimpleTextLine(final String text, final boolean title, final int horizontalAlignement) {
+        super();
+        final LightUILabel element = new LightUILabel("label", text, title);
         element.setHorizontalAlignement(horizontalAlignement);
         element.setFillWidth(true);
-        this.add(element);
+        this.addChild(element);
         this.setGridAlignment(LightUILine.ALIGN_LEFT);
     }
 
-    public SimpleTextLine(final String cellId, final String text, final boolean title, final int horizontalAlignement, final int gridWidth) {
-        final LightUILabel element = new LightUILabel(cellId, text, title);
+    public SimpleTextLine(final String text, final boolean title, final int horizontalAlignement, final int gridWidth) {
+        super();
+        final LightUILabel element = new LightUILabel("label", text, title);
         element.setHorizontalAlignement(horizontalAlignement);
         element.setFillWidth(true);
         element.setGridWidth(gridWidth);
-        this.add(element);
+        this.addChild(element);
         this.setGridAlignment(LightUILine.ALIGN_LEFT);
     }
 

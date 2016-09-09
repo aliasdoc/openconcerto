@@ -85,50 +85,6 @@ public class ListeDesCommandesAction extends CreateFrameAbstractAction {
 
         final IListFrame frame = new IListFrame(new ListeAddPanel(elementCmd, new IListe(tableSource)));
 
-        frame.getPanel().getListe().addIListeActions(new MouseSheetXmlListeListener(CommandeXmlSheet.class) {
-            @Override
-            public List<RowAction> addToMenu() {
-                // Transfert vers BR
-                PredicateRowAction bonAction = new PredicateRowAction(new AbstractAction() {
-                    public void actionPerformed(ActionEvent e) {
-                        final List<SQLRowValues> selectedRows = IListe.get(e).getSelectedRows();
-                        EditFrame f = TransfertBaseSQLComponent.openTransfertFrame(selectedRows, "BON_RECEPTION");
-                        BonReceptionSQLComponent comp = (BonReceptionSQLComponent) f.getSQLComponent();
-                        final SQLTable tableElt = comp.getElement().getTable().getTable("BON_RECEPTION_ELEMENT");
-                        SQLRowValues rowVals = new SQLRowValues(tableElt);
-                        rowVals.put("QTE_UNITAIRE", null);
-                        rowVals.put("QTE", null);
-                        rowVals.put("ID_ARTICLE", null);
-
-                        SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(rowVals);
-                        fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
-
-                            @Override
-                            public SQLSelect transformChecked(SQLSelect input) {
-                                List<Integer> ids = new ArrayList<Integer>(selectedRows.size());
-                                for (SQLRowValues sqlRowValues : selectedRows) {
-                                    ids.add(sqlRowValues.getID());
-                                }
-                                SQLSelectJoin joinBR = input.addJoin("RIGHT", tableElt.getTable("BON_RECEPTION_ELEMENT").getField("ID_BON_RECEPTION"));
-                                SQLSelectJoin joinTR = input.addBackwardJoin("RIGHT", tableElt.getTable("TR_COMMANDE").getField("ID_BON_RECEPTION"), joinBR.getJoinedTable().getAlias());
-                                joinTR.setWhere(new Where(joinTR.getJoinedTable().getField("ID_COMMANDE"), ids));
-                                System.err.println(input.asString());
-                                return input;
-                            }
-                        });
-                        comp.loadQuantity(fetcher.fetch());
-
-                    }
-                }, false, "supplychain.order.create.receipt");
-
-                bonAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
-
-                List<RowAction> l = new ArrayList<RowAction>();
-                l.add(bonAction);
-                return l;
-            }
-        }.getRowActions());
-
         return frame;
     }
 

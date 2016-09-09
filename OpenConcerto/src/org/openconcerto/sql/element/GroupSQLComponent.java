@@ -24,6 +24,7 @@ import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.JLabelBold;
+import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.group.Group;
 import org.openconcerto.ui.group.Item;
 import org.openconcerto.ui.group.LayoutHints;
@@ -249,6 +250,9 @@ public class GroupSQLComponent extends BaseSQLComponent {
                     comp = (JComponent) pane.getViewport().getView();
                 }
                 this.addView(comp, id);
+                // avoid collapsing of Mode de réglement in client
+                if (comp instanceof ElementSQLObject)
+                    DefaultGridBagConstraints.lockMinimumSize(editor);
             } catch (final Exception e) {
                 Log.get().warning(e.getMessage());
             }
@@ -321,9 +325,12 @@ public class GroupSQLComponent extends BaseSQLComponent {
         // Maybe the id is a field name (deprecated)
         if (field == null) {
             field = this.getTable().getFieldRaw(id);
-
         }
-        return super.addView(comp, field.getName());
+        // allow to add components in the UI which aren't in the request
+        if (field != null)
+            return super.addView(comp, field.getName());
+        else
+            return comp;
     }
 
     public JComponent createEditor(final String id) {
@@ -396,6 +403,8 @@ public class GroupSQLComponent extends BaseSQLComponent {
             } else if (Date.class.isAssignableFrom(type.getJavaType())) {
                 comp = new JDate();
                 comp.setOpaque(false);
+            } else if (String.class.isAssignableFrom(type.getJavaType()) && type.getSize() >= 500) {
+                comp = new ITextArea();
             } else {
                 comp = new JTextField(Math.min(30, type.getSize()));
             }

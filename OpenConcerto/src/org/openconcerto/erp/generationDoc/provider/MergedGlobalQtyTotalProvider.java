@@ -25,9 +25,11 @@ import java.math.BigDecimal;
 public class MergedGlobalQtyTotalProvider implements SpreadSheetCellValueProvider {
 
     private final boolean shortName;
+    private final boolean pieceName;
 
-    public MergedGlobalQtyTotalProvider(boolean shortName) {
+    public MergedGlobalQtyTotalProvider(boolean shortName, boolean pieceName) {
         this.shortName = shortName;
+        this.pieceName = pieceName;
     }
 
     public Object getValue(SpreadSheetCellValueContext context) {
@@ -38,7 +40,7 @@ public class MergedGlobalQtyTotalProvider implements SpreadSheetCellValueProvide
         }
 
         final int qte = row.getInt("QTE");
-        if (row.getInt("ID_UNITE_VENTE") == UniteVenteArticleSQLElement.A_LA_PIECE) {
+        if (!pieceName && row.getInt("ID_UNITE_VENTE") == UniteVenteArticleSQLElement.A_LA_PIECE) {
             return String.valueOf(qte);
         }
 
@@ -54,8 +56,11 @@ public class MergedGlobalQtyTotalProvider implements SpreadSheetCellValueProvide
     }
 
     public static void register() {
-        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.merged", new MergedGlobalQtyTotalProvider(false));
-        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.merged.short", new MergedGlobalQtyTotalProvider(true));
+        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.merged", new MergedGlobalQtyTotalProvider(false, false));
+        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.merged.short", new MergedGlobalQtyTotalProvider(true, false));
+
+        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.alwaysnamed.merged", new MergedGlobalQtyTotalProvider(false, true));
+        SpreadSheetCellValueProviderManager.put("supplychain.element.qtyunit.alwaysnamed.merged.short", new MergedGlobalQtyTotalProvider(true, true));
     }
 
 }

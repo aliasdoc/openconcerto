@@ -14,35 +14,49 @@
  package org.openconcerto.sql.element;
 
 import static org.openconcerto.sql.TM.getTM;
+
 import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.FieldExpander;
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.TM;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
+import org.openconcerto.sql.element.TreesOfSQLRows.LinkToCut;
 import org.openconcerto.sql.model.DBStructureItemNotFound;
 import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLFieldsSet;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowMode;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValues.CreateMode;
 import org.openconcerto.sql.model.SQLRowValues.ForeignCopyMode;
 import org.openconcerto.sql.model.SQLRowValuesCluster;
+import org.openconcerto.sql.model.SQLRowValuesCluster.DiffResult;
 import org.openconcerto.sql.model.SQLRowValuesCluster.State;
 import org.openconcerto.sql.model.SQLRowValuesCluster.StopRecurseException;
 import org.openconcerto.sql.model.SQLRowValuesCluster.StoreMode;
 import org.openconcerto.sql.model.SQLRowValuesCluster.WalkOptions;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLSelect.ArchiveMode;
+import org.openconcerto.sql.model.SQLSelect.LockStrength;
+import org.openconcerto.sql.model.SQLSyntax;
 import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.SQLTable.FieldGroup;
 import org.openconcerto.sql.model.SQLTable.VirtualFields;
 import org.openconcerto.sql.model.Where;
-import org.openconcerto.sql.model.graph.DatabaseGraph;
 import org.openconcerto.sql.model.graph.Link;
 import org.openconcerto.sql.model.graph.Link.Direction;
+import org.openconcerto.sql.model.graph.Path;
+import org.openconcerto.sql.model.graph.PathBuilder;
+import org.openconcerto.sql.model.graph.SQLKey;
+import org.openconcerto.sql.model.graph.SQLKey.Type;
+import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.request.ListSQLRequest;
 import org.openconcerto.sql.request.SQLCache;
 import org.openconcerto.sql.request.SQLFieldTranslator;
 import org.openconcerto.sql.sqlobject.SQLTextCombo;
+import org.openconcerto.sql.ui.light.ConvertorModifer;
 import org.openconcerto.sql.users.rights.UserRightsManager;
 import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.sql.utils.SQLUtils.SQLFactory;
@@ -51,7 +65,16 @@ import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelColumnPath;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.group.Group;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.ui.light.ColumnsSpec;
+import org.openconcerto.ui.light.ComboValueConvertor;
+import org.openconcerto.ui.light.CustomEditorProvider;
+import org.openconcerto.ui.light.IntValueConvertor;
+import org.openconcerto.ui.light.LightUIComboBox;
+import org.openconcerto.ui.light.LightUIComboBoxElement;
+import org.openconcerto.ui.light.LightUIElement;
+import org.openconcerto.ui.light.Row;
+import org.openconcerto.ui.light.StringValueConvertor;
+import org.openconcerto.utils.CollectionMap2Itf.SetMapItf;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.ExceptionHandler;
@@ -59,12 +82,15 @@ import org.openconcerto.utils.ExceptionUtils;
 import org.openconcerto.utils.LinkedListMap;
 import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.NumberUtils;
+import org.openconcerto.utils.RTInterruptedException;
 import org.openconcerto.utils.RecursionType;
 import org.openconcerto.utils.SetMap;
 import org.openconcerto.utils.Tuple2;
+import org.openconcerto.utils.Value;
 import org.openconcerto.utils.cache.CacheResult;
 import org.openconcerto.utils.cc.IClosure;
 import org.openconcerto.utils.cc.ITransformer;
+import org.openconcerto.utils.cc.Transformer;
 import org.openconcerto.utils.change.ListChangeIndex;
 import org.openconcerto.utils.change.ListChangeRecorder;
 import org.openconcerto.utils.i18n.Grammar;
@@ -99,6 +125,7 @@ import javax.swing.JOptionPane;
 import javax.swing.text.JTextComponent;
 
 import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.Immutable;
 
 /**
  * Décrit comment manipuler un élément de la BD (pas forcément une seule table, voir
@@ -107,9 +134,6 @@ import net.jcip.annotations.GuardedBy;
  * @author ilm
  */
 public abstract class SQLElement {
-
-    static final private Set<String> computingFF = Collections.unmodifiableSet(new HashSet<String>());
-    static final private Set<SQLField> computingRF = Collections.unmodifiableSet(new HashSet<SQLField>());
 
     private static Phrase createPhrase(String singular, String plural) {
         final NounClass nounClass;
@@ -162,16 +186,12 @@ public abstract class SQLElement {
     private SQLTableModelSourceOnline tableSrc;
     private final ListChangeRecorder<IListeAction> rowActions;
     private final LinkedListMap<String, ITransformer<Tuple2<SQLElement, String>, SQLComponent>> components;
-    // foreign fields
-    private Set<String> normalFF;
+    // links
+    private SQLElementLinks ownedLinks;
+    private SQLElementLinks otherLinks;
+    // keep it for now as joins are disallowed (see initFF())
     private String parentFF;
-    private Set<String> sharedFF;
-    private Map<String, SQLElement> privateFF;
-    private final Map<Link, ReferenceAction> actions;
-    // referent fields
-    private Set<SQLField> childRF;
-    private Set<SQLField> privateParentRF;
-    private Set<SQLField> otherRF;
+
     // lazy creation
     private SQLCache<SQLRowAccessor, Object> modelCache;
 
@@ -179,7 +199,10 @@ public abstract class SQLElement {
     private final List<SQLTableModelColumn> additionalListCols;
     @GuardedBy("this")
     private List<String> mdPath;
+
     private Group defaultGroup;
+    private Group groupForCreation;
+    private Group groupForModification;
 
     @Deprecated
     public SQLElement(String singular, String plural, SQLTable primaryTable) {
@@ -206,7 +229,6 @@ public abstract class SQLElement {
         this.combo = null;
         this.list = null;
         this.rowActions = new ListChangeRecorder<IListeAction>(new ArrayList<IListeAction>());
-        this.actions = new HashMap<Link, ReferenceAction>();
         this.resetRelationships();
 
         this.components = new LinkedListMap<String, ITransformer<Tuple2<SQLElement, String>, SQLComponent>>();
@@ -229,8 +251,22 @@ public abstract class SQLElement {
         return getClass().getName() + "-" + getTable().getName();
     }
 
+    public Group getGroupForCreation() {
+        if (this.groupForCreation != null) {
+            return this.groupForCreation;
+        }
+        return getDefaultGroup();
+    }
+
+    public Group getGroupForModification() {
+        if (this.groupForModification != null) {
+            return this.groupForModification;
+        }
+        return getDefaultGroup();
+    }
+
     public Group getDefaultGroup() {
-        return defaultGroup;
+        return this.defaultGroup;
     }
 
     public void setDefaultGroup(Group defaultGroup) {
@@ -238,168 +274,335 @@ public abstract class SQLElement {
     }
 
     /**
+     * Create a Row to put in a TableContent
+     * 
+     * @param sqlRow SQLRowValues used to create the Row
+     * @param allCols Columns attach to this SQLElement
+     * @param columnsSpec Columns of the LightUITable attach to this SQLElement
+     * 
+     * @return New Row created from the SQLRowValues
+     */
+    public final Row createRowFromSQLRow(final SQLRowValues sqlRow, final List<SQLTableModelColumn> allCols, final ColumnsSpec columnsSpec) {
+        final Row row = new Row(sqlRow.getID());
+
+        final List<Object> values = new ArrayList<Object>();
+        final int colSize = allCols.size();
+        for (int i = 0; i < colSize; i++) {
+            final String columnId = columnsSpec.getColumn(i).getId();
+            final SQLTableModelColumn col = getColumnFromId(allCols, columnId);
+            this.configureConverter(col);
+            if (col != null) {
+                Object value = col.show(sqlRow);
+                if (col.getLightUIrenderer() != null) {
+                    value = col.getLightUIrenderer().getLightUIElement(value, 0, i);
+                }
+                values.add(value);
+            } else {
+                throw new IllegalArgumentException("column " + columnId + " is in ColumnsSpec but it is not found in SQLTableModelColumn");
+            }
+        }
+        row.setValues(values);
+        return row;
+    }
+
+    public final SQLTableModelColumn getColumnFromId(final List<SQLTableModelColumn> allCols, final String columnId) {
+        final int columnSize = allCols.size();
+        for (int i = 0; i < columnSize; i++) {
+            final SQLTableModelColumn tableModelColumn = allCols.get(i);
+            if (tableModelColumn.getIdentifier().equals(columnId)) {
+                return tableModelColumn;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Override this function in an element and put new value in map for use ComboValueConvertor.
+     * This one allow you to change value store in database by an other one.
+     * 
+     * @return Map which contains all ComboValueConvertors use for this SQLElement edition. Key: ID
+     *         of group item / Value: ComboValueConvertor
+     */
+    // FIXME: voir avec Sylvain pour les conversions
+    public Map<String, ComboValueConvertor<?>> getComboConvertors() {
+        return new HashMap<String, ComboValueConvertor<?>>();
+    }
+
+    /**
+     * Override this function in an element and put new value in map for use ConvertorModifier. This
+     * one allow you to apply some change on LightUIElement before send it to client
+     * 
+     * @return Map which contains all ConvertorModifier use for this SQLElement edition. Key: ID of
+     *         group item / Value: ConvertorModeifier
+     */
+    public Map<String, ConvertorModifer> getConvertorModifiers() {
+        return new HashMap<String, ConvertorModifer>();
+    }
+
+    public Map<String, CustomEditorProvider> getCustomEditorProviderForCreation(final Configuration configuration, final long userId) {
+        return this.getDefaultCustomEditorProvider(configuration, null, userId);
+    }
+
+    public Map<String, CustomEditorProvider> getCustomEditorProviderForModification(final Configuration configuration, final SQLRowValues sqlRow, final long userId) {
+        return this.getDefaultCustomEditorProvider(configuration, sqlRow, userId);
+    }
+
+    protected Map<String, CustomEditorProvider> getDefaultCustomEditorProvider(final Configuration configuration, final SQLRowValues sqlRow, final long userId) {
+        final Map<String, ComboValueConvertor<?>> comboConvertors = this.getComboConvertors();
+        final Map<String, CustomEditorProvider> result = new HashMap<String, CustomEditorProvider>();
+        for (final Entry<String, ComboValueConvertor<?>> entry : comboConvertors.entrySet()) {
+            result.put(entry.getKey(), new CustomEditorProvider() {
+                final ComboValueConvertor<?> convertor = entry.getValue();
+
+                @Override
+                public LightUIElement createUIElement(final String elementId) {
+                    final LightUIComboBox uiCombo = new LightUIComboBox(elementId);
+                    this.convertor.fillCombo(uiCombo);
+
+                    if (sqlRow != null) {
+                        final SQLField field = configuration.getFieldMapper().getSQLFieldForItem(elementId);
+                        LightUIComboBoxElement selectedValue = null;
+                        if (this.convertor instanceof StringValueConvertor) {
+                            final StringValueConvertor stringConvertor = (StringValueConvertor) this.convertor;
+                            final String value = sqlRow.getString(field.getFieldName());
+                            if (value != null) {
+                                selectedValue = new LightUIComboBoxElement(stringConvertor.getIndexFromId(value));
+                                selectedValue.setValue1(stringConvertor.convert(value));
+                            }
+                        } else if (this.convertor instanceof IntValueConvertor) {
+                            final IntValueConvertor intConvertor = (IntValueConvertor) this.convertor;
+                            if (sqlRow.getObject(field.getFieldName()) != null) {
+                                final int value = sqlRow.getInt(field.getFieldName());
+                                selectedValue = new LightUIComboBoxElement(value);
+                                selectedValue.setValue1(intConvertor.convert(value));
+                            }
+                        }
+                        uiCombo.setSelectedValue(selectedValue);
+                    }
+                    return uiCombo;
+                }
+            });
+        }
+        return result;
+    }
+
+    /**
+     * Add value converter on a SQLTableModelColumn to change the attached value in SQLRowValues
+     * when createRowFromRowValues is called
+     * 
+     * @param col SQLTableModelColumn that you want change the value
+     */
+    protected void configureConverter(final SQLTableModelColumn col) {
+
+    }
+
+    /**
+     * Override this function in an element to execute some code just after inserted new row in
+     * database
+     * 
+     * @param row The row which was just inserted
+     */
+    public void doAfterLightInsert(SQLRow row) {
+
+    }
+
+    /**
      * Must be called if foreign/referent keys are added or removed.
      */
     public synchronized void resetRelationships() {
-        this.privateFF = null;
+        if (this.areRelationshipsInited()) {
+            // if we remove links, notify owned elements
+            for (final SQLElementLink l : this.ownedLinks.getByPath().values()) {
+                l.getOwned().resetRelationshipsOf(this);
+            }
+        }
+        this.ownedLinks = this instanceof JoinSQLElement ? new SQLElementLinks(SetMap.<LinkType, SQLElementLink>empty()) : null;
+        this.otherLinks = this instanceof JoinSQLElement ? new SQLElementLinks(SetMap.<LinkType, SQLElementLink>empty()) : null;
         this.parentFF = null;
-        this.normalFF = null;
-        this.sharedFF = null;
-        this.actions.clear();
+    }
 
-        this.childRF = null;
-        this.privateParentRF = null;
-        this.otherRF = null;
+    private synchronized void resetRelationshipsOf(final SQLElement changed) {
+        // MAYBE optimize and only remove links for the passed argument
+        this.otherLinks = null;
     }
 
     protected synchronized final boolean areRelationshipsInited() {
-        return this.sharedFF != null;
+        return this.ownedLinks != null;
     }
 
-    private void checkSelfCall(boolean check, final String methodName) {
-        assert check : this + " " + methodName + "() is calling itself, and thus the caller will only see a partial state";
+    // return Path from owner to owned
+    private final Set<Path> createPaths(final boolean wantedOwned) {
+        assert !(this instanceof JoinSQLElement) : "joins cannot have SQLElementLink : " + this;
+        final SQLTable thisTable = this.getTable();
+        final Set<Link> allLinks = thisTable.getDBSystemRoot().getGraph().getAllLinks(getTable());
+        final Set<Path> res = new HashSet<Path>();
+        for (final Link l : allLinks) {
+            final boolean owned;
+            final Path pathFromOwner;
+            final SQLElement sourceElem = this.getElementLenient(l.getSource());
+            if (sourceElem instanceof JoinSQLElement) {
+                final JoinSQLElement joinElem = (JoinSQLElement) sourceElem;
+                pathFromOwner = joinElem.getPathFromOwner();
+                // ATTN when source == target, the same path will both owned and not
+                owned = joinElem.getLinkToOwner().equals(l);
+            } else if (l.getSource() == l.getTarget()) {
+                owned = wantedOwned;
+                pathFromOwner = new PathBuilder(l.getSource()).add(l, Direction.FOREIGN).build();
+            } else {
+                owned = l.getSource() == thisTable;
+                pathFromOwner = new PathBuilder(l.getSource()).add(l).build();
+            }
+            if (owned == wantedOwned)
+                res.add(pathFromOwner);
+        }
+        return res;
+    }
+
+    // this implementation uses getParentFFName() and assumes that links to privates are COMPOSITION
+    final SetMap<LinkType, Path> getDefaultLinkTypes() {
+        final Set<Path> ownedPaths = createPaths(true);
+        final SetMap<LinkType, Path> res = new SetMap<LinkType, Path>();
+        final String parentFFName = getParentFFName();
+        if (parentFFName != null) {
+            final Path pathToParent = new PathBuilder(getTable()).addForeignField(parentFFName).build();
+            if (!ownedPaths.remove(pathToParent))
+                throw new IllegalStateException("getParentFFName() " + pathToParent + " isn't in " + ownedPaths);
+            res.add(LinkType.PARENT, pathToParent);
+        }
+        final List<String> privateFields = this.getPrivateFields();
+        if (!privateFields.isEmpty())
+            Log.get().warning("getPrivateFields() is deprecated use setupLinks(), " + this + " : " + privateFields);
+        // links to private are COMPOSITION by default (normal links to privates are few)
+        final Iterator<Path> iter = ownedPaths.iterator();
+        while (iter.hasNext()) {
+            final Path ownedPath = iter.next();
+            if (getElement(ownedPath.getLast()).isPrivate()) {
+                iter.remove();
+                res.add(LinkType.COMPOSITION, ownedPath);
+            } else if (ownedPath.length() == 1 && ownedPath.isSingleField() && privateFields.contains(ownedPath.getSingleField(0).getName())) {
+                throw new IllegalStateException("getPrivateFields() contains " + ownedPath + " which points to an element which isn't private");
+            }
+        }
+        res.addAll(LinkType.ASSOCIATION, ownedPaths);
+        return res;
+    }
+
+    final List<ReferenceAction> getPossibleActions(final LinkType lt, final SQLElement targetElem) {
+        // MAYBE move required fields to SQLElement and use RESTRICT
+
+        final List<ReferenceAction> res;
+        if (lt == LinkType.PARENT) {
+            // SET_EMPTY would create an orphan
+            res = Arrays.asList(ReferenceAction.CASCADE, ReferenceAction.RESTRICT);
+        } else if (lt == LinkType.COMPOSITION) {
+            res = Arrays.asList(ReferenceAction.SET_EMPTY, ReferenceAction.RESTRICT);
+        } else {
+            assert lt == LinkType.ASSOCIATION;
+            if (targetElem.isShared()) {
+                res = Arrays.asList(ReferenceAction.RESTRICT, ReferenceAction.SET_EMPTY);
+            } else {
+                res = Arrays.asList(ReferenceAction.values());
+            }
+        }
+        return res;
     }
 
     private synchronized void initFF() {
-        checkSelfCall(this.sharedFF != computingFF, "initFF");
         if (areRelationshipsInited())
             return;
-        this.sharedFF = computingFF;
 
-        final Set<String> privates = new HashSet<String>(this.getPrivateFields());
-        this.privateFF = new HashMap<String, SQLElement>(privates.size());
-        final Set<String> parents = new HashSet<String>();
-        this.normalFF = new HashSet<String>();
-        final Set<String> tmpSharedFF = new HashSet<String>();
-        for (final SQLField ff : this.getTable().getForeignKeys()) {
-            final String fieldName = ff.getName();
-            final SQLElement foreignElement = this.getForeignElement(fieldName);
-            if (privates.contains(fieldName)) {
-                privates.remove(fieldName);
-                this.privateFF.put(fieldName, foreignElement);
-            } else if (foreignElement.isShared()) {
-                tmpSharedFF.add(fieldName);
-            } else if (foreignElement.getChildrenReferentFields().contains(ff)) {
-                parents.add(fieldName);
-            } else {
-                this.normalFF.add(fieldName);
-            }
+        final SQLElementLinksSetup paths = new SQLElementLinksSetup(this);
+        setupLinks(paths);
+        this.ownedLinks = new SQLElementLinks(paths.getResult());
+
+        // try to fill old attributes
+        final SQLElementLink parentLink = this.getParentLink();
+        if (parentLink != null) {
+            if (parentLink.getSingleField() != null)
+                this.parentFF = parentLink.getSingleField().getName();
+            else
+                throw new UnsupportedOperationException("Parent field name not supported : " + parentLink);
+        } else {
+            this.parentFF = null;
         }
-        if (parents.size() > 1)
-            throw new IllegalStateException("for " + this + " more than one parent :" + parents);
-        this.parentFF = parents.size() == 0 ? null : (String) parents.iterator().next();
-        if (privates.size() > 0)
-            throw new IllegalStateException("for " + this + " these private foreign fields are not valid :" + privates);
         assert assertPrivateDefaultValues();
 
-        this.sharedFF = tmpSharedFF;
+        // if we added links, let the owned know
+        final Set<SQLElement> toReset = new HashSet<SQLElement>();
+        for (final SQLElementLink l : this.ownedLinks.getByPath().values()) {
+            toReset.add(l.getOwned());
+        }
+        for (final SQLElement e : toReset) {
+            e.resetRelationshipsOf(this);
+        }
 
-        // MAYBE move required fields to SQLElement and use RESTRICT
-        if (this.parentFF != null)
-            this.actions.put(getLinkFromFieldName(this.parentFF), ReferenceAction.CASCADE);
-        for (final String s : this.privateFF.keySet()) {
-            this.actions.put(getLinkFromFieldName(s), ReferenceAction.SET_EMPTY);
-        }
-        for (final String s : this.normalFF) {
-            this.actions.put(getLinkFromFieldName(s), ReferenceAction.SET_EMPTY);
-        }
-        for (final String s : this.sharedFF) {
-            this.actions.put(getLinkFromFieldName(s), ReferenceAction.RESTRICT);
-        }
         this.ffInited();
     }
 
     // since by definition private cannot be shared, the default value must be empty
     private final boolean assertPrivateDefaultValues() {
-        for (final Entry<String, SQLElement> e : this.privateFF.entrySet()) {
-            final String fieldName = e.getKey();
-            final Number privateDefault = (Number) getTable().getField(fieldName).getParsedDefaultValue().getValue();
-            final Number foreignUndef = e.getValue().getTable().getUndefinedIDNumber();
-            assert NumberUtils.areNumericallyEqual(privateDefault, foreignUndef) : fieldName + " not empty : " + privateDefault;
+        final Set<SQLElementLink> privates = this.getOwnedLinks().getByType(LinkType.COMPOSITION);
+        for (final SQLElementLink e : privates) {
+            if (!e.isJoin()) {
+                final SQLField singleField = e.getSingleField();
+                final Number privateDefault = (Number) singleField.getParsedDefaultValue().getValue();
+                final Number foreignUndef = e.getPath().getLast().getUndefinedIDNumber();
+                assert NumberUtils.areNumericallyEqual(privateDefault, foreignUndef) : singleField + " not empty : " + privateDefault;
+            }
         }
         return true;
     }
 
+    public boolean isPrivate() {
+        return false;
+    }
+
+    /**
+     * Set {@link LinkType type} and other information for each owned link of this element.
+     * 
+     * @param links the setup object.
+     */
+    protected void setupLinks(SQLElementLinksSetup links) {
+    }
+
+    /**
+     * Was used to set the action of an {@link SQLElementLink}.
+     * 
+     * @deprecated use {@link SQLElementLinkSetup#setType(LinkType, ReferenceAction)}
+     */
     protected void ffInited() {
         // MAYBE use DELETE_RULE of Link
     }
 
-    // convert the list of String of getChildren() to a Set of SQLField pointing to this table
-    private synchronized Set<SQLField> computeChildrenRF() {
+    private final Set<SQLField> getSingleFields(final SQLElementLinks links, final LinkType type) {
         final Set<SQLField> res = new HashSet<SQLField>();
-        // eg "BATIMENT" or "BATIMENT.ID_SITE"
-        for (final String child : this.getChildren()) {
-            // a field from our child to us, eg |BATIMENT.ID_SITE|
-            final SQLField childField;
-
-            final int comma = child.indexOf(',');
-            final String tableName = comma < 0 ? child : child.substring(0, comma);
-            final SQLTable childTable = this.getTable().getTable(tableName);
-
-            if (comma < 0) {
-                final Set<SQLField> keys = childTable.getForeignKeys(this.getTable());
-                if (keys.size() != 1)
-                    throw new IllegalArgumentException("cannot find a foreign from " + child + " to " + this.getTable());
-                childField = keys.iterator().next();
-            } else {
-                childField = childTable.getField(child.substring(comma + 1));
-                final SQLTable foreignTable = childField.getDBSystemRoot().getGraph().getForeignTable(childField);
-                if (!foreignTable.equals(this.getTable())) {
-                    throw new IllegalArgumentException(childField + " doesn't point to " + this.getTable());
-                }
-            }
-            res.add(childField);
+        for (final SQLElementLink l : links.getByType(type)) {
+            final SQLField singleField = l.getSingleField();
+            if (singleField == null)
+                throw new IllegalStateException("Not single field : " + l);
+            res.add(singleField);
         }
         return res;
     }
 
     private synchronized void initRF() {
-        checkSelfCall(this.otherRF != computingRF, "initRF");
-        if (this.otherRF != null)
+        if (this.otherLinks != null)
             return;
-        this.otherRF = computingRF;
-
-        this.privateParentRF = new HashSet<SQLField>();
-        final Set<SQLField> tmpOtherRF = new HashSet<SQLField>();
-        for (final SQLField refField : this.getTable().getBase().getGraph().getReferentKeys(this.getTable())) {
-            // don't force every table to have an SQLElement (eg ELEMENT_MISSION)
-            final SQLElement refElem = this.getElementLenient(refField.getTable());
-            if (refElem != null && refElem.getPrivateForeignFields().contains(refField.getName())) {
-                this.privateParentRF.add(refField);
-            } else if (!this.getChildrenReferentFields().contains(refField)) {
-                tmpOtherRF.add(refField);
+        final Set<Path> otherPaths = this.createPaths(false);
+        final SetMap<LinkType, SQLElementLink> tmp = new SetMap<LinkType, SQLElementLink>();
+        for (final Path p : otherPaths) {
+            final SQLElement refElem = this.getElementLenient(p.getFirst());
+            final SQLElementLink elementLink;
+            if (refElem == null) {
+                // RESTRICT : play it safe
+                elementLink = new SQLElementLink(null, p, this, LinkType.ASSOCIATION, null, ReferenceAction.RESTRICT);
+            } else {
+                elementLink = refElem.getOwnedLinks().getByPath(p);
+                assert elementLink.getOwned() == this;
             }
+            tmp.add(elementLink.getLinkType(), elementLink);
         }
-        this.otherRF = tmpOtherRF;
-    }
-
-    // childRF is done outside initRF() to avoid :
-    // MISSION.initRF() -> ELEMENT_MISSION.getPrivateForeignFields() ->
-    // ELEMENT_MISSION.initFF() -> MISSION.getChildrenReferentFields() -> MISSION.initRF()
-    private synchronized void initChildRF() {
-        checkSelfCall(this.childRF != computingRF, "initFF");
-        if (this.childRF != null)
-            return;
-        this.childRF = computingRF;
-
-        final Set<SQLField> children = this.computeChildrenRF();
-
-        final Set<SQLField> tmpChildRF = new HashSet<SQLField>();
-        for (final SQLField refField : this.getTable().getBase().getGraph().getReferentKeys(this.getTable())) {
-            // don't force every table to have an SQLElement (eg ELEMENT_MISSION)
-            final SQLElement refElem = this.getElementLenient(refField.getTable());
-            // if no element found, treat as elements with no parent
-            final SQLField refParentFF = refElem == null ? null : refElem.getParentFF();
-            // check coherence, either overload getParentFFName() or use getChildren(), but not both
-            if (refParentFF != null && children.contains(refField))
-                throw new IllegalStateException(refElem + " specifies this as its parent: " + refParentFF + " and is also mentioned as our (" + this + ") child: " + refField);
-            if (children.contains(refField) || refParentFF == refField) {
-                tmpChildRF.add(refField);
-            }
-        }
-        // pas besoin de faire comme dans initFF pour vérifier children :
-        // computeChildrenRF le fait déjà
-        this.childRF = tmpChildRF;
+        this.otherLinks = new SQLElementLinks(tmp);
     }
 
     final void setDirectory(final SQLElementDirectory directory) {
@@ -512,7 +715,7 @@ public abstract class SQLElement {
         return this.getName().getVariant(Grammar.INDEFINITE_ARTICLE_SINGULAR);
     }
 
-    public CollectionMap<String, String> getShowAs() {
+    public ListMap<String, String> getShowAs() {
         // nothing by default
         return null;
     }
@@ -551,24 +754,55 @@ public abstract class SQLElement {
      * @return the script transforming <code>from</code> into <code>to</code>.
      */
     public final UpdateScript update(SQLRowValues from, SQLRowValues to) {
+        return this.update(from, to, false);
+    }
+
+    public final UpdateScript update(final SQLRowValues from, final SQLRowValues to, final boolean allowedToChangeTo) {
+        return this.update(from, to, allowedToChangeTo, Transformer.<SQLRowValues>nopTransformer());
+    }
+
+    private final UpdateScript update(final SQLRowValues from, SQLRowValues to, boolean allowedToChangeTo, ITransformer<SQLRowValues, SQLRowValues> copy2originalRows) {
         check(from);
         check(to);
 
-        if (!from.hasID())
-            throw new IllegalArgumentException("missing id in " + from);
+        for (final SQLRowValues v : from.getGraph().getItems()) {
+            if (!v.hasID())
+                throw new IllegalArgumentException("missing id in " + v + " : " + from.printGraph());
+        }
+        if (!to.hasID()) {
+            if (!allowedToChangeTo) {
+                final Map<SQLRowValues, SQLRowValues> copied = to.getGraph().deepCopy(false);
+                to = copied.get(to);
+                allowedToChangeTo = true;
+                copy2originalRows = Transformer.fromMap(CollectionUtils.invertMap(new IdentityHashMap<SQLRowValues, SQLRowValues>(), copied));
+            }
+            // from already exists in the DB, so if we're re-using it for another row, all
+            // non-provided fields must be reset
+            to.fillWith(SQLRowValues.SQL_DEFAULT, false);
+            to.setPrimaryKey(from);
+        }
         if (from.getID() != to.getID())
             throw new IllegalArgumentException("not the same row: " + from + " != " + to);
 
-        final Set<SQLField> fks = this.getTable().getForeignKeys();
-        final UpdateScript res = new UpdateScript(this.getTable());
-        for (final String field : to.getFields()) {
-            if (!fks.contains(this.getTable().getField(field))) {
-                res.getUpdateRow().put(field, to.getObject(field));
+        final UpdateScript res = new UpdateScript(this, from, copy2originalRows.transformChecked(to));
+        // local values and foreign links
+        for (final FieldGroup group : to.getFieldGroups()) {
+            if (group.getKeyType() != Type.FOREIGN_KEY) {
+                // i.e. primary key or normal field
+                res.getUpdateRow().putAll(to.getAbsolutelyAll(), group.getFields());
             } else {
-                final Object fromPrivate = from.getObject(field);
-                final Object toPrivate = to.getObject(field);
-                final SQLElement privateElem = this.getPrivateElement(field);
-                if (privateElem != null) {
+                final SQLKey k = group.getKey();
+                if (k.getFields().size() > 1)
+                    throw new IllegalStateException("Multi-field not supported : " + k);
+                final String field = group.getSingleField();
+                assert field != null;
+
+                final Path p = new PathBuilder(getTable()).add(k.getForeignLink()).build();
+                final SQLElementLink elemLink = this.getOwnedLinks().getByPath(p);
+                if (elemLink.getLinkType() == LinkType.COMPOSITION) {
+                    final SQLElement privateElem = elemLink.getOwned();
+                    final Object fromPrivate = from.getObject(field);
+                    final Object toPrivate = to.getObject(field);
                     assert !from.isDefault(field) : "A row in the DB cannot have DEFAULT";
                     final boolean fromIsEmpty = from.isForeignEmpty(field);
                     // as checked in initFF() the default for a private is empty
@@ -581,19 +815,38 @@ public abstract class SQLElement {
                         // clear referents otherwise we will merge the updateRow with the to
                         // graph (toPR being a private is pointed to by its owner, which itself
                         // points to others, but we just want the private)
-                        res.getUpdateRow().put(field, toPR.deepCopy().clearReferents());
+                        assert CollectionUtils.getSole(toPR.getReferentRows(elemLink.getSingleField())) == to : "Shared private " + toPR.printGraph();
+                        final SQLRowValues copy = toPR.deepCopy().removeReferents(elemLink.getSingleField());
+                        res.getUpdateRow().put(field, copy);
+                        res.mapRow(copy2originalRows.transformChecked(toPR), copy);
                     } else if (toIsEmpty) {
-                        // archive
+                        // cut and archive
+                        res.getUpdateRow().putEmptyLink(field);
                         res.addToArchive(privateElem, from.getForeign(field));
                     } else {
                         // neither is empty
-                        if (!CompareUtils.equals(from.getForeignID(field), to.getForeignID(field)))
+                        final Number fromForeignID = from.getForeignIDNumber(field);
+                        if (fromForeignID == null)
+                            throw new IllegalArgumentException("Non-empty private in old row, but null ID for " + elemLink);
+                        if (toPrivate == null)
+                            throw new IllegalArgumentException("Non-empty private in new row, but null value for " + elemLink);
+                        assert toPrivate instanceof Number || toPrivate instanceof SQLRowValues;
+                        // with the above check, toForeignID is null if and only if toPrivate is an
+                        // SQLRowValues without ID
+                        final Number toForeignID = to.getForeignIDNumber(field);
+
+                        if (toForeignID != null && !NumberUtils.areNumericallyEqual(fromForeignID, toForeignID))
                             throw new IllegalArgumentException("private have changed for " + field + " : " + fromPrivate + " != " + toPrivate);
                         if (toPrivate instanceof SQLRowValues) {
+                            if (!(fromPrivate instanceof SQLRowValues))
+                                throw new IllegalArgumentException("Asymetric graph, old row doesn't contain a row for " + elemLink + " : " + fromPrivate);
                             final SQLRowValues fromPR = (SQLRowValues) fromPrivate;
                             final SQLRowValues toPR = (SQLRowValues) toPrivate;
                             // must have same ID
-                            res.put(field, privateElem.update(fromPR, toPR));
+                            res.put(field, privateElem.update(fromPR, toPR, allowedToChangeTo, copy2originalRows));
+                        } else {
+                            // if toPrivate is just an ID and the same as fromPrivate, nothing to do
+                            assert toPrivate instanceof Number && toForeignID != null;
                         }
                     }
                 } else if (to.isDefault(field)) {
@@ -603,11 +856,158 @@ public abstract class SQLElement {
                 }
             }
         }
+        // now private referents
+        for (final SQLElementLink elemLink : this.getOwnedLinks().getByPath().values()) {
+            if (elemLink.isJoin()) {
+                if (elemLink.getLinkType() == LinkType.COMPOSITION) {
+                    final Tuple2<List<SQLRowValues>, Map<Number, SQLRowValues>> fromPrivatesTuple = indexRows(from.followPath(elemLink.getPath(), CreateMode.CREATE_NONE, false));
+                    // already checked at the start of the method
+                    assert fromPrivatesTuple.get0().isEmpty() : "Existing rows without ID : " + fromPrivatesTuple.get0();
+                    final Map<Number, SQLRowValues> fromPrivates = fromPrivatesTuple.get1();
+
+                    final Tuple2<List<SQLRowValues>, Map<Number, SQLRowValues>> toPrivatesTuple = indexRows(to.followPath(elemLink.getPath(), CreateMode.CREATE_NONE, false));
+                    final Map<Number, SQLRowValues> toPrivates = toPrivatesTuple.get1();
+
+                    final List<Number> onlyInFrom = new ArrayList<Number>(fromPrivates.keySet());
+                    onlyInFrom.removeAll(toPrivates.keySet());
+                    final Set<Number> onlyInTo = new HashSet<Number>(toPrivates.keySet());
+                    onlyInTo.removeAll(fromPrivates.keySet());
+                    final Set<Number> inFromAndTo = new HashSet<Number>(toPrivates.keySet());
+                    inFromAndTo.retainAll(fromPrivates.keySet());
+
+                    if (!onlyInTo.isEmpty())
+                        throw new IllegalStateException("Unknown IDs : " + onlyInTo + " for " + elemLink + " from IDs : " + fromPrivates);
+
+                    // pair of rows (old row then new row) with the same ID or with the new row
+                    // lacking and ID
+                    final List<SQLRowValues> matchedPrivates = new ArrayList<SQLRowValues>();
+                    for (final Number inBoth : inFromAndTo) {
+                        matchedPrivates.add(fromPrivates.get(inBoth));
+                        matchedPrivates.add(toPrivates.get(inBoth));
+                    }
+
+                    final SQLField toMainField = elemLink.getPath().getStep(0).getSingleField();
+                    final SQLField toPrivateField = elemLink.getPath().getStep(-1).getSingleField();
+                    for (final SQLRowValues privateSansID : toPrivatesTuple.get0()) {
+                        if (!onlyInFrom.isEmpty()) {
+                            matchedPrivates.add(fromPrivates.get(onlyInFrom.remove(0)));
+                            matchedPrivates.add(privateSansID);
+                        } else {
+                            // insert new, always creating the join row
+                            final SQLRowValues copy = privateSansID.deepCopy().removeReferents(toPrivateField);
+                            res.getUpdateRow().put(elemLink.getPath(), true, copy);
+                            res.mapRow(copy2originalRows.transformChecked(privateSansID), copy);
+                        }
+                    }
+
+                    final SQLElement privateElem = elemLink.getOwned();
+                    final Iterator<SQLRowValues> iter = matchedPrivates.iterator();
+                    while (iter.hasNext()) {
+                        final SQLRowValues fromPrivate = iter.next();
+                        final SQLRowValues toPrivate = iter.next();
+
+                        final SQLRowValues fromJoin = CollectionUtils.getSole(fromPrivate.getReferentRows(toPrivateField));
+                        if (fromJoin == null)
+                            throw new IllegalStateException("Shared private " + fromPrivate.printGraph());
+                        final UpdateScript updateScript = privateElem.update(fromPrivate, toPrivate, allowedToChangeTo, copy2originalRows);
+
+                        final SQLRowValues joinCopy = new SQLRowValues(fromJoin, ForeignCopyMode.NO_COPY);
+                        assert joinCopy.getGraphSize() == 1;
+                        joinCopy.put(toMainField.getName(), res.getUpdateRow());
+                        joinCopy.put(toPrivateField.getName(), updateScript.getUpdateRow());
+                        res.add(updateScript);
+                    }
+
+                    for (final Number id : onlyInFrom) {
+                        // this will also cut the link from the main row
+                        res.addToArchive(privateElem, fromPrivates.get(id));
+                    }
+                } else {
+                    final Path pathToFK = elemLink.getPath().minusLast();
+                    final Step fkStep = elemLink.getPath().getStep(-1);
+                    final String fkField = fkStep.getSingleField().getName();
+                    final ListMap<Number, SQLRowValues> fromFKs = indexByFK(from.followPath(pathToFK, CreateMode.CREATE_NONE, false), fkField);
+                    final ListMap<Number, SQLRowValues> toFKs = indexByFK(to.followPath(pathToFK, CreateMode.CREATE_NONE, false), fkField);
+
+                    // find foreignIDs that haven't changed
+                    for (final Entry<Number, List<SQLRowValues>> e : toFKs.entrySet()) {
+                        final Number foreignID = e.getKey();
+                        final int count = e.getValue().size();
+                        for (int i = 0; i < count; i++) {
+                            if (fromFKs.containsKey(foreignID)) {
+                                fromFKs.get(foreignID).remove(0);
+                                fromFKs.removeIfEmpty(foreignID);
+                                e.getValue().remove(0);
+                            }
+                        }
+                    }
+                    assert fromFKs.removeAllEmptyCollections().isEmpty() : "Should have been done along the way";
+                    // do it after to avoid ConcurrentModificationException
+                    toFKs.removeAllEmptyCollections();
+
+                    // if there's more foreignIDs, re-use old join rows until we need to create new
+                    // ones.
+                    for (final Entry<Number, List<SQLRowValues>> e : toFKs.entrySet()) {
+                        final Number foreignID = e.getKey();
+                        final int count = e.getValue().size();
+                        for (int i = 0; i < count; i++) {
+                            assert !fromFKs.containsKey(foreignID) : "Should have been used above";
+                            final SQLRowValues toUse;
+                            if (fromFKs.isEmpty()) {
+                                toUse = res.getUpdateRow().putRowValues(pathToFK, true);
+                            } else {
+                                // take first available join
+                                final Entry<Number, List<SQLRowValues>> fromEntry = fromFKs.entrySet().iterator().next();
+                                final SQLRowValues fromJoin = fromEntry.getValue().remove(0);
+                                fromFKs.removeIfEmpty(fromEntry.getKey());
+                                // copy existing join ID to avoid inserting a new join in the DB
+                                toUse = new SQLRowValues(fromJoin.getTable()).setID(fromJoin.getIDNumber());
+                                res.getUpdateRow().put(elemLink.getPath().getStep(0), toUse);
+                            }
+                            toUse.put(fkField, foreignID);
+                        }
+                    }
+
+                    // lastly, delete remaining join rows (don't just archive otherwise if the main
+                    // row is unarchived it will get back all links from every modification)
+                    for (final SQLRowValues rowWithFK : fromFKs.allValues()) {
+                        res.addToDelete(rowWithFK);
+                    }
+                }
+            } // else foreign link already handled above
+        }
 
         return res;
     }
 
-    public void unarchiveNonRec(int id) throws SQLException {
+    // first rows without IDs, then those with IDs
+    static private Tuple2<List<SQLRowValues>, Map<Number, SQLRowValues>> indexRows(final Collection<SQLRowValues> rows) {
+        final List<SQLRowValues> sansID = new ArrayList<SQLRowValues>();
+        final Map<Number, SQLRowValues> map = new HashMap<Number, SQLRowValues>();
+        for (final SQLRowValues r : rows) {
+            if (r.hasID()) {
+                final SQLRowValues previous = map.put(r.getIDNumber(), r);
+                if (previous != null)
+                    throw new IllegalStateException("Duplicate " + r.asRow());
+            } else {
+                sansID.add(r);
+            }
+        }
+        return Tuple2.create(sansID, map);
+    }
+
+    static private ListMap<Number, SQLRowValues> indexByFK(final Collection<SQLRowValues> rows, final String fieldName) {
+        final ListMap<Number, SQLRowValues> res = new ListMap<Number, SQLRowValues>();
+        for (final SQLRowValues rowWithFK : rows) {
+            if (rowWithFK.isForeignEmpty(fieldName))
+                throw new IllegalArgumentException("Missing foreign key for " + fieldName);
+            else
+                res.add(rowWithFK.getForeignIDNumber(fieldName), rowWithFK);
+        }
+        return res;
+    }
+
+    public final void unarchiveNonRec(int id) throws SQLException {
         this.unarchive(this.getTable().getRow(id), false);
     }
 
@@ -615,7 +1015,7 @@ public abstract class SQLElement {
         this.unarchive(this.getTable().getRow(id));
     }
 
-    public void unarchive(final SQLRow row) throws SQLException {
+    public final void unarchive(final SQLRow row) throws SQLException {
         this.unarchive(row, true);
     }
 
@@ -624,8 +1024,10 @@ public abstract class SQLElement {
         // don't test row.isArchived() (it is done by getTree())
         // to allow an unarchived parent to unarchive all its descendants.
 
+        // make sure that all fields are loaded
+        final SQLRow upToDate = row.getTable().getRow(row.getID());
         // nos descendants
-        final SQLRowValues descsAndMe = desc ? this.getTree(row, true) : row.asRowValues();
+        final SQLRowValues descsAndMe = desc ? this.getTree(upToDate, true) : upToDate.asRowValues();
         final SQLRowValues connectedRows = new ArchivedGraph(this.getDirectory(), descsAndMe).expand();
         SQLUtils.executeAtomic(this.getTable().getBase().getDataSource(), new SQLFactory<Object>() {
             @Override
@@ -637,7 +1039,11 @@ public abstract class SQLElement {
     }
 
     public final void archive(int id) throws SQLException {
-        this.archive(this.getTable().getRow(id));
+        this.archiveIDs(Collections.singleton(id));
+    }
+
+    public final void archiveIDs(final Collection<? extends Number> ids) throws SQLException {
+        this.archive(TreesOfSQLRows.createFromIDs(this, ids), true);
     }
 
     public final void archive(final Collection<? extends SQLRowAccessor> rows) throws SQLException {
@@ -669,26 +1075,48 @@ public abstract class SQLElement {
     protected void archive(final TreesOfSQLRows trees, final boolean cutLinks) throws SQLException {
         if (trees.getElem() != this)
             throw new IllegalArgumentException(this + " != " + trees.getElem());
+        if ((trees.isFetched() ? trees.getTrees().keySet() : trees.getRows()).isEmpty())
+            return;
         for (final SQLRow row : trees.getRows())
             checkUndefined(row);
 
         SQLUtils.executeAtomic(this.getTable().getBase().getDataSource(), new SQLFactory<Object>() {
             @Override
             public Object create() throws SQLException {
+                if (!trees.isFetched())
+                    trees.fetch(LockStrength.UPDATE);
                 // reference
                 // d'abord couper les liens qui pointent sur les futurs archivés
                 if (cutLinks) {
                     // TODO prend bcp de temps
                     // FIXME update tableau pour chaque observation, ecrase les changements
                     // faire : 'La base à changée voulez vous recharger ou garder vos modifs ?'
-                    final Map<SQLField, Set<SQLRow>> externReferences = trees.getExternReferences();
+                    final Map<SQLElementLink, ? extends Collection<SQLRowValues>> externReferences = trees.getExternReferences().getMap();
                     // avoid toString() which might make requests to display rows (eg archived)
                     if (Log.get().isLoggable(Level.FINEST))
                         Log.get().finest("will cut : " + externReferences);
-                    for (final Entry<SQLField, Set<SQLRow>> e : externReferences.entrySet()) {
-                        final SQLField refKey = e.getKey();
-                        for (final SQLRow ref : e.getValue()) {
-                            ref.createEmptyUpdateRow().putEmptyLink(refKey.getName()).update();
+                    for (final Entry<SQLElementLink, ? extends Collection<SQLRowValues>> e : externReferences.entrySet()) {
+                        if (e.getKey().isJoin()) {
+                            final Path joinPath = e.getKey().getPath();
+                            final Path toJoinTable = joinPath.minusLast();
+                            final SQLTable joinTable = toJoinTable.getLast();
+                            assert getElement(joinTable) instanceof JoinSQLElement;
+                            final Set<Number> ids = new HashSet<Number>();
+                            for (final SQLRowValues joinRow : e.getValue()) {
+                                assert joinRow.getTable() == joinTable;
+                                ids.add(joinRow.getIDNumber());
+                            }
+                            // MAYBE instead of losing the information (as with simple foreign key),
+                            // archive it
+                            final String query = "DELETE FROM " + joinTable.getSQLName() + " WHERE " + new Where(joinTable.getKey(), ids);
+                            getTable().getDBSystemRoot().getDataSource().execute(query);
+                            for (final Number id : ids)
+                                joinTable.fireRowDeleted(id.intValue());
+                        } else {
+                            final Link refKey = e.getKey().getSingleLink();
+                            for (final SQLRowAccessor ref : e.getValue()) {
+                                ref.createEmptyUpdateRow().putEmptyLink(refKey.getSingleField().getName()).update();
+                            }
                         }
                     }
                     Log.get().finest("done cutting links");
@@ -729,7 +1157,13 @@ public abstract class SQLElement {
                 final Iterator<SQLRowValues> iter = toArchive.iterator();
                 while (iter.hasNext()) {
                     final SQLRowValues desc = iter.next();
-                    if (archive && !desc.hasReferents() || !archive && !desc.hasForeigns()) {
+                    final boolean correct;
+                    if (desc.isArchived() == archive) {
+                        // all already correct rows should be removed in the first loop, so they
+                        // cannot be in linksCut
+                        assert !linksCut.containsKey(desc.asRow());
+                        correct = true;
+                    } else if (archive && !desc.hasReferents() || !archive && !desc.hasForeigns()) {
                         SQLRowValues updateVals = linksCut.remove(desc.asRow());
                         if (updateVals == null)
                             updateVals = new SQLRowValues(desc.getTable());
@@ -741,12 +1175,17 @@ public abstract class SQLElement {
                         setArchive(updateVals, archive).setID(desc.getIDNumber());
                         // don't check validity since table events might have not already be
                         // fired
-                        assert updateVals.getGraph().size() == 1 : "Archiving a graph : " + updateVals.printGraph();
+                        assert updateVals.getGraphSize() == 1 : "Archiving a graph : " + updateVals.printGraph();
                         updateVals.getGraph().store(StoreMode.COMMIT, false);
+                        correct = true;
+                    } else {
+                        correct = false;
+                    }
+                    if (correct) {
                         // remove from graph
                         desc.clear();
                         desc.clearReferents();
-                        assert desc.getGraph().size() == 1 : "Next loop won't progress : " + desc.printGraph();
+                        assert desc.getGraphSize() == 1 : "Next loop won't progress : " + desc.printGraph();
                         archivedCount++;
                         iter.remove();
                     }
@@ -909,50 +1348,48 @@ public abstract class SQLElement {
 
     // *** rf
 
-    public final synchronized Set<SQLField> getOtherReferentFields() {
+    public final synchronized SQLElementLinks getLinksOwnedByOthers() {
         this.initRF();
-        return this.otherRF;
+        return this.otherLinks;
     }
 
-    public final synchronized Set<SQLField> getChildrenReferentFields() {
-        this.initChildRF();
-        return this.childRF;
+    private final Set<SQLField> getReferentFields(final LinkType type) {
+        return getSingleFields(this.getLinksOwnedByOthers(), type);
     }
 
-    /**
-     * The private foreign fields pointing to this table. Eg if this is OBSERVATION,
-     * {SOURCE.ID_OBS1, SOURCE.ID_OBS2, CPI.ID_OBS, LOCAL.ID_OBS} ; if this is LOCAL, {}.
-     * 
-     * @return the private foreign fields pointing to this table.
-     */
-    public final synchronized Set<SQLField> getPrivateParentReferentFields() {
-        this.initRF();
-        return this.privateParentRF;
-    }
-
-    /**
-     * Specify the tables whose rows are contained in rows of this element. They can be specified
-     * with table names, in which case there must be exactly one foreign field from the specified
-     * table to this element (eg "BATIMENT" for element SITE). Otherwise it must the fullname of
-     * foreign field which points to the table of this element (eg "RECEPTEUR.ID_LOCAL").
-     * 
-     * @return a Set of String.
-     * @see #getParentFFName()
-     */
-    protected Set<String> getChildren() {
-        return Collections.emptySet();
+    // not deprecated since joins to parents are unsupported (and unecessary since an SQLElement can
+    // only have one parent)
+    public final Set<SQLField> getChildrenReferentFields() {
+        return this.getReferentFields(LinkType.PARENT);
     }
 
     // *** ff
 
-    public final synchronized Set<String> getNormalForeignFields() {
+    public synchronized final SQLElementLinks getOwnedLinks() {
         this.initFF();
-        return this.normalFF;
+        return this.ownedLinks;
     }
 
-    public final synchronized Set<String> getSharedForeignFields() {
-        this.initFF();
-        return this.sharedFF;
+    public final SQLElementLink getOwnedLink(final String fieldName) {
+        return this.getOwnedLink(fieldName, null);
+    }
+
+    /**
+     * Return the {@link #getOwnedLinks() owned link} that crosses the passed field.
+     * 
+     * @param fieldName any field of {@link #getTable()}.
+     * @param type the type of the wanted link, <code>null</code> meaning any type.
+     * @return the link matching the parameter.
+     */
+    public final SQLElementLink getOwnedLink(final String fieldName, final LinkType type) {
+        final Link foreignLink = this.getTable().getDBSystemRoot().getGraph().getForeignLink(this.getTable().getField(fieldName));
+        if (foreignLink == null)
+            return null;
+        return this.getOwnedLinks().getByPath(new PathBuilder(getTable()).add(foreignLink, Direction.FOREIGN).build(), type);
+    }
+
+    public final boolean hasOwnedLinks(final LinkType type) {
+        return !this.getOwnedLinks().getByType(type).isEmpty();
     }
 
     public final SQLField getParentForeignField() {
@@ -964,8 +1401,24 @@ public abstract class SQLElement {
         return this.parentFF;
     }
 
-    private final SQLField getParentFF() {
-        return getOptionalField(getParentFFName());
+    public final SQLElementLink getParentLink() {
+        return CollectionUtils.getSole(this.getOwnedLinks().getByType(LinkType.PARENT));
+    }
+
+    public final Set<SQLElementLink> getChildrenLinks() {
+        return this.getLinksOwnedByOthers().getByType(LinkType.PARENT);
+    }
+
+    public final SQLElement getChildElement(final String tableName) {
+        final Set<SQLElementLink> links = new HashSet<SQLElementLink>();
+        for (final SQLElementLink childLink : this.getChildrenLinks()) {
+            if (childLink.getOwner().getTable().getName().equals(tableName))
+                links.add(childLink);
+        }
+        if (links.size() != 1)
+            throw new IllegalStateException("no exactly one child table named " + tableName + " : " + links);
+        else
+            return links.iterator().next().getOwner();
     }
 
     // optional but if specified it must exist
@@ -973,15 +1426,14 @@ public abstract class SQLElement {
         return name == null ? null : this.getTable().getField(name);
     }
 
+    // Previously there was another method which listed children but this method is preferred since
+    // it avoids writing IFs to account for customer differences and there's no ambiguity (you
+    // return a field of this table instead of a table name that must be searched in roots and then
+    // a foreign key must be found).
     /**
-     * Should be overloaded to specify our parent. NOTE the relationship must be specified only once
-     * either with this method or with {@link #getChildren()}. This method is preferred since it
-     * avoids writing IFs to account for customer differences and there's no ambiguity (you return a
-     * field of this table instead of a table name that must be searched in roots and then a foreign
-     * key must be found).
+     * Should be overloaded to specify our parent.
      * 
      * @return <code>null</code> for this implementation.
-     * @see #getChildren()
      */
     protected String getParentFFName() {
         return null;
@@ -994,23 +1446,9 @@ public abstract class SQLElement {
             return this.getForeignElement(this.getParentForeignFieldName());
     }
 
-    private final synchronized Map<String, SQLElement> getPrivateFF() {
-        this.initFF();
-        return this.privateFF;
-    }
-
-    /**
-     * The fields that private to this table, ie rows pointed by these fields are referenced only by
-     * one row of this table.
-     * 
-     * @return private fields of this element.
-     */
-    public final Set<String> getPrivateForeignFields() {
-        return Collections.unmodifiableSet(this.getPrivateFF().keySet());
-    }
-
     public final SQLElement getPrivateElement(String foreignField) {
-        return this.getPrivateFF().get(foreignField);
+        final SQLElementLink privateLink = this.getOwnedLink(foreignField, LinkType.COMPOSITION);
+        return privateLink == null ? null : privateLink.getOwned();
     }
 
     /**
@@ -1032,18 +1470,35 @@ public abstract class SQLElement {
      *         the <code>fields</code> parameter except for private foreign fields containing
      *         SQLRowValues.
      */
-    public final SQLRowValues getPrivateGraph(final Set<VirtualFields> fields) {
-        final SQLRowValues res = new SQLRowValues(this.getTable());
+    public final SQLRowValues getPrivateGraph(final VirtualFields fields) {
+        return this.getPrivateGraph(fields, false, true);
+    }
+
+    public final SQLRowValues getPrivateGraph(final VirtualFields fields, final boolean ignoreNotDeepCopied, final boolean includeJoins) {
+        final SQLRowValues res = includeJoins ? this.getOwnedJoinsGraph(fields) : new SQLRowValues(this.getTable());
         if (fields == null) {
             res.setAllToNull();
         } else {
-            for (final VirtualFields vf : fields) {
-                for (final SQLField f : this.getTable().getFields(vf))
-                    res.put(f.getName(), null);
+            res.putNulls(this.getTable().getFieldsNames(fields));
+        }
+        for (final SQLElementLink link : this.getOwnedLinks().getByType(LinkType.COMPOSITION)) {
+            final SQLElement owned = link.getOwned();
+            if (ignoreNotDeepCopied && owned.dontDeepCopy()) {
+                res.remove(link.getPath().getStep(0));
+            } else {
+                res.put(link.getPath(), false, owned.getPrivateGraph(fields, ignoreNotDeepCopied, includeJoins));
             }
         }
-        for (final Entry<String, SQLElement> e : this.getPrivateFF().entrySet()) {
-            res.put(e.getKey(), e.getValue().getPrivateGraph(fields));
+        return res;
+    }
+
+    public final SQLRowValues getOwnedJoinsGraph(final VirtualFields fields) {
+        final SQLRowValues res = new SQLRowValues(this.getTable());
+        for (final SQLElementLink link : this.getOwnedLinks().getByPath().values()) {
+            if (link.isJoin()) {
+                final SQLRowValues joinVals = res.putRowValues(link.getPath().getStep(0));
+                joinVals.fill(joinVals.getTable().getFieldsNames(fields == null ? VirtualFields.ALL : fields), null, false, true);
+            }
         }
         return res;
     }
@@ -1055,20 +1510,16 @@ public abstract class SQLElement {
      * which does some checks.
      * 
      * @return la List des noms des champs privés, eg ["ID_OBSERVATION_2"].
+     * @deprecated use {@link #setupLinks(SQLElementLinksSetup)}
      */
     protected List<String> getPrivateFields() {
         return Collections.emptyList();
     }
 
     public final void clearPrivateFields(SQLRowValues rowVals) {
-        for (String s : getPrivateFF().keySet()) {
-            rowVals.remove(s);
+        for (SQLElementLink l : this.getOwnedLinks().getByType(LinkType.COMPOSITION)) {
+            rowVals.remove(l.getPath().getStep(0));
         }
-    }
-
-    final Map<Link, ReferenceAction> getActions() {
-        this.initFF();
-        return this.actions;
     }
 
     /**
@@ -1079,76 +1530,31 @@ public abstract class SQLElement {
      * @throws IllegalArgumentException if <code>ff</code> is not a normal foreign field.
      */
     public final void setAction(final String ff, ReferenceAction action) throws IllegalArgumentException {
-        // shared must be RESTRICT, parent at least CASCADE (to avoid child without a parent),
-        // normal is free
-        if (action.compareTo(ReferenceAction.RESTRICT) < 0 && !this.getNormalForeignFields().contains(ff))
-            // getField() checks if the field exists
-            throw new IllegalArgumentException(getTable().getField(ff).getSQLName() + " is not a normal foreign field : " + this.getNormalForeignFields());
-        this.getActions().put(getLinkFromFieldName(ff), action);
-    }
-
-    private final Link getLinkFromFieldName(final String ff) {
-        return getTable().getDBSystemRoot().getGraph().getForeignLink(getTable(), Arrays.asList(ff));
+        final Path p = new PathBuilder(getTable()).addForeignField(ff).build();
+        this.getOwnedLinks().getByPath(p).setAction(action);
     }
 
     // *** rf and ff
 
     /**
-     * The links towards the parents (either {@link #getParentForeignFieldName()} or
-     * {@link #getPrivateParentReferentFields()}) of this element.
+     * The links towards the parents (either {@link LinkType#PARENT} or {@link LinkType#COMPOSITION}
+     * ) of this element.
      * 
-     * @return the graph links towards the parents of this element.
+     * @return the links towards the parents of this element.
      */
-    public final Set<Link> getParentsLinks() {
-        final Set<SQLField> refFields = this.getPrivateParentReferentFields();
-        final Set<Link> res = new HashSet<Link>(refFields.size());
-        final DatabaseGraph graph = this.getTable().getDBSystemRoot().getGraph();
-        for (final SQLField refField : refFields)
-            res.add(graph.getForeignLink(refField));
-        final SQLField parentFF = this.getParentForeignField();
-        if (parentFF != null)
-            res.add(graph.getForeignLink(parentFF));
+    public final SQLElementLinks getContainerLinks() {
+        return getContainerLinks(true, true);
+    }
+
+    public final SQLElementLinks getContainerLinks(final boolean privateParent, final boolean parent) {
+        final SetMapItf<LinkType, SQLElementLink> byType = new SetMap<LinkType, SQLElementLink>();
+        if (parent)
+            byType.addAll(LinkType.PARENT, this.getOwnedLinks().getByType(LinkType.PARENT));
+        if (privateParent)
+            byType.addAll(LinkType.COMPOSITION, this.getLinksOwnedByOthers().getByType(LinkType.COMPOSITION));
+        final SQLElementLinks res = new SQLElementLinks(byType);
+        assert res.getByType().size() <= 1 : "Child and private at the same time";
         return res;
-    }
-
-    /**
-     * The elements beneath this, ie both children and privates.
-     * 
-     * @return our children elements.
-     */
-    public final Set<SQLElement> getChildrenElements() {
-        final Set<SQLElement> res = new HashSet<SQLElement>();
-        res.addAll(this.getPrivateFF().values());
-        for (final SQLTable child : new SQLFieldsSet(this.getChildrenReferentFields()).getTables())
-            res.add(getElement(child));
-        return res;
-    }
-
-    public final SQLElement getChildElement(final String tableName) {
-        final SQLField field = CollectionUtils.getSole(new SQLFieldsSet(this.getChildrenReferentFields()).getFields(tableName));
-        if (field == null)
-            throw new IllegalStateException("no child table named " + tableName);
-        else
-            return this.getElement(field.getTable());
-    }
-
-    /**
-     * The tables beneath this.
-     * 
-     * @return our descendants, including this.
-     * @see #getChildrenElements()
-     */
-    public final Set<SQLTable> getDescendantTables() {
-        final Set<SQLTable> res = new HashSet<SQLTable>();
-        this.getDescendantTables(res);
-        return res;
-    }
-
-    private final void getDescendantTables(Set<SQLTable> res) {
-        res.add(this.getTable());
-        for (final SQLElement elem : this.getChildrenElements()) {
-            res.addAll(elem.getDescendantTables());
-        }
     }
 
     // *** request
@@ -1191,8 +1597,61 @@ public abstract class SQLElement {
         return this.list;
     }
 
-    protected ListSQLRequest createListRequest() {
-        return new ListSQLRequest(this.getTable(), this.getListFields());
+    /**
+     * Return the field expander to pass to {@link ListSQLRequest}.
+     * 
+     * @return the {@link FieldExpander} to pass to {@link ListSQLRequest}.
+     * @see #createListRequest(List, Where, FieldExpander)
+     */
+    protected FieldExpander getListExpander() {
+        return getDirectory().getShowAs();
+    }
+
+    public final ListSQLRequest createListRequest() {
+        return this.createListRequest(null);
+    }
+
+    public final ListSQLRequest createListRequest(final List<String> fields) {
+        return this.createListRequest(fields, null, null);
+    }
+
+    /**
+     * Create and initialise a new list request with the passed arguments. Pass <code>null</code>
+     * for default arguments.
+     * 
+     * @param fields the list fields, <code>null</code> meaning {@link #getListFields()}.
+     * @param w the where, can be <code>null</code>.
+     * @param expander the field expander, <code>null</code> meaning {@link #getListExpander()}.
+     * @return a new ready-to-use list request.
+     */
+    public final ListSQLRequest createListRequest(final List<String> fields, final Where w, final FieldExpander expander) {
+        final ListSQLRequest res = instantiateListRequest(fields == null ? this.getListFields() : fields, w, expander == null ? this.getListExpander() : expander);
+        this._initListRequest(res);
+        return res;
+    }
+
+    /**
+     * Must just create a new instance without altering parameters. The parameters are passed by
+     * {@link #createListRequest(List, Where, FieldExpander)}, if you need to change default values
+     * overload the needed method. This method should only be used if one needs a subclass of
+     * {@link ListSQLRequest}.
+     * 
+     * @param fields the list fields.
+     * @param w the where.
+     * @param expander the field expander.
+     * @return a new uninitialised list request.
+     */
+    protected ListSQLRequest instantiateListRequest(final List<String> fields, final Where w, final FieldExpander expander) {
+        return new ListSQLRequest(this.getTable(), fields, w, expander);
+    }
+
+    /**
+     * Initialise a new instance. E.g. one can {@link ListSQLRequest#addToGraphToFetch(String...)
+     * add fields} to the fetcher.
+     * 
+     * @param req the instance to initialise.
+     */
+    protected void _initListRequest(final ListSQLRequest req) {
     }
 
     public final SQLTableModelSourceOnline getTableSource() {
@@ -1217,7 +1676,7 @@ public abstract class SQLElement {
     }
 
     public final SQLTableModelSourceOnline createTableSource(final List<String> fields) {
-        return initTableSource(new SQLTableModelSourceOnline(new ListSQLRequest(this.getTable(), fields)));
+        return initTableSource(new SQLTableModelSourceOnline(createListRequest(fields)));
     }
 
     public final SQLTableModelSourceOnline createTableSource(final Where w) {
@@ -1311,8 +1770,9 @@ public abstract class SQLElement {
      * @throws SQLException if <code>c</code> raises an exn.
      */
     private <R extends SQLRowAccessor> void forChildrenDo(R row, ChildProcessor<? super R> c, boolean deep, boolean archived) throws SQLException {
-        for (final SQLField childField : this.getChildrenReferentFields()) {
-            if (deep || !this.getElement(childField.getTable()).dontDeepCopy()) {
+        for (final SQLElementLink childLink : this.getChildrenLinks()) {
+            if (deep || !childLink.getChild().dontDeepCopy()) {
+                final SQLField childField = childLink.getSingleField();
                 final List<SQLRow> children = row.asRow().getReferentRows(childField, archived ? SQLSelect.ARCHIVED : SQLSelect.UNARCHIVED);
                 // eg BATIMENT[516]
                 for (final SQLRow child : children) {
@@ -1412,6 +1872,7 @@ public abstract class SQLElement {
             return row;
 
         // current => new copy
+        // contains private and join rows otherwise we can't fix ASSOCIATION
         final Map<SQLRow, SQLRowValues> copies = new HashMap<SQLRow, SQLRowValues>();
 
         return SQLUtils.executeAtomic(this.getTable().getBase().getDataSource(), new SQLFactory<SQLRow>() {
@@ -1419,35 +1880,36 @@ public abstract class SQLElement {
             public SQLRow create() throws SQLException {
 
                 // eg SITE[128]
-                final SQLRowValues copy = createTransformedCopy(row, full, parent, c);
-                copies.put(row, copy);
+                final SQLRowValues copy = createTransformedCopy(row, full, parent, copies, c);
 
                 forDescendantsDo(row, new ChildProcessor<SQLRow>() {
                     public void process(SQLRow parent, SQLField joint, SQLRow desc) throws SQLException {
                         final SQLRowValues parentCopy = copies.get(parent);
                         if (parentCopy == null)
                             throw new IllegalStateException("null copy of " + parent);
-                        final SQLRowValues descCopy = createTransformedCopy(desc, full, null, c);
+                        final SQLRowValues descCopy = createTransformedCopy(desc, full, null, copies, c);
                         descCopy.put(joint.getName(), parentCopy);
-                        copies.put(desc, descCopy);
                     }
                 }, full, false, false);
                 // ne pas descendre en deep
 
-                // reference
+                // private and parent relationships are already handled, now fix ASSOCIATION : the
+                // associations in the source hierarchy either point outside or inside the
+                // hierarchy, for the former the copy is correct. But for the latter, the copy still
+                // point to the source hierarchy when it should point to copy hierarchy.
                 forDescendantsDo(row, new ChildProcessor<SQLRow>() {
                     public void process(SQLRow parent, SQLField joint, SQLRow desc) throws SQLException {
-                        final Map<SQLField, List<SQLRow>> normalReferents = getElement(desc.getTable()).getNonChildrenReferents(desc);
-                        for (final Entry<SQLField, List<SQLRow>> e : normalReferents.entrySet()) {
-                            // eg SOURCE.ID_CPI
-                            final SQLField refField = e.getKey();
-                            for (final SQLRow ref : e.getValue()) {
+                        for (final SQLElementLink link : getElement(desc.getTable()).getOwnedLinks().getByType(LinkType.ASSOCIATION)) {
+                            final Path toRowWFK = link.getPath().minusLast();
+                            final Step lastStep = link.getPath().getStep(-1);
+                            for (final SQLRow rowWithFK : desc.getDistantRows(toRowWFK)) {
+                                final SQLRow ref = rowWithFK.getForeignRow(lastStep.getSingleLink(), SQLRowMode.NO_CHECK);
                                 // eg copy of SOURCE[12] is SOURCE[354]
                                 final SQLRowValues refCopy = copies.get(ref);
                                 if (refCopy != null) {
                                     // CPI[1203]
-                                    final SQLRowValues referencedCopy = copies.get(desc);
-                                    refCopy.put(refField.getName(), referencedCopy);
+                                    final SQLRowValues rowWithFKCopy = copies.get(rowWithFK);
+                                    rowWithFKCopy.put(lastStep, refCopy);
                                 }
                             }
                         }
@@ -1463,8 +1925,8 @@ public abstract class SQLElement {
         });
     }
 
-    private final SQLRowValues createTransformedCopy(SQLRow desc, final boolean full, SQLRow parent, final IClosure<SQLRowValues> c) throws SQLException {
-        final SQLRowValues copiedVals = getElement(desc.getTable()).createCopy(desc, full, parent);
+    private final SQLRowValues createTransformedCopy(SQLRow desc, final boolean full, SQLRow parent, final Map<SQLRow, SQLRowValues> map, final IClosure<SQLRowValues> c) throws SQLException {
+        final SQLRowValues copiedVals = getElement(desc.getTable()).createCopy(desc, full, parent, null, map);
         assert copiedVals != null : "failed to copy " + desc;
         if (c != null)
             c.executeChecked(copiedVals);
@@ -1490,7 +1952,9 @@ public abstract class SQLElement {
     }
 
     /**
-     * Copies the passed row into an SQLRowValues. NOTE: this method does not access the DB, ie the
+     * Copies the passed row into an SQLRowValues. NOTE: this method will only access the DB if
+     * necessary : when <code>row</code> is not an {@link SQLRowValues} and this element has
+     * {@link LinkType#COMPOSITION privates} or {@link SQLElementLink#isJoin() joins}. Otherwise the
      * copy won't be a copy of the current values in DB, but of the current values of the passed
      * instance.
      * 
@@ -1507,24 +1971,78 @@ public abstract class SQLElement {
     }
 
     public SQLRowValues createCopy(SQLRowAccessor row, final boolean full, SQLRowAccessor parent) {
+        return this.createCopy(row, full, parent, null, null);
+    }
+
+    public SQLRowValues createCopy(SQLRowAccessor row, final boolean full, SQLRowAccessor parent, final IdentityHashMap<SQLRowValues, SQLRowValues> valsMap, final Map<SQLRow, SQLRowValues> rowMap) {
         // do NOT copy the undefined
         if (row == null || row.isUndefined())
             return null;
         this.check(row);
 
-        final SQLRowValues copy = new SQLRowValues(this.getTable());
-        this.loadAllSafe(copy, row.asRow());
+        final Set<SQLElementLink> privates = this.getOwnedLinks().getByType(LinkType.COMPOSITION);
+        final SQLRowValues privateGraph = this.getPrivateGraph(VirtualFields.ALL, !full, true);
+        // Don't make one request per private, just fetch the whole graph at once
+        // further with joined privates an SQLRow cannot contain privates nor carry the lack of them
+        // (without joins a row lacking privates was passed with just an SQLRow with undefined
+        // foreign keys).
+        final SQLRowValues rowVals;
+        if (row instanceof SQLRowValues) {
+            rowVals = (SQLRowValues) row;
+        } else if (privateGraph.getGraphSize() == 1) {
+            rowVals = null;
+        } else {
+            final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(privateGraph);
+            fetcher.setSelID(row.getIDNumber());
+            rowVals = CollectionUtils.getSole(fetcher.fetch());
+            if (rowVals == null)
+                throw new IllegalStateException("Not exactly one row for " + row);
+        }
+        // Use just fetched values so that data is coherent.
+        final SQLRowAccessor upToDateRow = rowVals != null ? rowVals : row;
 
-        for (final String privateName : this.getPrivateForeignFields()) {
-            final SQLElement privateElement = this.getPrivateElement(privateName);
+        final SQLRowValues copy = new SQLRowValues(this.getTable());
+        this.loadAllSafe(copy, upToDateRow);
+        if (valsMap != null) {
+            if (rowVals == null)
+                throw new IllegalArgumentException("Cannot fill map since no SQLRowValues were provided");
+            valsMap.put(rowVals, copy);
+        }
+        if (rowMap != null) {
+            if (!upToDateRow.hasID())
+                throw new IllegalArgumentException("Cannot fill map since no SQLRow were provided");
+            rowMap.put(upToDateRow.asRow(), copy);
+        }
+
+        for (final SQLElementLink privateLink : privates) {
+            final SQLElement privateElement = privateLink.getOwned();
             final boolean deepCopy = full || !privateElement.dontDeepCopy();
-            if (deepCopy && !row.isForeignEmpty(privateName)) {
-                final SQLRowValues child = privateElement.createCopy(row.getForeign(privateName), full, null);
-                copy.put(privateName, child);
+            if (!privateLink.isJoin()) {
+                final String privateName = privateLink.getSingleField().getName();
+                if (deepCopy && !rowVals.isForeignEmpty(privateName)) {
+                    final SQLRowValues foreign = checkPrivateLoaded(privateLink, rowVals.getForeign(privateName));
+                    final SQLRowValues child = privateElement.createCopy(foreign, full, null, valsMap, rowMap);
+                    copy.put(privateName, child);
+                    // use upToDateRow instead of rowVals since the latter might be null if
+                    // !full
+                } else if (upToDateRow.getFields().contains(privateName)) {
+                    copy.putEmptyLink(privateName);
+                }
             } else {
-                copy.putEmptyLink(privateName);
+                // join
+                assert privateLink.getPath().getStep(0).getDirection() == Direction.REFERENT;
+                if (deepCopy) {
+                    copyJoin(rowVals, full, valsMap, rowMap, copy, privateLink);
+                } // else nothing to do since there's no fields in copy
             }
         }
+
+        for (final SQLElementLink association : this.getOwnedLinks().getByType(LinkType.ASSOCIATION)) {
+            if (association.isJoin()) {
+                copyJoin(rowVals, full, valsMap, rowMap, copy, association);
+            } // else fields already in copy
+        }
+
         // si on a spécifié un parent, eg BATIMENT[23]
         if (parent != null) {
             final SQLTable foreignTable = this.getParentForeignField().getForeignTable();
@@ -1536,21 +2054,83 @@ public abstract class SQLElement {
         return copy;
     }
 
+    private SQLRowValues checkPrivateLoaded(final SQLElementLink privateLink, final SQLRowAccessor foreign) {
+        assert privateLink.getLinkType() == LinkType.COMPOSITION && privateLink.getOwned().getTable() == foreign.getTable();
+        // otherwise the recursive call will fetch the missing data, which could be
+        // incoherent with rowVals
+        if (!(foreign instanceof SQLRowValues))
+            throw new IllegalStateException("Graph missing non-empty private for " + privateLink);
+        return (SQLRowValues) foreign;
+    }
+
+    private final void copyJoin(final SQLRowValues rowVals, final boolean full, final IdentityHashMap<SQLRowValues, SQLRowValues> valsMap, final Map<SQLRow, SQLRowValues> rowMap,
+            final SQLRowValues copy, final SQLElementLink link) {
+        assert link.isJoin();
+        final Step firstStep = link.getPath().getStep(0);
+        final SQLElement joinElem = getElement(firstStep.getTo());
+        final Step lastStep = link.getPath().getStep(-1);
+        for (final SQLRowValues joinToCopy : rowVals.followPath(link.getPath().minusLast(), CreateMode.CREATE_NONE, false)) {
+            final SQLRowValues joinCopy = new SQLRowValues(joinElem.getTable());
+            joinElem.loadAllSafe(joinCopy, joinToCopy, link.getLinkType() == LinkType.COMPOSITION);
+            copy.put(firstStep, joinCopy);
+            if (valsMap != null)
+                valsMap.put(joinToCopy, joinCopy);
+            if (rowMap != null)
+                rowMap.put(joinToCopy.asRow(), joinCopy);
+            // copy private
+            if (link.getLinkType() == LinkType.COMPOSITION) {
+                final SQLElement privateElement = link.getOwned();
+                final SQLRowAccessor privateRow = joinToCopy.getForeign(lastStep.getSingleLink());
+                if (privateRow.isUndefined())
+                    throw new IllegalStateException("Joined to undefined " + link);
+                checkPrivateLoaded(link, privateRow);
+                final SQLRowValues privateCopy = privateElement.createCopy(privateRow, full, null, valsMap, rowMap);
+                joinCopy.put(lastStep, privateCopy);
+            }
+            assert !joinCopy.hasID() && joinCopy.getFields().containsAll(lastStep.getSingleLink().getCols());
+        }
+    }
+
+    static private final VirtualFields JOIN_SAFE_FIELDS = VirtualFields.ALL.difference(VirtualFields.PRIMARY_KEY, VirtualFields.ORDER);
+    static private final VirtualFields SAFE_FIELDS = JOIN_SAFE_FIELDS.difference(VirtualFields.FOREIGN_KEYS);
+
     /**
      * Load all values that can be safely copied (shared by multiple rows). This means all values
-     * except private, primary, order and archive.
+     * except private, primary, and order.
      * 
      * @param vals the row to modify.
      * @param row the row to be loaded.
      */
-    public final void loadAllSafe(final SQLRowValues vals, final SQLRow row) {
+    public final void loadAllSafe(final SQLRowValues vals, final SQLRowAccessor row) {
+        this.loadAllSafe(vals, row, null);
+    }
+
+    private final void loadAllSafe(final SQLRowValues vals, final SQLRowAccessor row, final Boolean isPrivateJoinElement) {
         check(vals);
         check(row);
-        vals.setAll(row.getAllValues());
-        vals.load(row, this.getNormalForeignFields());
-        if (this.getParentForeignFieldName() != null)
-            vals.put(this.getParentForeignFieldName(), row.getObject(this.getParentForeignFieldName()));
-        vals.load(row, this.getSharedForeignFields());
+        // JoinSQLElement has no links but we still want to copy metadata
+        if (this instanceof JoinSQLElement) {
+            if (isPrivateJoinElement == null)
+                throw new IllegalStateException("joins are not public");
+            assert this.getOwnedLinks().getByPath().size() == 0;
+            vals.setAll(row.getValues(JOIN_SAFE_FIELDS));
+            // remove links to owned if private join
+            final Path pathFromOwner = ((JoinSQLElement) this).getPathFromOwner();
+            assert pathFromOwner.length() == 2;
+            if (isPrivateJoinElement)
+                vals.remove(pathFromOwner.getStep(1));
+        } else {
+            if (isPrivateJoinElement != null)
+                throw new IllegalStateException("should a join : " + this);
+            // Don't copy foreign keys then remove privates (i.e. JOIN_SAFE_FIELDS), as this will
+            // copy ignored paths (see SQLElementLinkSetup.ignore()) and they might be privates
+            vals.setAll(row.getValues(SAFE_FIELDS));
+            for (final SQLElementLink l : this.getOwnedLinks().getByPath().values()) {
+                if (l.getLinkType() != LinkType.COMPOSITION && !l.isJoin()) {
+                    vals.putAll(row.getValues(l.getSingleLink().getCols()));
+                }
+            }
+        }
     }
 
     // *** getRows
@@ -1621,33 +2201,44 @@ public abstract class SQLElement {
             // never happen
             e.printStackTrace();
         }
+        // TODO return Map of SQLElement instead of SQLTable (this avoids the caller a call to
+        // getDirectory())
         return mm;
     }
 
-    public SQLRowAccessor getParent(SQLRowAccessor row) {
+    public SQLRowValues getContainer(final SQLRowValues row) {
+        return this.getContainer(row, true, true);
+    }
+
+    public final SQLRowValues getContainer(final SQLRowValues row, final boolean privateParent, final boolean parent) {
         check(row);
-        final List<SQLRowAccessor> parents = new ArrayList<SQLRowAccessor>();
-        for (final Link l : this.getParentsLinks()) {
-            parents.addAll(row.followLink(l));
+        if (row.isUndefined() || !privateParent && !parent)
+            return null;
+
+        final List<SQLRowValues> parents = new ArrayList<SQLRowValues>();
+        for (final SQLElementLink l : this.getContainerLinks(privateParent, parent).getByPath().values()) {
+            parents.addAll(row.followPath(l.getPathToParent(), CreateMode.CREATE_NONE, true));
         }
         if (parents.size() > 1)
             throw new IllegalStateException("More than one parent for " + row + " : " + parents);
         return parents.size() == 0 ? null : parents.get(0);
     }
 
+    @Deprecated
     public SQLRow getForeignParent(SQLRow row) {
         return this.getForeignParent(row, SQLRowMode.VALID);
     }
 
     // ATTN cannot replace with getParent(SQLRowAccessor) since some callers assume the result to be
     // a foreign row (which isn't the case for private)
+    @Deprecated
     private SQLRow getForeignParent(SQLRow row, final SQLRowMode mode) {
         check(row);
         return this.getParentForeignFieldName() == null ? null : row.getForeignRow(this.getParentForeignFieldName(), mode);
     }
 
-    public final SQLRowValues getPrivateParent(final SQLRowAccessor row, final boolean modifyParameter) {
-        return this.getPrivateParent(row, modifyParameter, ArchiveMode.UNARCHIVED);
+    public final SQLRowValues fetchPrivateParent(final SQLRowAccessor row, final boolean modifyParameter) {
+        return this.fetchPrivateParent(row, modifyParameter, ArchiveMode.UNARCHIVED);
     }
 
     /**
@@ -1661,18 +2252,48 @@ public abstract class SQLElement {
      *         {@link SQLRowAccessor#isUndefined()}, if this isn't a private or if no parent exist.
      * @throws IllegalStateException if <code>row</code> has more than one parent matching.
      */
-    public final SQLRowValues getPrivateParent(final SQLRowAccessor row, final boolean modifyParameter, final ArchiveMode archiveMode) {
+    public final SQLRowValues fetchPrivateParent(final SQLRowAccessor row, final boolean modifyParameter, final ArchiveMode archiveMode) {
+        return this.fetchContainer(row, modifyParameter, archiveMode, true, false);
+    }
+
+    public final SQLRowValues fetchContainer(final SQLRowAccessor row) {
+        return fetchContainer(row, ArchiveMode.UNARCHIVED);
+    }
+
+    public final SQLRowValues fetchContainer(final SQLRowAccessor row, final ArchiveMode archiveMode) {
+        return this.fetchContainer(row, false, archiveMode, true, true);
+    }
+
+    static private SQLField getToID(final Step s) {
+        return s.isForeign() ? s.getSingleField() : s.getTo().getKey();
+    }
+
+    public final SQLRowValues fetchContainer(final SQLRowAccessor row, final boolean modifyParameter, final ArchiveMode archiveMode, final boolean privateParent, final boolean parent) {
         check(row);
-        final List<SQLField> refFields = new ArrayList<SQLField>(this.getPrivateParentReferentFields());
-        if (row.isUndefined() || refFields.size() == 0)
+        if (row.isUndefined() || !privateParent && !parent)
             return null;
-        final ListIterator<SQLField> listIter = refFields.listIterator();
-        final List<String> selects = new ArrayList<String>(refFields.size());
+        final SQLSyntax syntax = SQLSyntax.get(getTable());
+        final List<SQLElementLink> parentLinks = new ArrayList<SQLElementLink>(this.getContainerLinks(privateParent, parent).getByPath().values());
+        if (parentLinks.isEmpty())
+            return null;
+        final ListIterator<SQLElementLink> listIter = parentLinks.listIterator();
+        final List<String> selects = new ArrayList<String>(parentLinks.size());
         while (listIter.hasNext()) {
-            final SQLField refField = listIter.next();
-            final SQLSelect sel = new SQLSelect(true).addSelect(refField.getTable().getKey()).addRawSelect(String.valueOf(listIter.previousIndex()), "fieldIndex");
+            final SQLElementLink parentLink = listIter.next();
+
+            final SQLSelect sel = new SQLSelect(true);
+            sel.addSelect(getToID(parentLink.getStepToParent()), null, "parentID");
+            final SQLField joinPK = parentLink.getPath().getTable(1).getKey();
+            if (parentLink.isJoin()) {
+                sel.addSelect(joinPK, null, "joinID");
+            } else {
+                sel.addRawSelect(syntax.cast("NULL", joinPK.getTypeDecl()), "joinID");
+            }
+            sel.addRawSelect(String.valueOf(listIter.previousIndex()), "fieldIndex");
             sel.setArchivedPolicy(archiveMode);
-            sel.setWhere(new Where(refField, "=", row.getIDNumber()));
+            sel.setWhere(new Where(getToID(parentLink.getStepToChild()), "=", row.getIDNumber()));
+
+            assert sel.getTableRefs().size() == 1 : "Non optimal query";
             selects.add(sel.asString());
         }
         final List<?> parentIDs = getTable().getDBSystemRoot().getDataSource().executeA(CollectionUtils.join(selects, "\nUNION ALL "));
@@ -1683,10 +2304,23 @@ public abstract class SQLElement {
             return null;
 
         final Object[] idAndIndex = (Object[]) parentIDs.get(0);
-        final SQLField refField = refFields.get(((Number) idAndIndex[1]).intValue());
-        final SQLRowValues res = new SQLRowValues(refField.getTable()).setID((Number) idAndIndex[0]);
+        final Number mainID = (Number) idAndIndex[0];
+        final Number joinID = (Number) idAndIndex[1];
+        final SQLElementLink parentLink = parentLinks.get(((Number) idAndIndex[2]).intValue());
+        final Path toChildPath = parentLink.getPathToChild();
+        final SQLRowValues res = new SQLRowValues(toChildPath.getTable(0)).setID(mainID);
+        final SQLRowValues rowWithFK;
+        if (parentLink.isJoin()) {
+            if (joinID == null)
+                throw new IllegalStateException("Missing join ID for " + parentLink);
+            final Step parentToJoin = toChildPath.getStep(0);
+            rowWithFK = res.putRowValues(parentToJoin).setID(joinID);
+        } else {
+            rowWithFK = res;
+        }
+        assert rowWithFK.hasID();
         // first convert to SQLRow to avoid modifying the (graph of our) method parameter
-        res.put(refField.getName(), (modifyParameter ? row : row.asRow()).asRowValues());
+        rowWithFK.put(toChildPath.getStep(-1), (modifyParameter ? row : row.asRow()).asRowValues());
         return res;
     }
 
@@ -1697,14 +2331,14 @@ public abstract class SQLElement {
      * @param archiveMode the parent must match this mode.
      * @return the matching parent linked to its child, <code>null</code> if <code>row</code>
      *         {@link SQLRowAccessor#isUndefined()}, if this isn't a private or if no parent exist.
-     * @see #getPrivateParent(SQLRowAccessor, boolean, ArchiveMode)
+     * @see #fetchPrivateParent(SQLRowAccessor, boolean, ArchiveMode)
      */
-    public final SQLRowValues getPrivateRoot(SQLRowAccessor row, final ArchiveMode archiveMode) {
+    public final SQLRowValues fetchPrivateRoot(SQLRowAccessor row, final ArchiveMode archiveMode) {
         SQLRowValues prev = null;
-        SQLRowValues res = getPrivateParent(row, true, archiveMode);
+        SQLRowValues res = fetchPrivateParent(row, true, archiveMode);
         while (res != null) {
             prev = res;
-            res = getElement(res.getTable()).getPrivateParent(res, true, archiveMode);
+            res = getElement(res.getTable()).fetchPrivateParent(res, true, archiveMode);
         }
         return prev;
     }
@@ -1717,25 +2351,6 @@ public abstract class SQLElement {
         for (final SQLField refField : nonChildren) {
             // eg CONTACT.ID_SITE => [CONTACT[12], CONTACT[13]]
             mm.put(refField, row.getReferentRows(refField));
-        }
-        return mm;
-    }
-
-    public Map<String, SQLRow> getNormalForeigns(SQLRow row) {
-        return this.getNormalForeigns(row, SQLRowMode.DEFINED);
-    }
-
-    private Map<String, SQLRow> getNormalForeigns(SQLRow row, final SQLRowMode mode) {
-        check(row);
-        final Map<String, SQLRow> mm = new HashMap<String, SQLRow>();
-        final Iterator<String> iter = this.getNormalForeignFields().iterator();
-        while (iter.hasNext()) {
-            // eg SOURCE.ID_CPI
-            final String ff = iter.next();
-            // eg CPI[12]
-            final SQLRow foreignRow = row.getForeignRow(ff, mode);
-            if (foreignRow != null)
-                mm.put(ff, foreignRow);
         }
         return mm;
     }
@@ -1757,12 +2372,19 @@ public abstract class SQLElement {
         // seuls les SQLRow peuvent être cachées
         if (row instanceof SQLRow) {
             // MAYBE make the modelObject change
-            final CacheResult<Object> cached = this.getModelCache().check(row);
-            if (cached.getState() == CacheResult.State.NOT_IN_CACHE) {
+            final CacheResult<Object> cached = this.getModelCache().check(row, Collections.singleton(row));
+            if (cached.getState() == CacheResult.State.INTERRUPTED)
+                throw new RTInterruptedException("interrupted while waiting for the cache");
+            else if (cached.getState() == CacheResult.State.VALID)
+                return cached.getRes();
+
+            try {
                 res = this.createModelObject(row);
-                this.getModelCache().put(row, res, Collections.singleton(row));
-            } else
-                res = cached.getRes();
+                this.getModelCache().put(cached, res);
+            } catch (RuntimeException exn) {
+                this.getModelCache().removeRunning(cached);
+                throw exn;
+            }
         } else
             res = this.createModelObject(row);
 
@@ -1791,13 +2413,110 @@ public abstract class SQLElement {
 
     // *** equals
 
+    public static final class EqualOptionBuilder {
+
+        private boolean ignoreNotDeepCopied, testNonShared, testParent, testMetadata;
+
+        public EqualOptionBuilder() {
+            this.ignoreNotDeepCopied = false;
+            this.testNonShared = false;
+            this.testParent = false;
+            this.testMetadata = false;
+        }
+
+        public boolean isIgnoreNotDeepCopied() {
+            return this.ignoreNotDeepCopied;
+        }
+
+        public EqualOptionBuilder setIgnoreNotDeepCopied(boolean ignoreNotDeepCopied) {
+            this.ignoreNotDeepCopied = ignoreNotDeepCopied;
+            return this;
+        }
+
+        public boolean isNonSharedTested() {
+            return this.testNonShared;
+        }
+
+        public EqualOptionBuilder setNonSharedTested(boolean testNonShared) {
+            this.testNonShared = testNonShared;
+            return this;
+        }
+
+        public boolean isParentTested() {
+            return this.testParent;
+        }
+
+        public EqualOptionBuilder setParentTested(boolean testParent) {
+            this.testParent = testParent;
+            return this;
+        }
+
+        public boolean isMetadataTested() {
+            return this.testMetadata;
+        }
+
+        public EqualOptionBuilder setMetadataTested(boolean testMetadata) {
+            this.testMetadata = testMetadata;
+            return this;
+        }
+
+        public EqualOption build() {
+            return new EqualOption(this.ignoreNotDeepCopied, this.testNonShared, this.testParent, this.testMetadata);
+        }
+    }
+
+    @Immutable
+    public static final class EqualOption {
+
+        static private final VirtualFields EQUALS_FIELDS = VirtualFields.CONTENT.union(VirtualFields.ARCHIVE);
+        static private final VirtualFields EQUALS_WITH_MD_FIELDS = EQUALS_FIELDS.union(VirtualFields.METADATA);
+
+        public static final EqualOption ALL = new EqualOption(false, true, true, true);
+        public static final EqualOption ALL_BUT_IGNORE_NOT_DEEP_COPIED = ALL.createBuilder().setIgnoreNotDeepCopied(true).build();
+
+        public static final EqualOption IGNORE_NOT_DEEP_COPIED = new EqualOptionBuilder().setIgnoreNotDeepCopied(true).build();
+        public static final EqualOption TEST_NOT_DEEP_COPIED = new EqualOptionBuilder().setIgnoreNotDeepCopied(false).build();
+
+        static final EqualOption fromIgnoreNotDeepCopied(final boolean ignoreNotDeepCopied) {
+            return ignoreNotDeepCopied ? IGNORE_NOT_DEEP_COPIED : TEST_NOT_DEEP_COPIED;
+        }
+
+        private final boolean ignoreNotDeepCopied, testNonShared, testParent;
+        private final VirtualFields fields;
+
+        protected EqualOption(final boolean ignoreNotDeepCopied, final boolean testNonShared, final boolean testParent, final boolean testMetadata) {
+            this.ignoreNotDeepCopied = ignoreNotDeepCopied;
+            this.testNonShared = testNonShared;
+            this.testParent = testParent;
+            this.fields = testMetadata ? EQUALS_WITH_MD_FIELDS : EQUALS_FIELDS;
+        }
+
+        public boolean isIgnoreNotDeepCopied() {
+            return this.ignoreNotDeepCopied;
+        }
+
+        public boolean isNonSharedTested() {
+            return this.testNonShared;
+        }
+
+        public boolean isParentTested() {
+            return this.testParent;
+        }
+
+        public EqualOptionBuilder createBuilder() {
+            return new EqualOptionBuilder().setIgnoreNotDeepCopied(isIgnoreNotDeepCopied()).setNonSharedTested(isNonSharedTested()).setParentTested(this.isParentTested())
+                    .setMetadataTested(this.fields == EQUALS_WITH_MD_FIELDS);
+        }
+    }
+
     public boolean equals(SQLRow row, SQLRow row2) {
         return this.equals(row, row2, false);
     }
 
     /**
      * Compare local values (excluding order and obviously primary key). This method doesn't cross
-     * links except for privates but it does compare the value of shared normal links.
+     * links except for privates but it does compare the value of shared normal links. This method
+     * always uses the DB.
      * 
      * @param row the first row.
      * @param row2 the second row.
@@ -1805,43 +2524,126 @@ public abstract class SQLElement {
      *        {@link #dontDeepCopy() not to be copied}. See also the <code>full</code> parameter of
      *        {@link #createCopy(SQLRowAccessor, boolean, SQLRowAccessor)}.
      * @return <code>true</code> if the two rows are equal.
+     * @see #equals(SQLRowValues, SQLRowValues, boolean)
      */
     public boolean equals(SQLRow row, SQLRow row2, boolean ignoreNotDeepCopied) {
+        return this.equals(row, row2, EqualOption.fromIgnoreNotDeepCopied(ignoreNotDeepCopied));
+    }
+
+    public boolean equals(SQLRow row, SQLRow row2, final EqualOption option) {
+        return this.diff(row, row2, option).get0();
+    }
+
+    private static final Tuple2<Boolean, DiffResult> TRUE_NULL = new Tuple2<Boolean, DiffResult>(true, null);
+    private static final Tuple2<Boolean, DiffResult> FALSE_NULL = new Tuple2<Boolean, DiffResult>(false, null);
+
+    // Boolean is never null, DiffResult is null if difference is trivial
+    Tuple2<Boolean, DiffResult> diff(SQLRow row, SQLRow row2, final EqualOption option) {
         check(row);
         if (!row2.getTable().equals(this.getTable()))
-            return false;
+            return FALSE_NULL;
         if (row.equals(row2))
-            return true;
+            return TRUE_NULL;
         // the same table but not the same id
 
-        if (!row.getAllValues().equals(row2.getAllValues()))
+        final SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(getPrivateGraphForEquals(option));
+        final List<SQLRowValues> fetched = fetcher.fetch(new Where(this.getTable().getKey(), Arrays.asList(row.getIDNumber(), row2.getIDNumber())));
+        if (fetched.size() > 2)
+            throw new IllegalStateException("More than 2 rows for " + row + " and " + row2);
+        else if (fetched.size() < 2)
+            // at least one is inexistent or archived
+            return FALSE_NULL;
+
+        final DiffResult res = equalsPruned(fetched.get(0), fetched.get(1));
+        return Tuple2.create(res.isEqual(), res);
+    }
+
+    /**
+     * Compare local values (excluding order and obviously primary key). This method doesn't cross
+     * links except for privates but it does compare the value of shared normal links. This method
+     * never uses the DB but does {@link SQLRowValuesCluster#prune(SQLRowValues, SQLRowValues)
+     * prune} the parameters before comparing them.
+     * 
+     * @param row the first row.
+     * @param row2 the second row.
+     * @param ignoreNotDeepCopied if <code>true</code> ignores the rows that are
+     *        {@link #dontDeepCopy() not to be copied}. See also the <code>full</code> parameter of
+     *        {@link #createCopy(SQLRowAccessor, boolean, SQLRowAccessor)}.
+     * @return <code>true</code> if the two rows are equal.
+     * @see #equals(SQLRow, SQLRow, boolean)
+     */
+    public boolean equals(SQLRowValues row, SQLRowValues row2, boolean ignoreNotDeepCopied) {
+        return this.equals(row, row2, EqualOption.fromIgnoreNotDeepCopied(ignoreNotDeepCopied));
+    }
+
+    public boolean equals(SQLRowValues row, SQLRowValues row2, final EqualOption option) {
+        check(row);
+        if (row == row2)
+            return true;
+        if (!row2.getTable().equals(this.getTable()))
             return false;
 
-        // shared doivent être partagées (!)
-        for (final String shared : this.getSharedForeignFields()) {
-            if (row.getInt(shared) != row2.getInt(shared))
-                return false;
-        }
+        final SQLRowValues privateGraphForEquals = getPrivateGraphForEquals(option);
+        return equalsPruned(row.prune(privateGraphForEquals), row2.prune(privateGraphForEquals)).isEqual();
+    }
 
-        // les private equals
-        for (final String prvt : this.getPrivateForeignFields()) {
-            final SQLElement foreignElement = this.getForeignElement(prvt);
-            // ne pas tester
-            if ((!ignoreNotDeepCopied || !foreignElement.dontDeepCopy()) && !foreignElement.equals(row.getForeignRow(prvt), row2.getForeignRow(prvt), ignoreNotDeepCopied))
-                return false;
+    private final SQLRowValues getPrivateGraphForEquals(final EqualOption option) {
+        // don't include joins as we only add those required by "option"
+        final SQLRowValues res = this.getPrivateGraph(option.fields, option.isIgnoreNotDeepCopied(), false);
+        for (final SQLRowValues item : new HashSet<SQLRowValues>(res.getGraph().getItems())) {
+            final SQLElement elem = getElement(item.getTable());
+            // remove parent
+            final SQLElementLink parentLink = elem.getParentLink();
+            setLink(item, parentLink, option.isParentTested());
+            // remove non shared normal links
+            // add shared normal links (if join)
+            for (final SQLElementLink normalLink : elem.getOwnedLinks().getByType(LinkType.ASSOCIATION)) {
+                setLink(item, normalLink, option.isNonSharedTested() || normalLink.getOwned().isShared());
+            }
         }
+        return res;
+    }
 
-        return true;
+    private final void setLink(final SQLRowValues item, final SQLElementLink link, final boolean shouldBeTested) {
+        if (link == null)
+            return;
+        if (shouldBeTested) {
+            if (link.isJoin()) {
+                assert link.getPath().getStep(0).getDirection() == Direction.REFERENT;
+                item.assurePath(link.getPath().minusLast()).fillWith(null, false);
+            }
+        } else {
+            if (!link.isJoin()) {
+                item.removeForeignKey(link.getSingleLink());
+            }
+        }
+    }
+
+    static private DiffResult equalsPruned(SQLRowValues row, SQLRowValues row2) {
+        // neither use order nor PK (don't just remove PK since we need them for
+        // DiffResult.fillRowMap())
+        return row.getGraph().getFirstDifference(row, row2, false, false, false);
     }
 
     public boolean equalsRecursive(SQLRow row, SQLRow row2) throws SQLException {
-        return this.equalsRecursive(row, row2, false);
+        return this.equalsRecursive(row, row2, EqualOption.ALL);
     }
 
-    public boolean equalsRecursive(SQLRow row, SQLRow row2, boolean ignoreNotDeepCopied) throws SQLException {
+    /**
+     * Test those rows and all their descendants.
+     * 
+     * @param row first row.
+     * @param row2 second row.
+     * @param option how to compare each descendant, note that #{@link EqualOption#isParentTested()}
+     *        is only meaningful for the passed (root) rows, since descendants are found through
+     *        their parents (i.e. they always have equal parents).
+     * @return true if both trees are equal according to <code>option</code>.
+     * @throws SQLException if an error occurs.
+     */
+    public boolean equalsRecursive(SQLRow row, SQLRow row2, EqualOption option) throws SQLException {
         // if (!equals(row, row2))
         // return false;
-        return new SQLElementRowR(this, row).equals(new SQLElementRowR(this, row2), ignoreNotDeepCopied);
+        return new SQLElementRowR(this, row).equals(new SQLElementRowR(this, row2), option);
     }
 
     // no need for equals()/hashCode() since there's only one SQLElement per table and directory
@@ -1994,7 +2796,7 @@ public abstract class SQLElement {
     }
 
     public final boolean askArchive(final Component comp, final Number ids) {
-        return this.askArchive(comp, Collections.singleton(ids));
+        return Value.hasValue(this.askArchive(comp, Collections.singleton(ids)));
     }
 
     /**
@@ -2002,22 +2804,52 @@ public abstract class SQLElement {
      * 
      * @param comp the parent component.
      * @param ids which rows to archive.
-     * @return <code>true</code> if the rows were successfully archived, <code>false</code>
-     *         otherwise.
+     * @return <code>null</code> if there was an error (already presented to the user),
+     *         {@link Value#hasValue() a value} if the user agreed, none if the user refused.
+     * @deprecated this methods mixes DB and UI access.
      */
-    public boolean askArchive(final Component comp, final Collection<? extends Number> ids) {
-        boolean shouldArchive = false;
-        final int rowCount = ids.size();
-        if (rowCount == 0)
-            return true;
+    public final Value<TreesOfSQLRows> askArchive(final Component comp, final Collection<? extends Number> ids) {
+        final TreesOfSQLRows trees = TreesOfSQLRows.createFromIDs(this, ids);
         try {
+            trees.fetch(LockStrength.NONE);
+            final Boolean agreed = this.ask(comp, trees);
+            if (agreed == null) {
+                return null;
+            } else if (agreed) {
+                this.archive(trees, true);
+                return Value.getSome(trees);
+            } else {
+                return Value.getNone();
+            }
+        } catch (SQLException e) {
+            ExceptionHandler.handle(comp, TM.tr("sqlElement.archiveError", this, ids), e);
+            return null;
+        }
+    }
+
+    /**
+     * Ask the user about rows to archive.
+     * 
+     * @param comp the parent component.
+     * @param trees which rows to archive.
+     * @return <code>null</code> if there was an error (already presented to the user),
+     *         <code>true</code> if the user agreed, <code>false</code> if the user refused.
+     */
+    public Boolean ask(final Component comp, final TreesOfSQLRows trees) {
+        boolean shouldArchive = false;
+        if (!trees.isFetched())
+            throw new IllegalStateException("Trees not yet fetched");
+        try {
+            final int rowCount = trees.getTrees().size();
+            if (rowCount == 0)
+                return true;
+            // only check rights if there's actually some rows to delete
             if (!UserRightsManager.getCurrentUserRights().canDelete(getTable()))
                 throw new SQLException("forbidden");
-            final TreesOfSQLRows trees = TreesOfSQLRows.createFromIDs(this, ids);
             // only display main rows since the user might not be aware of the private ones (the UI
             // might hide the fact that one panel is in fact multiple rows)
             final Map<SQLTable, List<SQLRowAccessor>> descs = trees.getDescendantsByTable();
-            final SortedMap<SQLField, Integer> externRefs = trees.getExternReferencesCount();
+            final SortedMap<LinkToCut, Integer> externRefs = trees.getExternReferences().countByLink();
             final String confirmDelete = getTM().trA("sqlElement.confirmDelete");
             final Map<String, Object> map = new HashMap<String, Object>();
             map.put("rowCount", rowCount);
@@ -2048,14 +2880,10 @@ public abstract class SQLElement {
                     shouldArchive = true;
                 }
             }
-            if (shouldArchive) {
-                this.archive(trees, true);
-                return true;
-            } else
-                return false;
-        } catch (SQLException e) {
-            ExceptionHandler.handle(comp, TM.tr("sqlElement.archiveError", this, ids), e);
-            return false;
+            return shouldArchive;
+        } catch (Exception e) {
+            ExceptionHandler.handle(comp, TM.tr("sqlElement.rowsToArchiveError", this), e);
+            return null;
         }
     }
 
@@ -2075,13 +2903,13 @@ public abstract class SQLElement {
 
     // traduire TRANSFO.ID_ELEMENT_TABLEAU_PRI -> {TRANSFO[5], TRANSFO[12]}
     // en 2 transformateurs vont perdre leurs champs 'Circuit primaire'
-    private final String toStringExtern(SortedMap<SQLField, Integer> externRef) {
+    private final String toStringExtern(SortedMap<LinkToCut, Integer> externRefs) {
         final List<String> l = new ArrayList<String>();
         final Map<String, Object> map = new HashMap<String, Object>(4);
-        for (final Map.Entry<SQLField, Integer> entry : externRef.entrySet()) {
-            final SQLField foreignKey = entry.getKey();
+        for (final Entry<LinkToCut, Integer> entry : externRefs.entrySet()) {
+            final LinkToCut foreignKey = entry.getKey();
             final int count = entry.getValue();
-            final String label = Configuration.getTranslator(foreignKey.getTable()).getLabelFor(foreignKey);
+            final String label = foreignKey.getLabel();
             final SQLElement elem = getElement(foreignKey.getTable());
             map.put("elementName", elem.getName());
             map.put("count", count);

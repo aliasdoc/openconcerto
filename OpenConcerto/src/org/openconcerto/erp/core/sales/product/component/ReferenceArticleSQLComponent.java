@@ -219,6 +219,7 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
             if (this.codeFournisseurTable != null) {
                 this.codeFournisseurTable.insertFrom("ID_ARTICLE", r.getID());
             }
+            selectModeVente(r.getForeignID("ID_MODE_VENTE_ARTICLE"));
         }
     }
 
@@ -880,7 +881,7 @@ public class ReferenceArticleSQLComponent extends BaseSQLComponent {
                         ha = BigDecimal.ZERO;
                     }
                     CurrencyConverter c = new CurrencyConverter();
-                    String devCode = boxDevise.getSelectedRow().getString("TAUX");
+                    String devCode = boxDevise.getSelectedRow().getString("CODE");
                     textPAHT.setText(c.convert(ha, devCode, c.getCompanyCurrencyCode(), new Date(), true).setScale(getTable().getField("PA_DEVISE").getType().getDecimalDigits(), RoundingMode.HALF_UP)
                             .toString());
 

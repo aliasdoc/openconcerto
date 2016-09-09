@@ -21,6 +21,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 
+import javax.swing.JOptionPane;
+
 import com.jcraft.jsch.Session;
 
 import org.openconcerto.sql.Configuration;
@@ -126,7 +128,9 @@ public abstract class ComptaBasePropsConfiguration extends PropsConfiguration {
                         try {
                             Thread.sleep(1000);
                             if (!conn.isConnected()) {
-                                ExceptionHandler.die("Liaison sécurisée déconnectée!\nVérifiez votre connexion internet et relancez le logiciel.");
+                                JOptionPane.showMessageDialog(null, "Coupure réseau", "Liaison sécurisée déconnectée!\nVérifiez votre connexion internet et relancez le logiciel.",
+                                        JOptionPane.ERROR_MESSAGE);
+                                System.exit(1);
                                 break;
                             }
                         } catch (InterruptedException e) {
@@ -173,7 +177,7 @@ public abstract class ComptaBasePropsConfiguration extends PropsConfiguration {
         dir.addSQLElement(new TaskRightSQLElement());
         dir.addSQLElement(new TaskSQLElement());
 
-        dir.addSQLElement(new UserCommonSQLElement());
+        dir.addSQLElement(new UserCommonSQLElement(getRoot()));
         dir.addSQLElement(new CompanyAccessSQLElement());
         dir.addSQLElement(UserRightSQLElement.class);
         dir.addSQLElement(RightSQLElement.class);

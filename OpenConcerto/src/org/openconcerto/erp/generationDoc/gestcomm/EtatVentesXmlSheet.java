@@ -206,7 +206,7 @@ public class EtatVentesXmlSheet extends AbstractListeSheetXml {
             totalTPA = totalTPA.add(a.ha);
             totalTPVTTC = totalTPVTTC.add(a.ttc);
             listValues.add(mValues);
-            System.out.println("EtatVentesXmlSheet.createListeValues():" + listValues);
+            // System.out.println("EtatVentesXmlSheet.createListeValues():" + listValues);
         }
 
         // Liste des ventes comptoirs

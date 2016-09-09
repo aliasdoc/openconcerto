@@ -106,7 +106,7 @@ abstract class AbstractUpdateOneRunnable extends UpdateRunnable {
                         @Override
                         public SQLSelect transformChecked(SQLSelect input) {
                             if (ListSQLRequest.getDefaultLockSelect())
-                                input.addWaitPreviousWriteTXTable(getTable().getName());
+                                input.addLockedTable(getTable().getName());
                             return input.setWhere(getRow().getWhere());
                         }
                     };

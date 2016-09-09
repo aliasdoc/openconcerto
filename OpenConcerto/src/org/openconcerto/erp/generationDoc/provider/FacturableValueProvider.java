@@ -28,7 +28,7 @@ public class FacturableValueProvider implements SpreadSheetCellValueProvider {
         BigDecimal percent = row.getBigDecimal("POURCENT_FACTURABLE");
         BigDecimal amount = row.getBigDecimal("MONTANT_FACTURABLE");
         Acompte a = new Acompte(percent, amount);
-        return a.toPlainString();
+        return a.toPlainString(false);
     }
 
     public static void register() {

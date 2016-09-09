@@ -17,6 +17,7 @@ import org.openconcerto.erp.generationDoc.AbstractLocalTemplateProvider;
 import org.openconcerto.erp.generationDoc.DefaultLocalTemplateProvider;
 import org.openconcerto.erp.generationDoc.TemplateManager;
 import org.openconcerto.erp.generationDoc.TemplateProvider;
+import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.preferences.DefaultPreferencePanel;
 import org.openconcerto.ui.table.TablePopupMouseListener;
@@ -119,6 +120,9 @@ public class TemplatePreferencePanel extends DefaultPreferencePanel {
         bSync = new JButton("Synchroniser");
         bSync.setEnabled(false);
         bSync.setOpaque(false);
+        if (!UserManager.getUser().getRights().haveRight("SYNC_TEMPLATE")) {
+            bSync.setToolTipText("Vous n'avez pas les droits suffisants pour synchroniser les modèles!");
+        }
         c.gridx++;
         p.add(bSync, c);
         final TemplateTableModel dm = new TemplateTableModel();
@@ -215,7 +219,7 @@ public class TemplatePreferencePanel extends DefaultPreferencePanel {
                     bUndo.setEnabled(false);
                 } else {
                     bModify.setEnabled(true);
-                    bSync.setEnabled(true);
+                    bSync.setEnabled(UserManager.getUser().getRights().haveRight("SYNC_TEMPLATE"));
                     bUndo.setEnabled(true);
                 }
 

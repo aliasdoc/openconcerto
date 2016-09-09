@@ -13,65 +13,51 @@
  
  package org.openconcerto.ui.light;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.openconcerto.utils.io.JSONConverter;
 import org.openconcerto.utils.io.Transferable;
-import net.minidev.json.JSONArray;
+
 import net.minidev.json.JSONObject;
 
-public class LightUILine implements Transferable {
+public class LightUILine extends LightUIContainer implements Transferable {
+    private static final long serialVersionUID = 4132718509484530435L;
 
     public static final int ALIGN_GRID = 0;
     public static final int ALIGN_LEFT = 1;
     public static final int ALIGN_RIGHT = 2;
 
-    private static final long serialVersionUID = 4132718509484530435L;
-
-    private boolean elementMargin = false;
-    private boolean fillHeight = false;
-    private boolean footer = false;
-
     private int gridAlignment = ALIGN_GRID;
-    private int marginBottom = 0;
-    private int marginLeft = 0;
-    private int marginRight = 0;
-    private int marginTop = 0;
-    private int weightY = 0;
 
-    private final List<LightUIElement> elements = new ArrayList<LightUIElement>();
+    private Integer elementPadding;
+    private Integer elementMargin;
 
     public LightUILine() {
+        // Id will be set when this line will be added into a panel, or set manually.
+        super("");
+        this.setType(TYPE_PANEL_LINE);
     }
 
     public LightUILine(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
-    public void setElementMargin(final boolean elementMargin) {
+    public LightUILine(final LightUILine line) {
+        super(line);
+    }
+
+    public void setElementPadding(final Integer elementPadding) {
+        this.elementPadding = elementPadding;
+    }
+
+    public Integer getElementPadding() {
+        return this.elementPadding;
+    }
+
+    public void setElementMargin(final Integer elementMargin) {
         this.elementMargin = elementMargin;
     }
 
-    public boolean isElementMargin() {
+    public Integer getElementMargin() {
         return this.elementMargin;
-    }
-
-    public void setFillHeight(final boolean fillHeight) {
-        this.fillHeight = fillHeight;
-    }
-
-    public boolean isFillHeight() {
-        return this.fillHeight;
-    }
-
-    public void setFooter(final boolean footer) {
-        this.footer = footer;
-    }
-
-    public boolean isFooter() {
-        return this.footer;
     }
 
     public int getGridAlignment() {
@@ -82,182 +68,68 @@ public class LightUILine implements Transferable {
         this.gridAlignment = gridAlignment;
     }
 
-    public int getMarginBottom() {
-        return this.marginBottom;
-    }
-
-    public void setMarginBottom(final int marginBottom) {
-        this.marginBottom = marginBottom;
-    }
-
-    public int getMarginLeft() {
-        return this.marginLeft;
-    }
-
-    public void setMarginLeft(final int marginLeft) {
-        this.marginLeft = marginLeft;
-    }
-
-    public int getMarginRight() {
-        return this.marginRight;
-    }
-
-    public void setMarginRight(final int marginRight) {
-        this.marginRight = marginRight;
-    }
-
-    public int getMarginTop() {
-        return this.marginTop;
-    }
-
-    public void setMarginTop(final int marginTop) {
-        this.marginTop = marginTop;
-    }
-
-    public int getWeightY() {
-        return this.weightY;
-    }
-
-    public void setWeightY(final int weightY) {
-        this.weightY = weightY;
-    }
-
-    public int getSize() {
-        return this.elements.size();
-    }
-
-    public void add(final LightUIElement element) {
-        this.elements.add(element);
-    }
-
-    public LightUIElement getElement(final int i) {
-        return this.elements.get(i);
-    }
-
-    public int getWidth() {
-        int w = 0;
-        final int size = this.elements.size();
+    public Integer getHeight() {
+        Integer h = 0;
+        final int size = this.getChildrenCount();
         for (int i = 0; i < size; i++) {
-            w += this.elements.get(i).getGridWidth();
+            h += this.getChild(i).getHeight();
+        }
+        return h;
+    }
+
+    public Integer getWidth() {
+        Integer w = 0;
+        final int size = this.getChildrenCount();
+        for (int i = 0; i < size; i++) {
+            w += this.getChild(i).getGridWidth();
         }
         return w;
     }
 
-    public boolean replaceElement(final LightUIElement pElement) {
-        final int cellSize = this.elements.size();
-        for (int i = 0; i < cellSize; i++) {
-            final LightUIElement element = this.elements.get(i);
-            if (element.getId() != null && element.getId().equals(pElement.getId())) {
-                this.elements.set(i, pElement);
-                return true;
-            }
-            if (element.getType() == LightUIElement.TYPE_PANEL) {
-                if (((LightUIPanel) element).replaceElement(pElement)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    public static String createId(final LightUIPanel parent) {
+        return parent.getId() + ".line." + parent.getChildrenCount();
     }
 
-    public LightUIElement getElementById(final String id) {
-        final int cellSize = this.elements.size();
-        LightUIElement result = null;
-        for (int i = 0; i < cellSize; i++) {
-            final LightUIElement element = this.elements.get(i);
-            if (element.getId() != null && element.getId().equals(id)) {
-                return element;
-            }
-            if (element.getType() == LightUIElement.TYPE_PANEL) {
-                result = ((LightUIPanel) element).getElementById(id);
-                if (result != null) {
-                    return result;
-                }
-            } else if (element.getType() == LightUIElement.TYPE_TABLE) {
-                result = ((LightUITable) element).getElementById(id);
-                if (result != null) {
-                    return result;
-                }
-            } else if (element.getType() == LightUIElement.TYPE_TABBED_UI) {
-                result = ((LightUITabbed) element).getElementById(id);
-                if (result != null) {
-                    return result;
-                }
-            }
-        }
-        return null;
+    @Override
+    public LightUIElement clone() {
+        return new LightUILine(this);
     }
 
-    public void dump(final PrintStream out) {
-        int size = this.elements.size();
-        out.println("LightUILine " + size + " elements, weightY: " + this.weightY + " fillHeight: " + this.fillHeight);
-        for (int i = 0; i < size; i++) {
-            LightUIElement element = this.elements.get(i);
-            out.print("Element " + i + " : ");
-            element.dump(out);
+    @Override
+    protected void copy(LightUIElement element) {
+        super.copy(element);
+
+        if (!(element instanceof LightUILine)) {
+            throw new InvalidClassException(this.getClassName(), element.getClassName(), element.getId());
         }
+
+        final LightUILine line = (LightUILine) element;
+        this.elementMargin = line.elementMargin;
+        this.elementPadding = line.elementPadding;
+        this.gridAlignment = line.gridAlignment;
     }
 
     @Override
     public JSONObject toJSON() {
-        final JSONObject result = new JSONObject();
+        final JSONObject result = super.toJSON();
         result.put("class", "LightUILine");
-        if (this.elementMargin) {
+        if (this.elementPadding != null) {
+            result.put("element-padding", this.elementPadding);
+        }
+        if (this.elementMargin != null) {
             result.put("element-margin", this.elementMargin);
-        }
-        if (this.fillHeight) {
-            result.put("fill-height", true);
-        }
-        if (this.footer) {
-            result.put("footer", true);
-        }
-        if (this.weightY != 0) {
-            result.put("weight-y", this.weightY);
-        }
-        if (this.marginBottom != 0) {
-            result.put("margin-bottom", this.marginBottom);
-        }
-        if (this.marginLeft != 0) {
-            result.put("margin-left", this.marginLeft);
-        }
-        if (this.marginRight != 0) {
-            result.put("margin-right", this.marginRight);
-        }
-        if (this.marginTop != 0) {
-            result.put("margin-top", this.marginTop);
         }
         if (this.gridAlignment != ALIGN_GRID) {
             result.put("grid-alignment", this.gridAlignment);
-        }
-        if (!elements.isEmpty()) {
-            result.put("elements", JSONConverter.getJSON(this.elements));
         }
         return result;
     }
 
     @Override
     public void fromJSON(final JSONObject json) {
-
-        this.elementMargin = (Boolean) JSONConverter.getParameterFromJSON(json, "element-margin", Boolean.class, Boolean.FALSE);
-        this.fillHeight = (Boolean) JSONConverter.getParameterFromJSON(json, "fill-height", Boolean.class, Boolean.FALSE);
-        this.footer = (Boolean) JSONConverter.getParameterFromJSON(json, "footer", Boolean.class, Boolean.FALSE);
+        super.fromJSON(json);
+        this.elementPadding = (Integer) JSONConverter.getParameterFromJSON(json, "element-padding", Integer.class);
+        this.elementMargin = (Integer) JSONConverter.getParameterFromJSON(json, "element-margin", Integer.class);
         this.gridAlignment = (Integer) JSONConverter.getParameterFromJSON(json, "grid-alignment", Integer.class, ALIGN_GRID);
-        this.marginBottom = (Integer) JSONConverter.getParameterFromJSON(json, "margin-bottom", Integer.class, 0);
-        this.marginLeft = (Integer) JSONConverter.getParameterFromJSON(json, "margin-left", Integer.class, 0);
-        this.marginRight = (Integer) JSONConverter.getParameterFromJSON(json, "margin-right", Integer.class, 0);
-        this.marginTop = (Integer) JSONConverter.getParameterFromJSON(json, "margin-top", Integer.class, 0);
-        this.weightY = (Integer) JSONConverter.getParameterFromJSON(json, "weight-y", Integer.class, 0);
-
-        final JSONArray jsonElements = (JSONArray) JSONConverter.getParameterFromJSON(json, "elements", JSONArray.class);
-        if (jsonElements != null) {
-            for (final Object o : jsonElements) {
-                final JSONObject jsonElement = (JSONObject) JSONConverter.getObjectFromJSON(o, JSONObject.class);
-                if (jsonElement == null) {
-                    throw new IllegalArgumentException("null element in json parameter");
-                }
-                final LightUIElement lightElement = LightUIElement.createUIElementFromJSON(jsonElement);
-                this.elements.add(lightElement);
-            }
-        }
     }
 }

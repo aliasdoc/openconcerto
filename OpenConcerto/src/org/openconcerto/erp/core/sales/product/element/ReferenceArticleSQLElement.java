@@ -36,6 +36,7 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.preferences.SQLPreferences;
+import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.EditPanel.EditMode;
 import org.openconcerto.sql.view.list.BaseSQLTableModelColumn;
@@ -45,7 +46,7 @@ import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
 import org.openconcerto.sql.view.list.SQLTableModelColumn;
 import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.FrameUtil;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.ListMap;
@@ -54,6 +55,7 @@ import java.awt.event.ActionEvent;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -199,14 +201,13 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
+    public ListMap<String, String> getShowAs() {
+        final ListMap<String, String> res = new ListMap<String, String>();
         SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
         if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.SHOW_PRODUCT_BAR_CODE, false)) {
-            res.put(null, "CODE_BARRE");
+            res.add(null, "CODE_BARRE");
         }
-        res.put(null, "NOM");
-        res.put(null, "ID_FAMILLE_ARTICLE");
+        res.addAll(null, "NOM", "ID_FAMILLE_ARTICLE");
         return res;
     }
 
@@ -219,13 +220,6 @@ public class ReferenceArticleSQLElement extends ComptaSQLConfElement {
         }
 
         l.add("NOM");
-        return l;
-    }
-
-    @Override
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_STOCK");
         return l;
     }
 

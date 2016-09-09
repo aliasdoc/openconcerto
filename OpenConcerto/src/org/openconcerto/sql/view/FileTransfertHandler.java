@@ -33,6 +33,7 @@ public class FileTransfertHandler extends TransferHandler {
         this.tableName = table;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public boolean importData(final JComponent c, final Transferable t) {
         if (!canImport(c, t.getTransferDataFlavors())) {
@@ -97,7 +98,7 @@ public class FileTransfertHandler extends TransferHandler {
 
     private boolean hasFileFlavor(DataFlavor[] flavors) {
         for (int i = 0; i < flavors.length; i++) {
-            if (DataFlavor.javaFileListFlavor.equals(flavors[i]) || DataFlavor.javaRemoteObjectMimeType.equals(flavors[i])) {
+            if (DataFlavor.javaFileListFlavor.equals(flavors[i]) || DataFlavor.javaRemoteObjectMimeType.equals(flavors[i].getMimeType())) {
                 return true;
             }
         }

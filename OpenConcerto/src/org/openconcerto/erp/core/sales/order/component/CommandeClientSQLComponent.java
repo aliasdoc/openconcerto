@@ -339,16 +339,10 @@ public class CommandeClientSQLComponent extends TransfertBaseSQLComponent {
                     System.err.println("SET WHERE ID_CLIENT = " + wantedID);
                     if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
-                        addressUI
-                                .getComboAdrF()
-                                .getRequest()
-                                .setWhere(
-                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
-                        addressUI
-                                .getComboAdrL()
-                                .getRequest()
-                                .setWhere(
-                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                        addressUI.getComboAdrF().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI.getComboAdrL().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
                     } else {
                         addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
                         addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
@@ -487,8 +481,8 @@ public class CommandeClientSQLComponent extends TransfertBaseSQLComponent {
         JTextField poids = new JTextField();
         SQLRequestComboBox boxTaxePort = new SQLRequestComboBox(false, 8);
         // addSQLObject(poids, "T_POIDS");
-        final TotalPanel totalTTC = new TotalPanel(this.table, fieldHT, fieldTVA, fieldTTC, textPortHT, textRemiseHT, fieldService, fieldHA, fieldDevise, poids, null, (getTable().contains(
-                "ID_TAXE_PORT") ? boxTaxePort : null));
+        final TotalPanel totalTTC = new TotalPanel(this.table, fieldHT, fieldTVA, fieldTTC, textPortHT, textRemiseHT, fieldService, fieldHA, fieldDevise, poids, null,
+                (getTable().contains("ID_TAXE_PORT") ? boxTaxePort : null));
 
         // INfos
         c.gridx = 0;
@@ -704,7 +698,7 @@ public class CommandeClientSQLComponent extends TransfertBaseSQLComponent {
             super.select(r);
         else {
             System.err.println(r);
-            final SQLRowValues rVals = r.asRowValues();
+            final SQLRowValues rVals = r.asRowValues().deepCopy();
             final SQLRowValues vals = new SQLRowValues(r.getTable());
             vals.load(rVals, createSet("ID_CLIENT"));
             vals.setID(rVals.getID());

@@ -15,7 +15,7 @@
 
 import org.openconcerto.erp.core.finance.payment.element.TypeReglementSQLElement;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
-import org.openconcerto.erp.core.sales.pos.Caisse;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
 import org.openconcerto.erp.core.sales.pos.model.Article;
 import org.openconcerto.erp.core.sales.pos.model.Categorie;
 import org.openconcerto.erp.core.sales.pos.model.Paiement;
@@ -52,7 +52,7 @@ public class TextAreaTicketPanel extends JPanel {
         button.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                ticket.print(Caisse.getTicketPrinter());
+                POSConfiguration.getInstance().print(ticket);
 
             }
         });
@@ -72,7 +72,7 @@ public class TextAreaTicketPanel extends JPanel {
         c.weighty = 1;
         this.add(comp, c);
 
-        ticket.print(comp);
+        ticket.print(comp, POSConfiguration.getInstance().getTicketPrinterConfiguration1().getTicketWidth());
     }
 
     private Ticket createTicket(SQLRow row) {
@@ -108,10 +108,10 @@ public class TextAreaTicketPanel extends JPanel {
         for (SQLRow row2 : l2) {
             Article a = new Article(c, row2.getString("NOM"), row2.getInt("ID_ARTICLE"));
             BigDecimal ht = (BigDecimal) row2.getObject("PV_HT");
-            a.setPriceHTInCents(ht);
+            a.setPriceWithoutTax(ht);
             int idTaxe = row2.getInt("ID_TAXE");
             float tva = TaxeCache.getCache().getTauxFromId(idTaxe);
-            a.setPriceInCents(ht.multiply(new BigDecimal(1.0 + (tva / 100.0D)), DecimalUtils.HIGH_PRECISION));
+            a.setPriceWithTax(ht.multiply(new BigDecimal(1.0 + (tva / 100.0D)), DecimalUtils.HIGH_PRECISION));
             a.setIdTaxe(idTaxe);
             t.addArticle(a);
             t.setArticleCount(a, row2.getInt("QTE"));

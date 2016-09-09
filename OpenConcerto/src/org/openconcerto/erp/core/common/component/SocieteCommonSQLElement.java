@@ -50,7 +50,7 @@ import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.InteractionMode;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 /**
  * Sociétés existantes avec le nom de la base associée
@@ -78,13 +78,17 @@ public class SocieteCommonSQLElement extends ConfSQLElement {
         return sysRoot.getRoot(rootName);
     }
 
+    public SocieteCommonSQLElement(DBRoot root) {
+        super(root.getTable(TABLE_NAME), "une société", "sociétés");
+    }
+
     public SocieteCommonSQLElement() {
-        super(TABLE_NAME, "une société", "sociétés");
+        this(Configuration.getInstance().getRoot());
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, getListFields());
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getListFields());
     }
 
     protected List<String> getListFields() {
@@ -96,13 +100,6 @@ public class SocieteCommonSQLElement extends ConfSQLElement {
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
         l.add("NOM");
-        return l;
-    }
-
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_EXERCICE_COMMON");
-        l.add("ID_ADRESSE_COMMON");
         return l;
     }
 
@@ -225,6 +222,20 @@ public class SocieteCommonSQLElement extends ConfSQLElement {
                 c.weightx = 1;
                 this.add(this.textNumAPE, c);
 
+                // Org social
+                c.gridy++;
+                c.gridx = 0;
+                c.weightx = 0;
+                JLabel labelIDSoc = new JLabel(getLabelFor("ORG_PROTECTION_SOCIAL_ID"));
+                labelIDSoc.setHorizontalAlignment(SwingConstants.RIGHT);
+                this.add(labelIDSoc, c);
+
+                c.gridx++;
+                c.weightx = 1;
+                JTextField fieldIDSoc = new JTextField();
+                this.add(fieldIDSoc, c);
+                this.addView(fieldIDSoc, "ORG_PROTECTION_SOCIAL_ID");
+
                 // RCS
                 c.gridy++;
                 c.gridx = 0;
@@ -251,6 +262,33 @@ public class SocieteCommonSQLElement extends ConfSQLElement {
                 JTextField fieldCapital = new JTextField();
                 this.add(fieldCapital, c);
                 this.addView(fieldCapital, "CAPITAL");
+
+                // IBAN
+                c.gridy++;
+                c.gridx = 0;
+                c.weightx = 0;
+                JLabel labelIban = new JLabel(getLabelFor("IBAN"));
+                labelIban.setHorizontalAlignment(SwingConstants.RIGHT);
+                this.add(labelIban, c);
+
+                c.gridx++;
+                c.weightx = 1;
+                JTextField fieldIban = new JTextField();
+                this.add(fieldIban, c);
+                this.addView(fieldIban, "IBAN");
+
+                // Capital
+                c.gridx++;
+                c.weightx = 0;
+                JLabel labelBIC = new JLabel(getLabelFor("BIC"));
+                labelBIC.setHorizontalAlignment(SwingConstants.RIGHT);
+                this.add(labelBIC, c);
+
+                c.gridx++;
+                c.weightx = 1;
+                JTextField fieldBIC = new JTextField();
+                this.add(fieldBIC, c);
+                this.addView(fieldBIC, "BIC");
 
                 // Assurance
                 if (getTable().contains("NUMERO_POLICE")) {
@@ -491,6 +529,13 @@ public class SocieteCommonSQLElement extends ConfSQLElement {
                 if (r != null) {
                     disableEdition();
                 }
+            }
+
+            @Override
+            public void update() {
+                // TODO Auto-generated method stub
+                super.update();
+                ComptaPropsConfiguration.getInstanceCompta().getRowSociete().fetchValues();
             }
 
             public void disableEdition() {

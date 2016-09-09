@@ -22,6 +22,7 @@ import org.openconcerto.sql.model.SQLTableEvent;
 import org.openconcerto.sql.model.SQLTableModifiedListener;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +78,9 @@ public class UserManager {
             final User u = new User(v.getID(), v.getString("NOM"));
             u.setFirstName(v.getString("PRENOM"));
             u.setNickName(v.getString("SURNOM"));
+            if (v.getFields().contains("DISABLED")) {
+                u.setActive(!v.getBoolean("DISABLED"));
+            }
             this.byID.put(v.getID(), u);
         }
 
@@ -104,6 +108,17 @@ public class UserManager {
 
     public synchronized List<User> getAllUser() {
         return new ArrayList<User>(this.getUsers().values());
+    }
+
+    public synchronized List<User> getAllActiveUsers() {
+        final ArrayList<User> result = new ArrayList<User>();
+        final Collection<User> values = this.getUsers().values();
+        for (User user : values) {
+            if (user.isActive()) {
+                result.add(user);
+            }
+        }
+        return result;
     }
 
     public synchronized User getUser(final Integer v) {

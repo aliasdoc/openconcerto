@@ -30,10 +30,12 @@ public class GestionArticleGlobalPreferencePanel extends JavaPrefPreferencePanel
     public static String CREATE_ARTICLE_AUTO = "CreateArticleAuto";
     public static String SUPPLIER_PRODUCT_CODE = "SupplierProductCode";
     public static String WARNING_STOCK_MIN = "ArticleStockMin";
-
+    public static String BOM_STYLE = "BomStyle";
     public static String SHOW_PRODUCT_BAR_CODE = "ShowProductBarCode";
     public static String ITEM_PACKAGING = "ItemPackaging";
     public static String FILTER_BY_FAMILY = "FilterByFamily";
+    public static String CAN_EXPAND_NOMENCLATURE_VT = "CanExpandNomenclature";
+    public static String CAN_EXPAND_NOMENCLATURE_HA = "CanExpandNomenclaturePurchase";
 
     public GestionArticleGlobalPreferencePanel() {
         super("Gestion des articles", null);
@@ -42,6 +44,16 @@ public class GestionArticleGlobalPreferencePanel extends JavaPrefPreferencePanel
 
     @Override
     protected void addViews() {
+
+        PrefView<Boolean> viewExpandNom = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Permettre d'applatir, d'exposer, d'éclater les articles dans les pièces commerciales de vente",
+                CAN_EXPAND_NOMENCLATURE_VT);
+        viewExpandNom.setDefaultValue(Boolean.TRUE);
+        this.addView(viewExpandNom);
+
+        PrefView<Boolean> viewExpandNomHA = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Permettre d'applatir, d'exposer, d'éclater les articles dans les pièces commerciales d'achat",
+                CAN_EXPAND_NOMENCLATURE_HA);
+        viewExpandNomHA.setDefaultValue(Boolean.TRUE);
+        this.addView(viewExpandNomHA);
 
         PrefView<Boolean> viewAchat = new PrefView<Boolean>(PrefType.BOOLEAN_TYPE, "Gérer les codes articles fournisseurs", SUPPLIER_PRODUCT_CODE);
         viewAchat.setDefaultValue(Boolean.FALSE);

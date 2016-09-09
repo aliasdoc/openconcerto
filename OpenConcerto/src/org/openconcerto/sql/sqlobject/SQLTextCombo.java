@@ -16,6 +16,7 @@
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.IResultSetHandler;
+import org.openconcerto.sql.model.SQLData;
 import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -35,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * An ITextCombo with the cache from COMPLETION.
@@ -198,15 +200,10 @@ public class SQLTextCombo extends org.openconcerto.ui.component.ITextCombo imple
             sel.addFieldOrder(getField());
             // ignore DS cache to allow the fetching of rows modified by another VM
             @SuppressWarnings("unchecked")
-            final List<String> items = (List<String>) this.getDS().execute(sel.asString(), new IResultSetHandler(SQLDataSource.COLUMN_LIST_HANDLER) {
+            final List<String> items = (List<String>) this.getDS().execute(sel.asString(), new IResultSetHandler(SQLDataSource.COLUMN_LIST_HANDLER, dsCache, true) {
                 @Override
-                public boolean readCache() {
-                    return dsCache;
-                }
-
-                @Override
-                public boolean writeCache() {
-                    return true;
+                public Set<? extends SQLData> getCacheModifiers() {
+                    return Collections.singleton(getTable());
                 }
             });
             this.cache.clear();

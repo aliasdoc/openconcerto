@@ -156,7 +156,8 @@ public class ListeDesEcheancesClientsPanel extends JPanel {
                 String numeroFact = "";
                 for (Integer integer : selectedIds) {
                     final SQLRow row = ListeDesEcheancesClientsPanel.this.panelEcheances.getListe().getSource().getPrimaryTable().getRow(integer);
-                    // System.err.println("ListeDesEcheancesClientsPanel.ListeDesEcheancesClientsPanel().new ActionListener() {...}.actionPerformed()"
+                    // System.err.println("ListeDesEcheancesClientsPanel.ListeDesEcheancesClientsPanel().new
+                    // ActionListener() {...}.actionPerformed()"
                     // + row);
                     selectedRows.add(row);
 
@@ -265,7 +266,7 @@ public class ListeDesEcheancesClientsPanel extends JPanel {
     private void relanceClient() {
 
         SQLBase base = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete();
-        SQLElement relanceElt = Configuration.getInstance().getDirectory().getElement("RELANCE");
+        final SQLElement relanceElt = Configuration.getInstance().getDirectory().getElement("RELANCE");
 
         this.rowSource = this.panelEcheances.getListe().fetchSelectedRow();
 
@@ -303,6 +304,7 @@ public class ListeDesEcheancesClientsPanel extends JPanel {
 
                         try {
                             rowValsEch.update(rowSource.getID());
+                            relanceElt.getTable().getRow(id).createEmptyUpdateRow().put("ID_ECHEANCE_CLIENT", rowSource.getID()).commit();
                         } catch (SQLException e1) {
                             e1.printStackTrace();
                         }

@@ -60,6 +60,7 @@ import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ElementSQLObject;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -105,12 +106,6 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
         final List<String> l = new ArrayList<String>();
         l.add("DATE");
         l.add("MONTANT_TTC");
-        return l;
-    }
-
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_MODE_REGLEMENT");
         return l;
     }
 
@@ -639,7 +634,7 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
              * float taux; PrixHT pHT;
              * 
              * if (!this.comboTaxe.isEmpty()) { // taux de la TVA selectionnee SQLRow ligneTaxe =
-             * Configuration.getInstance().getBase().getTable("TAXE").getRow(((Integer)
+             * Configuration.getInstance().getBase().getTable( "TAXE").getRow(((Integer)
              * this.comboTaxe.getValue()).intValue()); taux = (ligneTaxe.getFloat("TAUX")) / 100; //
              * calcul des montants HT ou TTC if (this.textMontantHT.getText().trim().length() > 0) {
              * 
@@ -977,23 +972,26 @@ public class SaisieVenteComptoirSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        // TODO Auto-generated method stub
+        super.archive(trees, cutLinks);
 
-        super.archive(row, cutLinks);
+        for (SQLRow row : trees.getRows()) {
 
-        // Mise à jour des stocks
-        SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
-        SQLSelect sel = new SQLSelect(eltMvtStock.getTable().getBase());
-        sel.addSelect(eltMvtStock.getTable().getField("ID"));
-        Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
-        Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-        sel.setWhere(w.and(w2));
+            // Mise à jour des stocks
+            SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
+            SQLSelect sel = new SQLSelect(eltMvtStock.getTable().getBase());
+            sel.addSelect(eltMvtStock.getTable().getField("ID"));
+            Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
+            Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
+            sel.setWhere(w.and(w2));
 
-        List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-        if (l != null) {
-            for (int i = 0; i < l.size(); i++) {
-                Object[] tmp = (Object[]) l.get(i);
-                eltMvtStock.archive(((Number) tmp[0]).intValue());
+            List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
+            if (l != null) {
+                for (int i = 0; i < l.size(); i++) {
+                    Object[] tmp = (Object[]) l.get(i);
+                    eltMvtStock.archive(((Number) tmp[0]).intValue());
+                }
             }
         }
     }

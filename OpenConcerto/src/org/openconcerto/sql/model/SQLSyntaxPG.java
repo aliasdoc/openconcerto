@@ -18,6 +18,7 @@ import org.openconcerto.sql.model.SQLField.Properties;
 import org.openconcerto.sql.model.SQLTable.SQLIndex;
 import org.openconcerto.sql.model.graph.TablesMap;
 import org.openconcerto.sql.utils.ChangeTable.ClauseType;
+import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.FileUtils;
@@ -55,8 +56,8 @@ import org.postgresql.PGConnection;
  * "false" enables it), to disable server validation set "sslfactory" to
  * "org.postgresql.ssl.NonValidatingFactory". To check the connection status, install the
  * contrib/sslinfo extension and execute "select ssl_is_used();". SSL Compression might be supported
- * if we can find a good sslfactory : see this <a
- * href="http://archives.postgresql.org/pgsql-general/2010-08/thrd5.php#00003">thread</a>.
+ * if we can find a good sslfactory : see this
+ * <a href="http://archives.postgresql.org/pgsql-general/2010-08/thrd5.php#00003">thread</a>.
  * <p>
  * To enable SSL on the server see http://www.postgresql.org/docs/current/static/ssl-tcp.html
  * (already set up on Ubuntu).
@@ -90,6 +91,12 @@ class SQLSyntaxPG extends SQLSyntax {
         this.typeNames.addAll(Blob.class, "bytea");
         this.typeNames.addAll(Clob.class, "varchar", "char", "character varying", "character", "text");
         this.typeNames.addAll(String.class, "varchar", "char", "character varying", "character", "text");
+    }
+
+    @Override
+    public int getMaximumIdentifierLength() {
+        // http://www.postgresql.org/docs/9.1/static/sql-syntax-lexical.html
+        return 63;
     }
 
     public String getInitRoot(final String name) {
@@ -151,7 +158,7 @@ class SQLSyntaxPG extends SQLSyntax {
     // override since pg driver do not return FILTER_CONDITION
     public List<Map<String, Object>> getIndexInfo(SQLTable t) throws SQLException {
         final String query = "SELECT NULL AS \"TABLE_CAT\",  n.nspname as \"TABLE_SCHEM\",\n"
-        //
+                //
                 + "ct.relname as \"TABLE_NAME\", NOT i.indisunique AS \"NON_UNIQUE\",\n"
                 //
                 + "NULL AS \"INDEX_QUALIFIER\", ci.relname as \"INDEX_NAME\",\n"
@@ -246,6 +253,11 @@ class SQLSyntaxPG extends SQLSyntax {
 
     protected boolean supportsPGCast() {
         return true;
+    }
+
+    @Override
+    public boolean isDeadLockException(SQLException exn) {
+        return SQLUtils.findWithSQLState(exn).getSQLState().equals("40P01");
     }
 
     private static final Pattern NOW_PTRN = Pattern.compile("\\(?'now'::text\\)?(::timestamp)");
@@ -384,8 +396,8 @@ class SQLSyntaxPG extends SQLSyntax {
         // rule names are unique by table
         res += t.getBase().quote("CREATE or REPLACE RULE \"_updView_\" AS ON UPDATE TO %i\n" + "DO INSTEAD UPDATE %f \n" + set + "where %n=OLD.%n\n" + "RETURNING %f.*;", newName, t, t.getKey(),
                 t.getKey(), t);
-        res += t.getBase().quote("CREATE or REPLACE RULE \"_delView_\" AS ON DELETE TO %i\n" + "DO INSTEAD DELETE FROM %f \n where %n=OLD.%n\n" + "RETURNING %f.*;", newName, t, t.getKey(),
-                t.getKey(), t);
+        res += t.getBase().quote("CREATE or REPLACE RULE \"_delView_\" AS ON DELETE TO %i\n" + "DO INSTEAD DELETE FROM %f \n where %n=OLD.%n\n" + "RETURNING %f.*;", newName, t, t.getKey(), t.getKey(),
+                t);
         res += t.getBase().quote("CREATE or REPLACE RULE \"_insView_\" AS ON INSERT TO %i\n" + "DO INSTEAD INSERT INTO %f" + insFields + " " + insValues + "RETURNING %f.*;", newName, t, t);
 
         return res;

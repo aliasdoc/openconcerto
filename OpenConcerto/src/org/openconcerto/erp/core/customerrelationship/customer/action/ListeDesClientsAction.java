@@ -13,28 +13,17 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.action;
 
-import org.openconcerto.erp.action.CreateFrameAbstractAction;
 import org.openconcerto.erp.action.CreateListFrameAbstractAction;
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.core.customerrelationship.customer.report.FicheClientXmlSheet;
 import org.openconcerto.erp.core.sales.invoice.ui.EcheanceRenderer;
-import org.openconcerto.erp.preferences.PrinterNXProps;
-import org.openconcerto.map.model.Ville;
-import org.openconcerto.ql.LabelCreator;
-import org.openconcerto.ql.QLPrinter;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLField;
-import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.view.IListFrame;
 import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.sql.view.list.IListe;
-import org.openconcerto.sql.view.list.RowAction;
 import org.openconcerto.sql.view.list.SQLTableModelSource;
-import org.openconcerto.utils.cc.IClosure;
 
-import java.awt.Font;
-import java.util.List;
 import java.util.Set;
 
 import javax.swing.Action;

@@ -54,7 +54,7 @@ public class PriceByQty {
             if (priceByQty.qty > qty) {
                 break;
             }
-            if (priceByQty.startDate.before(d)) {
+            if (result == null || priceByQty.startDate.before(d)) {
                 result = priceByQty.price;
             }
         }

@@ -33,7 +33,7 @@ public final class DropTable extends ChangeTable<DropTable> {
 
     private final AlterTable getAlterTable() {
         final AlterTable alterTable = new AlterTable(this.t);
-        for (final Link foreignLink : this.t.getDBSystemRoot().getGraph().getForeignLinks(this.t)) {
+        for (final Link foreignLink : this.t.getForeignLinks()) {
             if (foreignLink.getName() == null)
                 throw new IllegalStateException(foreignLink + " is not a real constraint, use AddFK");
             alterTable.dropForeignConstraint(foreignLink.getName());

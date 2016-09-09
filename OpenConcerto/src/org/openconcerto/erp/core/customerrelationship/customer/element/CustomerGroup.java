@@ -84,6 +84,7 @@ public class CustomerGroup extends Group {
         final Group gInfo = new Group("customerrelationship.customer.info", LayoutHints.DEFAULT_SEPARATED_GROUP_HINTS);
         gInfo.addItem("INFOS", new LayoutHints(true, true, true, true, true, true, true, true));
         gInfo.addItem("COMMENTAIRES", new LayoutHints(true, true, true, true, true, true, true, true));
+        gInfo.addItem("OBSOLETE");
         this.add(gInfo);
 
     }

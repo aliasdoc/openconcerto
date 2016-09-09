@@ -13,19 +13,6 @@
  
  package org.openconcerto.erp.core.supplychain.receipt.element;
 
-import java.awt.event.ActionEvent;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import javax.swing.AbstractAction;
-import javax.swing.ImageIcon;
-import javax.swing.JFrame;
-
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
-
 import org.openconcerto.erp.config.Gestion;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
@@ -44,7 +31,18 @@ import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
+
+import java.awt.event.ActionEvent;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.swing.AbstractAction;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+
+import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
 public class BonReceptionSQLElement extends ComptaSQLConfElement {
 
@@ -75,10 +73,8 @@ public class BonReceptionSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
-        res.putAll(null, "NUMERO", "DATE");
-        return res;
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NUMERO", "DATE");
     }
 
     protected List<String> getListFields() {
@@ -96,13 +92,6 @@ public class BonReceptionSQLElement extends ComptaSQLConfElement {
         l.add("NUMERO");
         l.add("DATE");
         return l;
-    }
-
-    @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("BON_RECEPTION_ELEMENT");
-        return set;
     }
 
     /*

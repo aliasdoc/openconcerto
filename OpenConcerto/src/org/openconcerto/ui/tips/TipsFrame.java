@@ -159,6 +159,10 @@ public class TipsFrame extends JFrame {
         panel.repaint();
     }
 
+    public int getTipsCount() {
+        return this.tips.size();
+    }
+
     public static void main(String[] args) {
         Tip t1 = new Tip();
         t1.addText("Les fonctions de gestion courante se trouvent dans le menu 'Saisie'.");

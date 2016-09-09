@@ -21,6 +21,7 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -180,8 +181,8 @@ public class EtatChargeModel extends AbstractTableModel {
                         rowVals = new SQLRowValues(tableFichePayeElt);
                         rowVals.put("NOM", (tmp[2] == null) ? "" : tmp[2].toString());
                         rowVals.put("IDSOURCE", (tmp[1] == null) ? 0 : Integer.parseInt(tmp[1].toString()));
-                        rowVals.put("TAUX_SAL", (tmp[4] == null) ? new Float(0) : new Float(tmp[4].toString()));
-                        rowVals.put("TAUX_PAT", (tmp[7] == null) ? new Float(0) : new Float(tmp[7].toString()));
+                        rowVals.put("TAUX_SAL", (tmp[4] == null) ? BigDecimal.ZERO : tmp[4]);
+                        rowVals.put("TAUX_PAT", (tmp[7] == null) ? BigDecimal.ZERO : tmp[7]);
                         EtatChargeModel.this.mapCot.put(new Integer(tmp[1].toString()), rowVals);
                     } else {
                         rowVals = (SQLRowValues) EtatChargeModel.this.mapCot.get(new Integer(tmp[1].toString()));
@@ -189,25 +190,28 @@ public class EtatChargeModel extends AbstractTableModel {
 
                     if (rowVals != null) {
                         // Cumul des valeurs
-                        float base = (rowVals.getObject("NB_BASE") == null) ? 0.0F : ((Float) rowVals.getObject("NB_BASE")).floatValue();
-                        base += (tmp[3] == null) ? 0.0F : ((Float) tmp[3]).floatValue();
-                        rowVals.put("NB_BASE", new Float(base));
+                        BigDecimal base = BigDecimal.ZERO;
+                        if (rowVals.getObject("NB_BASE") != null) {
+                            base = rowVals.getBigDecimal("NB_BASE");
+                        }
+                        base = base.add((tmp[3] == null) ? BigDecimal.ZERO : ((BigDecimal) tmp[3]));
+                        rowVals.put("NB_BASE", base);
 
-                        float montantSal = (rowVals.getObject("MONTANT_SAL_AJ") == null) ? 0.0F : ((Float) rowVals.getObject("MONTANT_SAL_AJ")).floatValue();
-                        montantSal += (tmp[5] == null) ? 0.0F : ((Float) tmp[5]).floatValue();
-                        rowVals.put("MONTANT_SAL_AJ", new Float(montantSal));
+                        BigDecimal montantSal = (rowVals.getObject("MONTANT_SAL_AJ") == null) ? BigDecimal.ZERO : rowVals.getBigDecimal("MONTANT_SAL_AJ");
+                        montantSal = montantSal.add((tmp[5] == null) ? BigDecimal.ZERO : ((BigDecimal) tmp[5]));
+                        rowVals.put("MONTANT_SAL_AJ", montantSal);
 
-                        float montantSalDed = (rowVals.getObject("MONTANT_SAL_DED") == null) ? 0.0F : ((Float) rowVals.getObject("MONTANT_SAL_DED")).floatValue();
-                        montantSalDed += (tmp[6] == null) ? 0.0F : ((Float) tmp[6]).floatValue();
-                        rowVals.put("MONTANT_SAL_DED", new Float(montantSalDed));
+                        BigDecimal montantSalDed = (rowVals.getObject("MONTANT_SAL_DED") == null) ? BigDecimal.ZERO : rowVals.getBigDecimal("MONTANT_SAL_DED");
+                        montantSalDed = montantSalDed.add((tmp[6] == null) ? BigDecimal.ZERO : ((BigDecimal) tmp[6]));
+                        rowVals.put("MONTANT_SAL_DED", montantSalDed);
 
-                        float montantPat = (rowVals.getObject("MONTANT_PAT") == null) ? 0.0F : ((Float) rowVals.getObject("MONTANT_PAT")).floatValue();
-                        montantPat += (tmp[8] == null) ? 0.0F : ((Float) tmp[8]).floatValue();
-                        rowVals.put("MONTANT_PAT", new Float(montantPat));
+                        BigDecimal montantPat = (rowVals.getObject("MONTANT_PAT") == null) ? BigDecimal.ZERO : rowVals.getBigDecimal("MONTANT_PAT");
+                        montantPat = montantPat.add((tmp[8] == null) ? BigDecimal.ZERO : ((BigDecimal) tmp[8]));
+                        rowVals.put("MONTANT_PAT", montantPat);
 
                         // Cumuls total des cotisations
-                        EtatChargeModel.this.cotPat += (tmp[8] == null) ? 0.0F : new Float(tmp[8].toString()).intValue();
-                        EtatChargeModel.this.cotSal += (tmp[6] == null) ? 0.0F : new Float(tmp[6].toString()).intValue();
+                        EtatChargeModel.this.cotPat += (tmp[8] == null) ? 0.0F : new Float(tmp[8].toString()).floatValue();
+                        EtatChargeModel.this.cotSal += (tmp[6] == null) ? 0.0F : new Float(tmp[6].toString()).floatValue();
                     }
                 }
                 return null;
@@ -287,7 +291,7 @@ public class EtatChargeModel extends AbstractTableModel {
                 return rowVals.getObject("MONTANT_PAT");
             }
             if (columnIndex == 6) {
-                return new Float(((Float) rowVals.getObject("MONTANT_PAT")).floatValue() + ((Float) rowVals.getObject("MONTANT_SAL_DED")).floatValue());
+                return new Float((rowVals.getBigDecimal("MONTANT_PAT")).floatValue() + (rowVals.getBigDecimal("MONTANT_SAL_DED")).floatValue());
             }
         }
         return null;
