@@ -82,12 +82,6 @@ public class CourrierClientSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_ADRESSE");
-        return l;
-    }
-
     /*
      * (non-Javadoc)
      * 

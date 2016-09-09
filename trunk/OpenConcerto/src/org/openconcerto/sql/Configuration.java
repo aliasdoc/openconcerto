@@ -65,6 +65,7 @@ public abstract class Configuration {
     private static Configuration instance;
 
     public static SQLFieldTranslator getTranslator(SQLTable t) {
+        // FIXME : Parametre inutile...
         return getInstance().getTranslator();
     }
 
@@ -160,16 +161,14 @@ public abstract class Configuration {
     }
 
     /**
-     * Add the showAs, translator and directory of <code>o</code> to this.
+     * Add the translator and directory of <code>o</code> to this.
      * 
      * @param o the configuration to add.
      * @return this.
-     * @see ShowAs#putAll(ShowAs)
      * @see SQLFieldTranslator#putAll(SQLFieldTranslator)
      * @see SQLElementDirectory#putAll(SQLElementDirectory)
      */
     public Configuration add(Configuration o) {
-        this.getShowAs().putAll(o.getShowAs());
         this.getTranslator().putAll(o.getTranslator());
         this.getDirectory().putAll(o.getDirectory());
         return this;

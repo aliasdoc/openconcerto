@@ -16,7 +16,7 @@
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,9 +48,9 @@ public class PieceSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
-        res.put(null, "NOM");
+    public ListMap<String, String> getShowAs() {
+        final ListMap<String, String> res = new ListMap<String, String>();
+        res.putCollection(null, "NOM");
         return res;
     }
 

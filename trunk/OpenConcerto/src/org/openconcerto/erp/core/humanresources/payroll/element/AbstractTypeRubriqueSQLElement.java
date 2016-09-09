@@ -16,6 +16,7 @@
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.UISQLComponent;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +41,11 @@ public abstract class AbstractTypeRubriqueSQLElement extends ConfSQLElement {
         final List<String> list = new ArrayList<String>();
         list.add(NOM);
         return list;
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, NOM);
     }
 
     /*

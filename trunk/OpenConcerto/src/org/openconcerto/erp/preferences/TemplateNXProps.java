@@ -41,6 +41,7 @@ import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.CourrierClientSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.EtatVentesXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.FactureFournisseurXmlSheet;
+import org.openconcerto.erp.generationDoc.gestcomm.FicheArticleXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.FicheRelanceSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.PointageXmlSheet;
 import org.openconcerto.erp.generationDoc.gestcomm.RelanceSheet;
@@ -134,6 +135,7 @@ public class TemplateNXProps extends TemplateProps {
             register(BonReceptionXmlSheet.TEMPLATE_ID, BonReceptionXmlSheet.TEMPLATE_ID, AbstractGenerationDocumentPreferencePanel.getLabelFromTable("BON_RECEPTION"));
             register(FactureFournisseurXmlSheet.TEMPLATE_ID, FactureFournisseurXmlSheet.TEMPLATE_ID, AbstractGenerationDocumentPreferencePanel.getLabelFromTable("FACTURE_FOURNISSEUR"));
             register(CommandeXmlSheet.TEMPLATE_ID, CommandeXmlSheet.TEMPLATE_PROPERTY_NAME, AbstractGenerationDocumentPreferencePanel.getLabelFromTable("COMMANDE"));
+            register(FicheArticleXmlSheet.TEMPLATE_ID, FicheArticleXmlSheet.TEMPLATE_PROPERTY_NAME, "Fiche");
             register(EtatVentesXmlSheet.TEMPLATE_ID, EtatVentesXmlSheet.TEMPLATE_PROPERTY_NAME, null);
             register(FicheClientXmlSheet.TEMPLATE_ID, FicheClientXmlSheet.TEMPLATE_PROPERTY_NAME, null);
             register(FicheRelanceSheet.TEMPLATE_ID, FicheRelanceSheet.TEMPLATE_PROPERTY_NAME, null);

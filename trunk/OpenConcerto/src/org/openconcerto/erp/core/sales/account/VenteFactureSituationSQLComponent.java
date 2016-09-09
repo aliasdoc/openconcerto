@@ -16,12 +16,12 @@
 import org.openconcerto.erp.core.common.component.TransfertGroupSQLComponent;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.AbstractArticleItemTable;
+import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable.TypeCalcul;
 import org.openconcerto.erp.core.common.ui.Acompte;
 import org.openconcerto.erp.core.common.ui.AcompteField;
 import org.openconcerto.erp.core.common.ui.AcompteRowItemView;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
-import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable.TypeCalcul;
 import org.openconcerto.erp.core.sales.invoice.element.SaisieVenteFactureSQLElement;
 import org.openconcerto.erp.core.sales.invoice.report.VenteFactureXmlSheet;
 import org.openconcerto.erp.core.sales.invoice.ui.FactureSituationItemTable;
@@ -38,7 +38,6 @@ import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.RowValuesTable;
 import org.openconcerto.sql.view.list.SQLTableElement;
-import org.openconcerto.ui.JComponentUtils;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.group.Group;
@@ -46,7 +45,6 @@ import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.text.SimpleDocumentListener;
 
 import java.awt.Component;
-import java.awt.Dimension;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.math.BigDecimal;
@@ -120,6 +118,16 @@ public class VenteFactureSituationSQLComponent extends TransfertGroupSQLComponen
         this.addView(totalService, "T_SERVICE");
         this.addView(totalHT, "T_HT");
 
+        final DeviseField fieldNet = new DeviseField();
+        this.addView(fieldNet, "NET_A_PAYER");
+        totalTTC.getDocument().addDocumentListener(new SimpleDocumentListener() {
+
+            @Override
+            public void update(DocumentEvent e) {
+                fieldNet.setText(totalTTC.getText());
+            }
+        });
+
         final SQLRequestComboBox sqlRequestComboBox = (SQLRequestComboBox) getEditor("sales.invoice.customer");
         sqlRequestComboBox.addModelListener("wantedID", new PropertyChangeListener() {
 
@@ -180,7 +188,7 @@ public class VenteFactureSituationSQLComponent extends TransfertGroupSQLComponen
     @Override
     public JComponent getLabel(String id) {
         if (id.equals("sales.invoice.partial.amount")) {
-            final JLabel jLabel = new JLabel("Montant à facturer");
+            final JLabel jLabel = new JLabel("Montant HT (ou %) à facturer");
             jLabel.setHorizontalAlignment(SwingConstants.RIGHT);
             return jLabel;
         } else if (id.equals("sales.invoice.partial.total.amount")) {
@@ -265,20 +273,19 @@ public class VenteFactureSituationSQLComponent extends TransfertGroupSQLComponen
                 } catch (SQLException e1) {
                     e1.printStackTrace();
                 }
-
-                ((AbstractArticleItemTable) getEditor("sales.invoice.partial.items.list")).updateField("ID_SAISIE_VENTE_FACTURE", idSaisieVF);
-
-                new GenerationMvtSaisieVenteFacture(idSaisieVF);
-
-                try {
-                    VenteFactureXmlSheet sheet = new VenteFactureXmlSheet(rowFacture);
-                    sheet.createDocument();
-                    sheet.showPrintAndExport(true, false, false);
-                } catch (Exception e) {
-                    ExceptionHandler.handle("Une erreur est survenue lors de la création du document.", e);
-                }
-
             }
+            ((AbstractArticleItemTable) getEditor("sales.invoice.partial.items.list")).updateField("ID_SAISIE_VENTE_FACTURE", idSaisieVF);
+
+            new GenerationMvtSaisieVenteFacture(idSaisieVF);
+
+            try {
+                VenteFactureXmlSheet sheet = new VenteFactureXmlSheet(rowFacture);
+                sheet.createDocument();
+                sheet.showPrintAndExport(true, false, false);
+            } catch (Exception e) {
+                ExceptionHandler.handle("Une erreur est survenue lors de la création du document.", e);
+            }
+
         } else {
             ExceptionHandler.handle("Impossible d'ajouter, numéro de facture existant.");
             Object root = SwingUtilities.getRoot(this);

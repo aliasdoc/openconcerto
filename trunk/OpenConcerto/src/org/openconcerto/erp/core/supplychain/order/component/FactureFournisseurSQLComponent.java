@@ -13,24 +13,6 @@
  
  package org.openconcerto.erp.core.supplychain.order.component;
 
-import java.awt.Color;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.math.BigDecimal;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
-
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
@@ -38,6 +20,7 @@ import org.openconcerto.erp.core.common.ui.AbstractVenteArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
+import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
 import org.openconcerto.erp.core.supplychain.order.ui.FactureFournisseurItemTable;
 import org.openconcerto.erp.generationDoc.gestcomm.FactureFournisseurXmlSheet;
@@ -66,6 +49,23 @@ import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.preferences.DefaultProps;
 import org.openconcerto.utils.text.SimpleDocumentListener;
 
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
+
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
+
 public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
 
     private FactureFournisseurItemTable table = new FactureFournisseurItemTable();
@@ -76,6 +76,8 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
     private PanelOOSQLComponent panelOO;
     final JPanel panelAdrSpec = new JPanel(new GridBagLayout());
     private JDate dateCommande = new JDate();
+    private final JTextField fieldTaux = new JTextField(15);
+    private final JLabel labelTaux = new JLabel();
 
     public FactureFournisseurSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("FACTURE_FOURNISSEUR"));
@@ -119,6 +121,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
             public void propertyChange(PropertyChangeEvent evt) {
                 if (!isFilling() && dateCommande.getValue() != null) {
                     table.setDateDevise(dateCommande.getValue());
+                    updateLabelTauxConversion();
                 }
             }
         });
@@ -150,7 +153,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
         c.gridwidth = 1;
 
         final ElementComboBox boxDevise = new ElementComboBox();
-        final JTextField fieldTaux = new JTextField(15);
+
         if (DefaultNXProps.getInstance().getBooleanValue(AbstractVenteArticleItemTable.ARTICLE_SHOW_DEVISE, false)) {
             // Devise
             c.gridx = 0;
@@ -167,6 +170,20 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
             this.add(boxDevise, c);
             this.addView(boxDevise, "ID_DEVISE");
 
+            this.fourn.addModelListener("wantedID", new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    table.setFournisseur(fourn.getSelectedRow());
+                    if (!isFilling()) {
+                        SQLRow row = fourn.getSelectedRow();
+                        if (row != null && !row.isUndefined() && !row.isForeignEmpty("ID_DEVISE")) {
+                            boxDevise.setValue(row.getForeignID("ID_DEVISE"));
+                        }
+                    }
+                }
+            });
+
             if (getTable().contains("TAUX_APPLIQUE")) {
                 // Devise
                 c.gridx++;
@@ -179,9 +196,13 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
                 c.weightx = 1;
                 c.weighty = 0;
                 c.fill = GridBagConstraints.NONE;
-                DefaultGridBagConstraints.lockMinimumSize(fieldTaux);
-                this.add(fieldTaux, c);
-                this.addView(fieldTaux, "TAUX_APPLIQUE");
+
+                DefaultGridBagConstraints.lockMinimumSize(this.fieldTaux);
+                JPanel panelTaux = new JPanel();
+                panelTaux.add(this.fieldTaux);
+                panelTaux.add(this.labelTaux);
+                this.add(panelTaux, c);
+                this.addView(this.fieldTaux, "TAUX_APPLIQUE");
 
             }
         }
@@ -253,6 +274,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
                 @Override
                 public void propertyChange(PropertyChangeEvent evt) {
                     table.setDevise(boxDevise.getSelectedRow());
+                    updateLabelTauxConversion();
 
                 }
             });
@@ -266,6 +288,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
                         tauxConversion = new BigDecimal(fieldTaux.getText());
                     }
                     table.setTauxConversion(tauxConversion);
+                    updateLabelTauxConversion();
                 }
             });
         }
@@ -309,6 +332,18 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
 
         DefaultGridBagConstraints.lockMinimumSize(this.fourn);
         DefaultGridBagConstraints.lockMinimumSize(commSel);
+    }
+
+    private void updateLabelTauxConversion() {
+        String result = "";
+        if (this.fieldTaux.getText().trim().length() == 0 && this.table.getDevise() != null && !this.table.getDevise().isUndefined()) {
+            CurrencyConverter converter = new CurrencyConverter();
+            BigDecimal taux = converter.convert(BigDecimal.ONE, converter.getCompanyCurrencyCode(), this.table.getDevise().getString("CODE"), this.table.getDateDevise(), false);
+            result = "(" + taux + ")";
+        } else {
+            result = "(" + this.fieldTaux.getText() + ")";
+        }
+        this.labelTaux.setText(result);
     }
 
     private JPanel getBottomPanel() {
@@ -593,6 +628,7 @@ public class FactureFournisseurSQLComponent extends TransfertBaseSQLComponent {
     protected void refreshAfterSelect(SQLRowAccessor rSource) {
         if (this.dateCommande.getValue() != null) {
             this.table.setDateDevise(this.dateCommande.getValue());
+            updateLabelTauxConversion();
         }
 
     }

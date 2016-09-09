@@ -120,24 +120,60 @@ public class ListeDesCommandesClientAction extends CreateFrameAbstractAction {
             });
         }
 
-        this.colAvancement = new BaseSQLTableModelColumn("Avancement facturation", BigDecimal.class) {
+        if (eltCmd.getTable().getDBRoot().contains("TARIF_AGENCE")) {
+            this.colAvancement = new BaseSQLTableModelColumn("Avancement livraison", BigDecimal.class) {
 
-            @Override
-            protected Object show_(SQLRowAccessor r) {
+                @Override
+                protected Object show_(SQLRowAccessor r) {
 
-                return getAvancement(r);
-            }
+                    return getAvancementL(r);
+                }
 
-            @Override
-            public Set<FieldPath> getPaths() {
-                final Path p = new PathBuilder(eltCmd.getTable()).addTable("TR_COMMANDE_CLIENT").addTable("SAISIE_VENTE_FACTURE").build();
-                return CollectionUtils.createSet(new FieldPath(p, "T_HT"));
-            }
-        };
+                @Override
+                public Set<FieldPath> getPaths() {
+                    final Path p = new PathBuilder(eltCmd.getTable()).addTable("TR_COMMANDE_CLIENT").addTable("BON_DE_LIVRAISON").build();
+                    return CollectionUtils.createSet(new FieldPath(p, "TOTAL_HT"));
+                }
+            };
+        } else {
+            this.colAvancement = new BaseSQLTableModelColumn("Avancement facturation", BigDecimal.class) {
+
+                @Override
+                protected Object show_(SQLRowAccessor r) {
+
+                    return getAvancement(r);
+                }
+
+                @Override
+                public Set<FieldPath> getPaths() {
+                    final Path p = new PathBuilder(eltCmd.getTable()).addTable("TR_COMMANDE_CLIENT").addTable("SAISIE_VENTE_FACTURE").build();
+                    return CollectionUtils.createSet(new FieldPath(p, "T_HT"));
+                }
+            };
+        }
+
         tableSource.getColumns().add(this.colAvancement);
         this.colAvancement.setRenderer(new PercentTableCellRenderer());
         final ListeAddPanel panel = getPanel(eltCmd, tableSource);
         return panel;
+    }
+
+    private BigDecimal getAvancementL(SQLRowAccessor r) {
+        Collection<? extends SQLRowAccessor> rows = r.getReferentRows(r.getTable().getTable("TR_COMMANDE_CLIENT"));
+        long totalFact = 0;
+        long total = r.getLong("T_HT");
+        for (SQLRowAccessor row : rows) {
+            if (!row.isForeignEmpty("ID_BON_DE_LIVRAISON")) {
+                SQLRowAccessor rowFact = row.getForeign("ID_BON_DE_LIVRAISON");
+                Long l = rowFact.getLong("TOTAL_HT");
+                totalFact += l;
+            }
+        }
+        if (total > 0) {
+            return new BigDecimal(totalFact).divide(new BigDecimal(total), DecimalUtils.HIGH_PRECISION).movePointRight(2).setScale(2, RoundingMode.HALF_UP);
+        } else {
+            return BigDecimal.ONE.movePointRight(2);
+        }
     }
 
     private BigDecimal getAvancement(SQLRowAccessor r) {

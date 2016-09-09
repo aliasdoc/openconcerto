@@ -19,6 +19,11 @@ import org.openconcerto.sql.element.SQLElement;
 
 public class FactureFournisseurItemTable extends AbstractAchatArticleItemTable {
 
+    public FactureFournisseurItemTable() {
+        super();
+        setUsedBiasedDevise(false);
+    }
+
     @Override
     protected String getConfigurationFileName() {
         return "Table_Facture_Fournisseur.xml";

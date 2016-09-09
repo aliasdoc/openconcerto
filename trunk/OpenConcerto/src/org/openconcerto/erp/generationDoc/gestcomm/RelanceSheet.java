@@ -20,6 +20,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.sql.users.UserManager;
 import org.openconcerto.utils.GestionDevise;
 
 import java.util.Date;
@@ -49,12 +50,19 @@ public class RelanceSheet extends AbstractJOOReportsSheet {
      * @return une Map contenant les valeurs à remplacer dans la template
      */
     protected Map<String, Object> createMap() {
+        final Map<String, Object> map = new HashMap<String, Object>();
 
         final SQLRow rowSoc = ((ComptaPropsConfiguration) Configuration.getInstance()).getRowSociete();
         final SQLRow rowSocAdresse = rowSoc.getForeignRow("ID_ADRESSE_COMMON");
-
-        final Map<String, Object> map = new HashMap<String, Object>();
-
+        SQLRow rowUser = rowSoc.getTable().getDBRoot().findTable("USER_COMMON").getRow(UserManager.getUser().getId());
+        map.put("UserName", rowUser.getString("NOM"));
+        map.put("UserFirstName", rowUser.getString("PRENOM"));
+        if (rowUser.getTable().contains("MAIL")) {
+            map.put("UserMail", rowUser.getString("MAIL"));
+        }
+        if (rowUser.getTable().contains("TEL")) {
+            map.put("UserTel", rowUser.getString("TEL"));
+        }
         // Infos societe
         map.put("SocieteType", rowSoc.getString("TYPE"));
         map.put("SocieteNom", rowSoc.getString("NOM"));
@@ -127,7 +135,7 @@ public class RelanceSheet extends AbstractJOOReportsSheet {
         Date dateEch = ModeDeReglementSQLElement.calculDate(modeRegRow.getInt("AJOURS"), modeRegRow.getInt("LENJOUR"), dFacture);
         map.put("FactureDateEcheance", dateFormat2.format(dateEch));
 
-        SQLSelect sel = new SQLSelect(Configuration.getInstance().getBase());
+        SQLSelect sel = new SQLSelect();
         sel.addSelect(this.rowRelance.getTable().getKey());
         sel.setWhere(new Where(this.rowRelance.getTable().getField("ID_SAISIE_VENTE_FACTURE"), "=", this.rowRelance.getInt("ID_SAISIE_VENTE_FACTURE")));
         sel.addFieldOrder(this.rowRelance.getTable().getField("DATE"));

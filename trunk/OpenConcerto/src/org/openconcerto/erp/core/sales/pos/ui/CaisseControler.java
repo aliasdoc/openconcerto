@@ -13,19 +13,25 @@
  
  package org.openconcerto.erp.core.sales.pos.ui;
 
-import org.openconcerto.erp.core.sales.pos.Caisse;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
 import org.openconcerto.erp.core.sales.pos.io.BarcodeReader;
+import org.openconcerto.erp.core.sales.pos.io.ConcertProtocol;
+import org.openconcerto.erp.core.sales.pos.io.ESCSerialDisplay;
 import org.openconcerto.erp.core.sales.pos.io.TicketPrinter;
 import org.openconcerto.erp.core.sales.pos.model.Article;
 import org.openconcerto.erp.core.sales.pos.model.Paiement;
 import org.openconcerto.erp.core.sales.pos.model.Ticket;
-import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.Pair;
 
 import java.awt.event.KeyEvent;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import javax.swing.JOptionPane;
 
 public class CaisseControler implements BarcodeListener {
 
@@ -34,24 +40,26 @@ public class CaisseControler implements BarcodeListener {
     private Ticket t;
     private List<CaisseListener> listeners = new ArrayList<CaisseListener>();
 
-    private BarcodeReader r;
+    private final BarcodeReader r;
     private Paiement p1 = new Paiement(Paiement.ESPECES);
     private Paiement p2 = new Paiement(Paiement.CB);
     private Paiement p3 = new Paiement(Paiement.CHEQUE);
-    private CaisseFrame caisseFrame;
+    private final CaisseFrame caisseFrame;
+    private final ESCSerialDisplay lcd;
 
     public CaisseControler(CaisseFrame caisseFrame) {
         this.caisseFrame = caisseFrame;
-        this.t = new Ticket(Caisse.getID());
+        this.t = new Ticket(POSConfiguration.getInstance().getPosID());
 
         this.t.addPaiement(this.p1);
         this.t.addPaiement(this.p2);
         this.t.addPaiement(this.p3);
 
-        this.r = new BarcodeReader(Caisse.getScanDelay());
+        this.r = new BarcodeReader(POSConfiguration.getInstance().getScanDelay());
         this.r.start();
         this.r.addBarcodeListener(this);
-
+        lcd = new ESCSerialDisplay(POSConfiguration.getInstance().getLCDSerialPort());
+        this.setLCDDefaultDisplay(0);
     }
 
     public Article getArticleSelected() {
@@ -92,11 +100,17 @@ public class CaisseControler implements BarcodeListener {
     void addArticle(Article a) {
         this.t.addArticle(a);
         fire();
+        String price = TicketCellRenderer.centsToString(a.getPriceWithTax().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValue());
+        this.setLCD(a.getName(), price, 0);
+        this.setLCDDefaultDisplay(2);
     }
 
     void incrementArticle(Article a) {
         this.t.incrementArticle(a);
         fire();
+        String price = TicketCellRenderer.centsToString(a.getPriceWithTax().movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValue());
+        this.setLCD(a.getName(), price, 0);
+        this.setLCDDefaultDisplay(2);
     }
 
     void removeArticle(Article a) {
@@ -121,9 +135,11 @@ public class CaisseControler implements BarcodeListener {
         fire();
     }
 
-    public void setPaiementValue(Paiement paiement, int v) {
-        paiement.setMontantInCents(v);
+    public void setPaiementValue(Paiement p, int v) {
+        p.setMontantInCents(v);
         fire();
+        this.setLCD("Paiement " + p.getTypeAsString().replace('è', 'e').replace('é', 'e'), TicketCellRenderer.centsToString(p.getMontantInCents()), 0);
+        this.setLCDDefaultDisplay(3);
     }
 
     // Totaux
@@ -201,9 +217,10 @@ public class CaisseControler implements BarcodeListener {
 
     void autoFillPaiement(Paiement p) {
         int montant = p.getMontantInCents();
-
         p.setMontantInCents(getTotal() - getPaidTotal() + montant);
         setPaiementSelected(p);
+        this.setLCD("Paiement " + p.getTypeAsString(), TicketCellRenderer.centsToString(p.getMontantInCents()), 0);
+        this.setLCDDefaultDisplay(3);
     }
 
     void addBarcodeListener(BarcodeListener l) {
@@ -248,7 +265,7 @@ public class CaisseControler implements BarcodeListener {
             if (this.getPaidTotal() >= this.getTotal()) {
                 this.t.setCreationCal(Calendar.getInstance());
                 this.t.save();
-                t = new Ticket(Caisse.getID());
+                t = new Ticket(POSConfiguration.getInstance().getPosID());
                 p1 = new Paiement(Paiement.ESPECES);
                 p2 = new Paiement(Paiement.CB);
                 p3 = new Paiement(Paiement.CHEQUE);
@@ -269,8 +286,7 @@ public class CaisseControler implements BarcodeListener {
     public void printTicket() {
         if (this.t.getTotalInCents() > 0) {
             if (this.getPaidTotal() >= this.getTotal()) {
-                final TicketPrinter prt = Caisse.getTicketPrinter();
-                t.print(prt);
+                POSConfiguration.getInstance().print(this.t);
             } else {
                 System.err.println("Ticket not printed because not paid");
             }
@@ -281,16 +297,80 @@ public class CaisseControler implements BarcodeListener {
 
     public void openDrawer() {
         try {
-            final TicketPrinter prt = Caisse.getTicketPrinter();
+            final TicketPrinter prt = POSConfiguration.getInstance().getTicketPrinterConfiguration1().createTicketPrinter();
             prt.openDrawer();
         } catch (Exception e) {
-            ExceptionHandler.handle("Drawer error", e);
+            e.printStackTrace();
         }
 
     }
 
     public void switchListMode() {
         caisseFrame.t.switchListMode();
+
+    }
+
+    public void setLCD(final String line1, final String line2, final int delay) {
+        final TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    lcd.setMessage(line1, line2);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+        final Timer timer = new Timer("LCD : " + line1, true);
+        timer.schedule(task, delay * 1000);
+
+    }
+
+    public void setLCDDefaultDisplay(int delay) {
+        if (t.getTotalInCents() > 0) {
+            int count = 0;
+            final List<Pair<Article, Integer>> articles = t.getArticles();
+            for (Pair<Article, Integer> pair : articles) {
+                count += pair.getSecond();
+            }
+            String line1;
+            if (count == 1) {
+                line1 = "1 article";
+            } else {
+                line1 = count + " articles";
+            }
+            int cents = t.getTotalInCents();
+            setLCD(line1, "Total : " + TicketCellRenderer.centsToString(cents), delay);
+        } else {
+            setLCD(POSConfiguration.getInstance().getLCDLine1(), POSConfiguration.getInstance().getLCDLine2(), delay);
+        }
+    }
+
+    public void sendCBRequest(final Paiement p) {
+
+        final String creditCardPort = POSConfiguration.getInstance().getCreditCardPort();
+        if (creditCardPort != null && creditCardPort.trim().length() > 2) {
+            final Thread t = new Thread(new Runnable() {
+
+                @Override
+                public void run() {
+                    try {
+                        ConcertProtocol cp = new ConcertProtocol(creditCardPort);
+                        boolean ok = cp.sendCardPayment(p.getMontantInCents(), ConcertProtocol.CURRENCY_EUR);
+                        if (ok) {
+                            JOptionPane.showMessageDialog(null, "Paiement CB OK");
+                        } else {
+                            JOptionPane.showMessageDialog(null, "Erreur paiement CB");
+                        }
+                    } catch (Throwable ex) {
+                        JOptionPane.showMessageDialog(null, "Erreur terminal CB");
+                    }
+                }
+            });
+            t.setDaemon(true);
+            t.start();
+
+        }
 
     }
 }

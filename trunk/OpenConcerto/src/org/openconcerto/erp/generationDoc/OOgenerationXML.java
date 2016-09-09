@@ -48,16 +48,16 @@ import java.util.Map;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.JDOMException;
-import org.jdom.input.SAXBuilder;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
 
 /**
  * Génération d'un document sxc à partir d'un modéle sxc et d'un fichier xml du meme nom (doc.sxc et
  * doc.xml) <element location="D4" (type="fill" || type="replace" replacePattern="_" ||
- * type="codesMissions" ||type="DescriptifArticle" || type="DateEcheance"> <field base="Societe"
- * table="AFFAIRE" name="NUMERO"/> </element>
+ * type="codesMissions" ||type="DescriptifArticle" || type="DateEcheance">
+ * <field base="Societe" table="AFFAIRE" name="NUMERO"/> </element>
  * 
  * 
  * @author Administrateur
@@ -133,13 +133,17 @@ public class OOgenerationXML {
                 if (annexeStream != null) {
                     templateId = annexeTemplateId;
                     annexeStream.close();
-                    System.err.println("modele With annexe " + templateId);
+                    System.err.println("OOgenerationXML.createDocument() : modele With annexe " + templateId);
                 }
             }
 
-            System.err.println("Using template id: " + templateId);
+            System.err.println("OOgenerationXML.createDocument() : using template id : " + templateId);
             final InputStream xmlConfiguration = TemplateManager.getInstance().getTemplateConfiguration(templateId, langage, typeTemplate);
-
+            if (xmlConfiguration == null) {
+                JOptionPane.showMessageDialog(null, "Fichier de configuration manquant pour " + templateId + " " + ((rowLanguage == null) ? "" : rowLanguage.getString("CHEMIN")) + " "
+                        + ((typeTemplate == null) ? "" : typeTemplate));
+                return null;
+            }
             Document doc = builder.build(xmlConfiguration);
             xmlConfiguration.close();
 
@@ -152,7 +156,8 @@ public class OOgenerationXML {
             // Création et génération du fichier OO
             final InputStream templateStream = TemplateManager.getInstance().getTemplate(templateId, langage, typeTemplate);
             if (templateStream == null) {
-                ExceptionHandler.handle("Modèle " + templateId + " " + ((rowLanguage == null) ? "" : rowLanguage.getString("CHEMIN")) + " " + typeTemplate + " manquant.");
+                JOptionPane.showMessageDialog(null,
+                        "Modèle manquant pour " + templateId + " " + ((rowLanguage == null) ? "" : rowLanguage.getString("CHEMIN")) + " " + ((typeTemplate == null) ? "" : typeTemplate));
                 return null;
             }
             final SpreadSheet spreadSheet;
@@ -288,12 +293,34 @@ public class OOgenerationXML {
             }
             String pageRef = tableau.getAttributeValue("pageRef");
             if (pageRef != null && pageRef.trim().length() > 0) {
-                MutableCell<SpreadSheet> cell = sheet.getCellAt(pageRef);
-                cell.setValue("Page 1/" + nbPage);
-                for (int i = 1; i < nbPage; i++) {
-                    MutableCell<SpreadSheet> cell2 = sheet.getCellAt(cell.getX(), cell.getY() + (endPageLine * i));
-                    cell2.setValue("Page " + (i + 1) + "/" + nbPage);
+                int nbPageRef = nbPage;
+                String pageAdd = tableau.getAttributeValue("pageRefAdditional");
+                if (pageAdd != null && pageAdd.trim().length() > 0) {
+                    nbPageRef += Integer.valueOf(pageAdd);
+
                 }
+                MutableCell<SpreadSheet> cell = sheet.getCellAt(pageRef);
+                String pageStart = tableau.getAttributeValue("pageRefStart");
+                int start = 1;
+                if (pageStart != null && pageStart.trim().length() > 0) {
+                    cell.setValue("Page " + pageStart + "/" + nbPageRef);
+                    start = Integer.valueOf(pageStart);
+                } else {
+                    cell.setValue("Page 1/" + nbPageRef);
+                }
+                for (int i = 1; i < nbPageRef; i++) {
+                    MutableCell<SpreadSheet> cell2 = sheet.getCellAt(cell.getX(), cell.getY() + (endPageLine * i));
+                    cell2.setValue("Page " + (i + start) + "/" + nbPageRef);
+                }
+                if (pageAdd != null && pageAdd.trim().length() > 0) {
+                    int pAdd = Integer.valueOf(pageAdd);
+                    for (int i = 0; i < pAdd; i++) {
+                        Sheet s = sheet.getSpreadSheet().getSheet(idSheet + i + 1);
+                        MutableCell<SpreadSheet> cell2 = s.getCellAt(pageRef);
+                        cell2.setValue("Page " + (nbPageRef - (pAdd - i) + 1) + "/" + nbPageRef);
+                    }
+                }
+
             }
             fillTable(tableau, row, sheet, mapStyle, false, rowLanguage);
         }
@@ -410,7 +437,7 @@ public class OOgenerationXML {
             final boolean included = isIncluded(tableElement.getFilterId(), tableElement.getForeignTableWhere(), tableElement.getFilterId(), tableElement.getFieldWhere(), rowElt);
             String styleName = null;
             if (tableElement.getSQLElement().getTable().contains("ID_STYLE")) {
-                styleName = styleElt.getTable().getRow(rowElt.getInt("ID_STYLE")).getString("NOM");
+                styleName = styleElt.getTable().getRow(rowElt.getForeignID("ID_STYLE")).getString("NOM");
             }
 
             if ((included || tableElement.getTypeStyleWhere()) && (styleName == null || !styleName.equalsIgnoreCase("Invisible"))) {
@@ -487,6 +514,19 @@ public class OOgenerationXML {
             int numeroRef, SQLRowAccessor rowElt, Map<String, Integer> mapNbCel, String styleName, Map<Element, Object> mapValues) {
         int nbCellule = 1;
         int tableLine = 1;
+
+        // Application du style sur toute la ligne (exemple pour mettre une couleur en fond)
+        if (styleName != null && styleName.trim().length() > 0 && mapStyle != null && mapStyle.containsKey(styleName)) {
+            Map<Integer, String> mapLineStyle = mapStyle.get(styleName);
+            if (mapLineStyle != null) {
+                for (Integer col : mapLineStyle.keySet()) {
+                    if (!test && sheet.isCellValid(col, currentLine - 1)) {
+                        sheet.getCellAt(col, currentLine - 1).setStyleName(mapLineStyle.get(col));
+                    }
+                }
+            }
+        }
+
         // on remplit chaque cellule de la ligne
         for (Element e : listElts) {
 
@@ -546,7 +586,7 @@ public class OOgenerationXML {
                             styleOO = null;
                         }
 
-                        int tmpCelluleAffect = fill(test ? "A1" : loc, value, sheet, tableField.isTypeReplace(), null, styleOO, test, tableField.isMultilineAuto());
+                        int tmpCelluleAffect = fill(test ? "A1" : loc, value, sheet, tableField.isTypeReplace(), null, styleOO, test, tableField.isMultilineAuto(), tableField.isKeepingEmptyLines());
                         // tmpCelluleAffect = Math.max(tmpCelluleAffect,
                         // tableField.getLine());
                         if (tableField.getLine() != 1 && (!tableField.isLineOption() || (value != null && value.toString().trim().length() > 0))) {
@@ -615,7 +655,7 @@ public class OOgenerationXML {
                     // if (value != null && value instanceof Long)
                     // value = Double.valueOf(GestionDevise.currencyToString((Long) value, false));
                     // }
-                    fill(test ? "A1" : loc, value, sheet, false, null, null, test, false);
+                    fill(test ? "A1" : loc, value, sheet, false, null, null, test, false, false);
                 }
             }
             line++;
@@ -637,7 +677,8 @@ public class OOgenerationXML {
             if (result != null) {
                 Object o = elt.getAttributeValue("sheet");
                 int sheet = (o == null) ? 0 : Integer.valueOf(o.toString().trim());
-                fill(elt.getAttributeValue("location"), result, spreadSheet.getSheet(sheet), OOElt.isTypeReplace(), OOElt.getReplacePattern(), null, false, OOElt.isMultilineAuto());
+                fill(elt.getAttributeValue("location"), result, spreadSheet.getSheet(sheet), OOElt.isTypeReplace(), OOElt.getReplacePattern(), null, false, OOElt.isMultilineAuto(),
+                        OOElt.isKeepingEmptyLines());
             }
         }
     }
@@ -685,7 +726,7 @@ public class OOgenerationXML {
      * @param replace efface ou non le contenu original de la cellule
      * @param styleOO style à appliquer
      */
-    private int fill(String location, Object value, Sheet sheet, boolean replace, String replacePattern, String styleOO, boolean test, boolean controleMultiline) {
+    private int fill(String location, Object value, Sheet sheet, boolean replace, String replacePattern, String styleOO, boolean test, boolean controleMultiline, boolean keepEmptyLines) {
 
         int nbCellule = (test && styleOO == null) ? 2 : 1;
         // est ce que la cellule est valide
@@ -696,23 +737,23 @@ public class OOgenerationXML {
             // on divise en 2 cellules si il y a des retours à la ligne
             if (controleMultiline && value != null && value.toString().indexOf('\n') >= 0) {
                 String[] values = value.toString().split("\n");
-                if (!test) {
 
-                    Point p = sheet.resolveHint(location);
-                    int y = 0;
-                    for (String string : values) {
-                        if (string != null && string.trim().length() != 0) {
-                            try {
+                Point p = sheet.resolveHint(location);
+                int y = 0;
+                for (String string : values) {
+                    if (string != null && (keepEmptyLines || string.trim().length() != 0)) {
+                        try {
+                            if (!test) {
                                 MutableCell c = sheet.getCellAt(p.x, p.y + y);
                                 setCellValue(c, string, replace, replacePattern);
                                 if (styleOO != null) {
                                     c.setStyleName(styleOO);
                                 }
-                                y++;
-                            } catch (IllegalArgumentException e) {
-
-                                ExceptionHandler.handle("La cellule " + location + " n'existe pas ou est fusionnée.", e);
                             }
+                            y++;
+                        } catch (IllegalArgumentException e) {
+
+                            ExceptionHandler.handle("La cellule " + location + " n'existe pas ou est fusionnée.", e);
                         }
                     }
 
@@ -731,7 +772,7 @@ public class OOgenerationXML {
                     // System.err.println("Get Cell At " + p.x + " : " + p.y);
 
                 }
-                nbCellule = values.length;
+                nbCellule = y;
             } else {
                 nbCellule = 1;
                 if (!test) {

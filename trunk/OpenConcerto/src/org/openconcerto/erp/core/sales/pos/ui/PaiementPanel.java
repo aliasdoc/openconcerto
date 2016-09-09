@@ -13,6 +13,7 @@
  
  package org.openconcerto.erp.core.sales.pos.ui;
 
+import org.openconcerto.erp.core.sales.pos.io.ConcertProtocol;
 import org.openconcerto.erp.core.sales.pos.model.Article;
 import org.openconcerto.erp.core.sales.pos.model.Paiement;
 
@@ -41,7 +42,7 @@ public class PaiementPanel extends JPanel implements CaisseListener, MouseListen
 
     /**
      * Mode '+' ajout d'une quantité '*' multiplication '-' soustraction ' ' remplacement
-     * */
+     */
     private char mode = ' ';
     private boolean init = true;
 
@@ -314,7 +315,10 @@ public class PaiementPanel extends JPanel implements CaisseListener, MouseListen
                     } catch (Throwable ex) {
                         JOptionPane.showMessageDialog(PaiementPanel.this, "Ouverture du tiroir caisse impossible");
                     }
+                } else if (p.getType() == Paiement.CB) {
+                    controller.sendCBRequest(p);
                 }
+
             }
             controller.setPaiementSelected(p);
         }

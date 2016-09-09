@@ -13,6 +13,9 @@
  
  package org.openconcerto.erp.panel;
 
+import java.net.URISyntaxException;
+import java.util.Random;
+
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.preferences.UserProps;
 import org.openconcerto.ui.tips.Tip;
@@ -63,7 +66,11 @@ public class ComptaTipsFrame extends TipsFrame {
             f.addTip(t2);
 
             Tip t3 = new Tip();
-            t3.addText(Configuration.getInstance().getAppName() + " fonctionne sous Windows 7, Vista et XP");
+            String appName = "OpenConcerto";
+            if (Configuration.getInstance() != null) {
+                appName = Configuration.getInstance().getAppName();
+            }
+            t3.addText(appName + " fonctionne sous Windows 7, Vista et XP");
             t3.addText("et aussi sous Linux et MacOS...");
             t3.addText("  ");
             t3.addImage(ComptaTipsFrame.class.getResource("tips_os.png"));
@@ -141,7 +148,23 @@ public class ComptaTipsFrame extends TipsFrame {
             t11.addText(" ");
             t11.addImage(ComptaTipsFrame.class.getResource("tips_add.png"));
             f.addTip(t11);
-            f.setCurrentTip(0);
+
+            Tip t12 = new Tip();
+            t12.addText("INDISPENSABLE : Le manuel !");
+            t12.addText(" ");
+            t12.addText("Le manuel complet d'OpenConcerto, destiné aux utilisateurs et aux développeurs.");
+            t12.addText("Manuel couleur au format A5 comportant plus de 260 pages.");
+            t12.addText(" ");
+            try {
+                t12.addImage(ComptaTipsFrame.class.getResource("tips_manuel.png"), "http://www.openconcerto.org/fr/documentation.html");
+            } catch (URISyntaxException e) {
+                throw new IllegalStateException(e);
+            }
+            f.addTip(t12);
+
+            Random m = new Random();
+            int index = m.nextInt(f.getTipsCount());
+            f.setCurrentTip(index);
             // don't setAlwaysOnTop(true) since this will hide errors and emergency module frame
             // (plus this is system wide)
             f.setLocationRelativeTo(null);
@@ -156,10 +179,10 @@ public class ComptaTipsFrame extends TipsFrame {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         TipsFrame f = ComptaTipsFrame.getFrame(true);
         // Centrage
         f.setLocationRelativeTo(null);
-        f.setCurrentTip(0);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setVisible(true);
     }

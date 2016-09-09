@@ -20,7 +20,6 @@ import org.openconcerto.sql.element.SQLComponent;
 import java.util.ArrayList;
 import java.util.List;
 
-
 public class AvoirFournisseurSQLElement extends ComptaSQLConfElement {
 
     public AvoirFournisseurSQLElement() {
@@ -45,13 +44,6 @@ public class AvoirFournisseurSQLElement extends ComptaSQLConfElement {
         l.add("NOM");
         l.add("NUMERO");
         l.add("MONTANT_TTC");
-        return l;
-    }
-
-    @Override
-    protected List<String> getPrivateFields() {
-        List<String> l = new ArrayList<String>();
-        l.add("ID_MODE_REGLEMENT");
         return l;
     }
 

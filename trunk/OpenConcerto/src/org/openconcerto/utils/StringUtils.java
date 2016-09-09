@@ -204,29 +204,45 @@ public class StringUtils {
         return getFixedWidthString(s, width, align, false);
     }
 
-    public static String getFixedWidthString(final String s, final int width, final Side align, final boolean allowTruncate) {
+    public static String getFixedWidthString(final String s, final int width, final Side align, final boolean allowShorten) {
         final int length = s.length();
         final String res;
         if (length == width) {
             res = s;
         } else if (length < width) {
-            final StringBuilder sb = new StringBuilder(width);
-            if (align == Side.LEFT)
-                sb.append(s);
-            final int n = width - length;
-            for (int i = 0; i < n; i++) {
-                sb.append(' ');
-            }
-            if (align == Side.RIGHT)
-                sb.append(s);
-            res = sb.toString();
-        } else if (allowTruncate) {
-            res = s.substring(0, width);
+            // we already tested length, so no need to allow shorten
+            res = appendFixedWidthString(new StringBuilder(width), s, width, align, ' ', false).toString();
         } else {
-            throw new IllegalArgumentException("Too wide : " + length + " > " + width);
+            res = getTooWideString(s, width, allowShorten);
         }
         assert res.length() == width;
         return res;
+    }
+
+    private static String getTooWideString(final String s, final int width, final boolean allowShorten) {
+        assert s.length() > width;
+        if (!allowShorten)
+            throw new IllegalArgumentException("Too wide : " + s.length() + " > " + width);
+        return getBoundedLengthString(s, width);
+    }
+
+    public static StringBuilder appendFixedWidthString(final StringBuilder sb, final String s, final int width, final Side align, final char filler, final boolean allowShorten) {
+        final int origBuilderLen = sb.length();
+        final int length = s.length();
+        if (length <= width) {
+            sb.ensureCapacity(origBuilderLen + width);
+            if (align == Side.LEFT)
+                sb.append(s);
+            for (int i = length; i < width; i++) {
+                sb.append(filler);
+            }
+            if (align == Side.RIGHT)
+                sb.append(s);
+        } else {
+            sb.append(getTooWideString(s, width, allowShorten));
+        }
+        assert sb.length() == origBuilderLen + width;
+        return sb;
     }
 
     public static final List<String> fastSplit(final String string, final char sep) {
@@ -712,7 +728,7 @@ public class StringUtils {
 
     /**
      * convert a byte array to its hexa representation
-     * */
+     */
     public static String bytesToHexString(byte[] bytes) {
         final int length = bytes.length;
         char[] hexChars = new char[length * 2];

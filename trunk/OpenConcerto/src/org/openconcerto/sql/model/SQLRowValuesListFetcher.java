@@ -20,6 +20,7 @@ import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.sql.model.graph.Step;
 import org.openconcerto.utils.CollectionMap2Itf.ListMapItf;
+import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.CopyUtils;
 import org.openconcerto.utils.ListMap;
@@ -50,10 +51,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.commons.dbutils.ResultSetHandler;
+
 import net.jcip.annotations.GuardedBy;
 import net.jcip.annotations.ThreadSafe;
-
-import org.apache.commons.dbutils.ResultSetHandler;
 
 /**
  * Construct a list of linked SQLRowValues from one request.
@@ -223,7 +224,7 @@ public class SQLRowValuesListFetcher {
     private final SQLRowValues graph;
     private final Path descendantPath;
     @GuardedBy("this")
-    private ITransformer<SQLSelect, SQLSelect> selTransf;
+    private List<ITransformer<SQLSelect, SQLSelect>> selTransf;
     @GuardedBy("this")
     private Number selID;
     @GuardedBy("this")
@@ -335,7 +336,7 @@ public class SQLRowValuesListFetcher {
         this.graph.getGraph().freeze();
 
         synchronized (this) {
-            this.selTransf = null;
+            this.selTransf = Collections.emptyList();
             this.selID = null;
             this.ordered = Collections.<Path> emptySet();
             this.descendantsOrdered = false;
@@ -398,7 +399,7 @@ public class SQLRowValuesListFetcher {
     /**
      * Make this instance immutable. Ie all setters will now throw {@link IllegalStateException}.
      * Furthermore the request will be computed now once and for all, so as not to be subject to
-     * outside modification by {@link #getSelTransf()}.
+     * outside modification by {@link #getSelectTransformers()}.
      * 
      * @return this.
      */
@@ -500,10 +501,51 @@ public class SQLRowValuesListFetcher {
      */
     public synchronized void setSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf) {
         this.checkFrozen();
-        this.selTransf = selTransf;
+        this.selTransf = selTransf != null ? Collections.singletonList(selTransf) : Collections.<ITransformer<SQLSelect, SQLSelect>> emptyList();
+    }
+
+    public void clearSelTransf() {
+        this.setSelTransf(null);
+    }
+
+    public void appendSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf) {
+        this.addSelTransf(selTransf, -1);
+    }
+
+    public void prependSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf) {
+        this.addSelTransf(selTransf, 0);
+    }
+
+    public synchronized void addSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf, final int index) {
+        this.checkFrozen();
+        if (selTransf != null) {
+            final List<ITransformer<SQLSelect, SQLSelect>> copy = new ArrayList<ITransformer<SQLSelect, SQLSelect>>(this.selTransf);
+            final int size = copy.size();
+            final int realIndex = index < 0 ? size + index + 1 : index;
+            copy.add(realIndex, selTransf);
+            this.selTransf = Collections.unmodifiableList(copy);
+        }
+    }
+
+    public synchronized boolean removeSelTransf(ITransformer<SQLSelect, SQLSelect> selTransf) {
+        this.checkFrozen();
+        if (selTransf != null) {
+            final List<ITransformer<SQLSelect, SQLSelect>> copy = new ArrayList<ITransformer<SQLSelect, SQLSelect>>(this.selTransf);
+            if (copy.remove(selTransf)) {
+                this.selTransf = Collections.unmodifiableList(copy);
+                return true;
+            }
+        }
+        return false;
     }
 
     public synchronized final ITransformer<SQLSelect, SQLSelect> getSelTransf() {
+        if (this.selTransf.size() > 1)
+            throw new IllegalStateException("More than one transformer");
+        return CollectionUtils.getFirst(this.selTransf);
+    }
+
+    public synchronized final List<ITransformer<SQLSelect, SQLSelect>> getSelectTransformers() {
         return this.selTransf;
     }
 
@@ -558,7 +600,7 @@ public class SQLRowValuesListFetcher {
      * 
      *        <pre>
      * *SITE* <- BATIMENT <- LOCAL
-     * </pre>
+     *        </pre>
      * 
      *        then this will cause ORDER BY BATIMENT.ORDRE, LOCAL.ORDRE.
      * @param rec if grafts should also be changed.
@@ -798,8 +840,18 @@ public class SQLRowValuesListFetcher {
         }
 
         if (this.getSelID() != null)
-            sel.andWhere(new Where(t.getKey(), "=", this.getSelID()));
-        return (this.getSelTransf() == null ? sel : this.getSelTransf().transformChecked(sel)).andWhere(w);
+            sel.andWhere(getIDWhere(t, this.getSelID()));
+        SQLSelect res = sel;
+        for (final ITransformer<SQLSelect, SQLSelect> tr : this.getSelectTransformers()) {
+            res = tr.transformChecked(res);
+        }
+        return res.andWhere(w);
+    }
+
+    static private Where getIDWhere(final SQLTable t, final Number id) {
+        if (id == null)
+            return null;
+        return new Where(t.getKey(), "=", id);
     }
 
     static String getAlias(final SQLSelect sel, final Path path) {
@@ -1049,6 +1101,21 @@ public class SQLRowValuesListFetcher {
         }
     }
 
+    public final SQLRowValues fetchOne(final Number id) {
+        return this.fetchOne(id, null);
+    }
+
+    public final SQLRowValues fetchOne(final Number id, final Boolean unmodifiableRows) {
+        if (id == null)
+            throw new NullPointerException("Null ID");
+        if (this.getSelID() != null)
+            throw new IllegalStateException("ID already set to " + getSelID());
+        final List<SQLRowValues> res = this.fetch(getIDWhere(getGraph().getTable(), id), unmodifiableRows);
+        if (res.size() > 1)
+            throw new IllegalStateException("More than one row for ID " + id + " : " + res);
+        return CollectionUtils.getFirst(res);
+    }
+
     /**
      * Execute the request transformed by <code>selTransf</code> and with the passed where (even if
      * {@link #isFrozen()}) and return the result as a list of SQLRowValues. NOTE: this method
@@ -1131,8 +1198,8 @@ public class SQLRowValuesListFetcher {
         // otherwise walk() would already have thrown an exception
         assert fieldIndex.get() <= selectFieldsSize;
         if (fieldIndex.get() != selectFieldsSize) {
-            throw new IllegalStateException("Fields have been added to the select (which is useless, since only fields specified by rows are returned) : "
-                    + selectFields.subList(fieldIndex.get(), selectFieldsSize));
+            throw new IllegalStateException(
+                    "Fields have been added to the select (which is useless, since only fields specified by rows are returned) : " + selectFields.subList(fieldIndex.get(), selectFieldsSize));
         }
         assert l.size() == graphSize : "All nodes weren't explored once : " + l.size() + " != " + graphSize + "\n" + this.getGraph().printGraph();
 
@@ -1307,7 +1374,8 @@ public class SQLRowValuesListFetcher {
      * @param descendantPath the path to merge.
      * @return the merged and grafted values.
      */
-    static private final List<SQLRowValues> merge(final List<SQLRowValues> tree, final List<SQLRowValues> graft, final ListMap<Tuple2<Path, Number>, SQLRowValues> graftPlaceRows, Path descendantPath) {
+    static private final List<SQLRowValues> merge(final List<SQLRowValues> tree, final List<SQLRowValues> graft, final ListMap<Tuple2<Path, Number>, SQLRowValues> graftPlaceRows,
+            Path descendantPath) {
         final boolean isGraft = graftPlaceRows != null;
         assert (tree != graft) == isGraft : "Trying to graft onto itself";
         final List<SQLRowValues> res = isGraft ? tree : new ArrayList<SQLRowValues>();
@@ -1370,7 +1438,7 @@ public class SQLRowValuesListFetcher {
 
     @Override
     public String toString() {
-        return this.getClass().getSimpleName() + " for " + this.getGraph() + " with " + this.getSelID() + " and " + this.getSelTransf();
+        return this.getClass().getSimpleName() + " for " + this.getGraph() + " with " + this.getSelID() + " and " + this.getSelectTransformers();
     }
 
     @Override

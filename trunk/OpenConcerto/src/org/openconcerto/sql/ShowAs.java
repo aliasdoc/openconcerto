@@ -25,6 +25,7 @@ import org.openconcerto.utils.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -128,6 +129,18 @@ public class ShowAs extends FieldExpander {
             }
         }
         this.clearCache();
+    }
+
+    /**
+     * Make sure that no fields of the passed table will be expanded. I.e. it
+     * {@link #removeTable(SQLTable) removes} all reference to the passed table and then re-add the
+     * table so that it is expanded to nothing instead of throwing an exception.
+     * 
+     * @param removedTable the table to remove.
+     */
+    public synchronized void neverShow(final SQLTable removedTable) {
+        this.removeTable(removedTable);
+        this.show(removedTable, Collections.<String> emptyList());
     }
 
     public synchronized final void clear() {

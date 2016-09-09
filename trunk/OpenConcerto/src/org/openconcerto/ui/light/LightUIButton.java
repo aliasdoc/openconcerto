@@ -13,11 +13,49 @@
  
  package org.openconcerto.ui.light;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.List;
+
+import net.minidev.json.JSONObject;
+
 public class LightUIButton extends LightUIElement {
-    public LightUIButton(String id, String label) {
-        setType(LightUIElement.TYPE_BUTTON);
-        setId(id);
-        setGridWidth(1);
-        setLabel(label);
+    private List<ActionListener> clickListeners = new ArrayList<ActionListener>();
+
+    public LightUIButton(final JSONObject json) {
+        super(json);
+    }
+
+    public LightUIButton(final String id) {
+        super(id);
+        this.init(TYPE_BUTTON);
+    }
+
+    protected LightUIButton(final String id, final int buttonType) {
+        super(id);
+        this.init(buttonType);
+    }
+
+    private void init(final int buttonType) {
+        this.setType(buttonType);
+    }
+
+    public LightUIButton(final LightUIButton button) {
+        super(button);
+    }
+
+    public void addClickListener(final ActionListener listener) {
+        this.clickListeners.add(listener);
+    }
+
+    public void removeClickListeners() {
+        this.clickListeners.clear();
+    }
+
+    public void fireClick() {
+        for (final ActionListener listener : this.clickListeners) {
+            listener.actionPerformed(new ActionEvent(this, 1, "click"));
+        }
     }
 }

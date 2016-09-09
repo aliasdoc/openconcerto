@@ -22,6 +22,7 @@ import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.net.URI;
 import java.net.URL;
 
@@ -39,7 +40,8 @@ public class JImage extends JComponent {
     private ImageIcon icon;
 
     private boolean centered;
-    private String hyperlink;
+    private URI hyperlink;
+    private MouseListener hyperlinkL;
 
     /**
      * Cree une JImage a partir d'un nom de fichier.
@@ -63,30 +65,6 @@ public class JImage extends JComponent {
         this.image = img;
         this.icon = null;
         this.setOpaque(true);
-        this.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                if (hyperlink != null) {
-                    try {
-                        URI uri = new URI(hyperlink);
-                        Desktop.getDesktop().browse(uri);
-                    } catch (Exception ex) {
-                        ExceptionHandler.handle(e.getComponent(), TM.tr("linkOpenError", hyperlink), ex);
-                    }
-                    e.consume();
-                }
-            }
-
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                setCursor(new Cursor(Cursor.HAND_CURSOR));
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-            }
-        });
     }
 
     public void check() {
@@ -135,7 +113,41 @@ public class JImage extends JComponent {
         this.image = image;
     }
 
-    public void setHyperLink(String url) {
-        this.hyperlink = url;
+    public final URI getHyperlink() {
+        return this.hyperlink;
+    }
+
+    public final void setHyperLink(final URI uri) {
+        if (!CompareUtils.equals(uri, this.hyperlink)) {
+            if (this.hyperlink == null) {
+                this.hyperlinkL = new MouseAdapter() {
+                    @Override
+                    public void mousePressed(MouseEvent e) {
+                        try {
+                            Desktop.getDesktop().browse(getHyperlink());
+                        } catch (Exception ex) {
+                            ExceptionHandler.handle(e.getComponent(), TM.tr("linkOpenError", getHyperlink()), ex);
+                        }
+                        e.consume();
+                    }
+
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                    }
+                };
+                this.addMouseListener(this.hyperlinkL);
+            }
+            this.hyperlink = uri;
+            if (this.hyperlink == null) {
+                this.removeMouseListener(this.hyperlinkL);
+                this.hyperlinkL = null;
+            }
+        }
     }
 }

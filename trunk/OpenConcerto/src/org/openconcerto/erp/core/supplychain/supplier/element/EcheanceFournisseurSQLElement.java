@@ -136,15 +136,9 @@ public class EcheanceFournisseurSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(this.getTable(), this.getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.put("REG_COMPTA", null);
-                graphToFetch.put("REGLE", null);
-            }
-        };
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("REG_COMPTA", "REGLE");
     }
 
     protected List<String> getListFields() {

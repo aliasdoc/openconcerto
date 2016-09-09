@@ -137,8 +137,8 @@ import javax.swing.table.TableColumnModel;
 import javax.swing.table.TableModel;
 
 /**
- * Une liste de lignes correspondant à une ListSQLRequest. Diagramme pour la sélection : <img
- * src="doc-files/listSelection.png"/><br/>
+ * Une liste de lignes correspondant à une ListSQLRequest. Diagramme pour la sélection :
+ * <img src="doc-files/listSelection.png"/><br/>
  * 
  * @author ILM Informatique
  */
@@ -1146,7 +1146,7 @@ public final class IListe extends JPanel {
         return clazz.cast(toCast);
     }
 
-    private SQLRow fetchRow(int id) {
+    public SQLRow fetchRow(int id) {
         if (id < SQLRow.MIN_VALID_ID) {
             return null;
         } else
@@ -1191,8 +1191,11 @@ public final class IListe extends JPanel {
             if (selectionModel.isSelectedIndex(i)) {
                 try {
                     res.add(getRow(i, clazz));
-                } catch (Exception e) {
-                    System.err.println("IListe.iterateSelectedRows() index " + i + " is selected but not in the model anymore.");
+                } catch (IndexOutOfBoundsException e) {
+                    throw new IllegalStateException(
+                            "The selected row at " + i
+                                    + " is not in the model : it has been changed before Swing could update the selection. E.g. the DB was changed on mousePressed and Swing updated the selection on mouseReleased.",
+                            e);
                 }
             }
         }

@@ -35,6 +35,12 @@ public abstract class DefaultTicketPrinter implements TicketPrinter {
         this.modes.add(mode);
     }
 
+    @Override
+    public void clearBuffer() {
+        this.strings.clear();
+        this.modes.clear();
+    }
+
     public static String formatLeft(int l, String string) {
         if (string.length() > l) {
             string = string.substring(0, l);

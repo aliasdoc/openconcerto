@@ -24,8 +24,10 @@ import javax.swing.SwingUtilities;
 import javax.swing.table.TableCellEditor;
 
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
+import org.openconcerto.utils.cc.ITransformer;
 
 public class ITextArticleWithCompletionCellEditor extends AbstractCellEditor implements TableCellEditor {
 
@@ -119,6 +121,10 @@ public class ITextArticleWithCompletionCellEditor extends AbstractCellEditor imp
 
     public SQLRowAccessor getComboSelectedRow() {
         return this.text.getSelectedRow();
+    }
+
+    public void setSelectTransformer(ITransformer<SQLSelect, SQLSelect> selTrans) {
+        this.text.setSelectTransformer(selTrans);
     }
 
     public void setWhere(Where w) {

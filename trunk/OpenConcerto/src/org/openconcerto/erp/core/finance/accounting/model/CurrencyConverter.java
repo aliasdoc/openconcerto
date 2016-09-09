@@ -24,6 +24,7 @@ import org.openconcerto.sql.model.Where;
 import org.openconcerto.utils.DecimalUtils;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
@@ -60,21 +61,21 @@ public class CurrencyConverter {
 
     /**
      * Converter an amount to an other currency
-     * */
+     */
     public BigDecimal convert(BigDecimal amount, String from, String to) {
         return convert(amount, from, to, Calendar.getInstance().getTime());
     }
 
     /**
      * Converter an amount to an other currency at a precise date
-     * */
+     */
     public BigDecimal convert(BigDecimal amount, String from, String to, Date date) {
         return convert(amount, from, to, date, false);
     }
 
     /**
      * Converter an amount to an other currency at a precise date
-     * */
+     */
     public BigDecimal convert(BigDecimal amount, String from, String to, Date date, boolean useBiased) {
 
         if (from.equalsIgnoreCase(to)) {
@@ -91,22 +92,37 @@ public class CurrencyConverter {
         final Date d = c.getTime();
 
         // Get conversion info
-        final SQLSelect select = new SQLSelect();
-        final SQLTable t = this.root.getTable("DEVISE_HISTORIQUE");
-        select.addAllSelect(t, Arrays.asList("ID", "DATE", "SRC", "DST", "TAUX", "TAUX_COMMERCIAL"));
-        Where w = new Where(t.getField("SRC"), "=", baseCurrencyCode);
-        w = w.and(new Where(t.getField("DST"), true, Arrays.asList(from, to)));
-        w = w.and(new Where(t.getField("DATE"), "<=", d));
-        select.setWhere(w);
-        select.addFieldOrder(t.getField("DATE"), Order.desc());
-        select.setLimit(2);
-        final List<SQLRow> rows = SQLRowListRSH.execute(select);
-        if (rows.isEmpty()) {
-            System.err.println("CurrencyConverter.convert() no data to convert " + amount + " " + from + " to " + to + " at " + date + " biased:" + useBiased);
-            return null;
-        }
+        final List<SQLRow> rowsFrom = getRates(from, d);
+        final List<SQLRow> rowsTo = getRates(to, d);
         BigDecimal r1 = null;
         BigDecimal r2 = null;
+
+        // Récupération des taux par défaut dans DEVISE si aucun taux dans l'historique
+        List<SQLRow> rowsDevise = new ArrayList<SQLRow>();
+        if (rowsTo.isEmpty() || rowsFrom.isEmpty()) {
+            SQLSelect sel = new SQLSelect();
+            sel.addSelectStar(root.findTable("DEVISE"));
+            rowsDevise.addAll(SQLRowListRSH.execute(sel));
+        }
+
+        if (rowsTo.isEmpty()) {
+            for (SQLRow sqlRow : rowsDevise) {
+                if (sqlRow.getString("CODE").equalsIgnoreCase(to)) {
+                    r2 = (useBiased ? sqlRow.getBigDecimal("TAUX_COMMERCIAL") : sqlRow.getBigDecimal("TAUX"));
+                }
+            }
+        }
+        if (rowsFrom.isEmpty()) {
+            for (SQLRow sqlRow : rowsDevise) {
+                if (sqlRow.getString("CODE").equalsIgnoreCase(from)) {
+                    r1 = (useBiased ? sqlRow.getBigDecimal("TAUX_COMMERCIAL") : sqlRow.getBigDecimal("TAUX"));
+                }
+            }
+        }
+
+        List<SQLRow> rows = new ArrayList<SQLRow>();
+        rows.addAll(rowsTo);
+        rows.addAll(rowsFrom);
         for (SQLRow sqlRow : rows) {
             if (sqlRow.getString("DST").equals(from)) {
                 if (useBiased) {
@@ -137,5 +153,19 @@ public class CurrencyConverter {
         }
         final BigDecimal result = amount.multiply(r2, DecimalUtils.HIGH_PRECISION).divide(r1, DecimalUtils.HIGH_PRECISION);
         return result;
+    }
+
+    public List<SQLRow> getRates(String currencyCode, final Date d) {
+        final SQLSelect select = new SQLSelect();
+        final SQLTable t = this.root.getTable("DEVISE_HISTORIQUE");
+        select.addAllSelect(t, Arrays.asList("ID", "DATE", "SRC", "DST", "TAUX", "TAUX_COMMERCIAL"));
+        Where w = new Where(t.getField("SRC"), "=", baseCurrencyCode);
+        w = w.and(new Where(t.getField("DST"), "=", currencyCode));
+        w = w.and(new Where(t.getField("DATE"), "<=", d));
+        select.setWhere(w);
+        select.addFieldOrder(t.getField("DATE"), Order.desc());
+        select.setLimit(2);
+        final List<SQLRow> rows = SQLRowListRSH.execute(select);
+        return rows;
     }
 }

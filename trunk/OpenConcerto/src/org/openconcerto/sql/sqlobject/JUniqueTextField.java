@@ -69,6 +69,17 @@ import javax.swing.text.JTextComponent;
  */
 public class JUniqueTextField extends JPanel implements ValueWrapper<String>, Documented, TextComponent, RowItemViewComponent, SQLComponentItem, MouseListener {
 
+    public static final boolean exists(final SQLField f, final String t, final Number idToExclude, final boolean withCache) throws RTInterruptedException {
+        final SQLSelect selNum = new SQLSelect();
+        selNum.addSelectFunctionStar("COUNT");
+        selNum.setWhere(new Where(f, "=", t));
+        if (idToExclude != null) {
+            selNum.andWhere(new Where(f.getTable().getKey(), "!=", idToExclude));
+        }
+        final Number l = (Number) f.getDBSystemRoot().getDataSource().execute(selNum.asString(), new IResultSetHandler(SQLDataSource.SCALAR_HANDLER, withCache));
+        return l.intValue() > 0;
+    }
+
     private JTextField textField;
     private JLabelWarning labelWarning;
     private int idSelected = -1;
@@ -226,18 +237,9 @@ public class JUniqueTextField extends JPanel implements ValueWrapper<String>, Do
 
         this.lastCheck = System.currentTimeMillis();
         if (getTable() != null) {
-
-            final SQLSelect selNum = new SQLSelect(getTable().getBase());
-            selNum.addSelect(getTable().getKey(), "COUNT");
-            final Where w = new Where(getField(), "=", t);
-            selNum.setWhere(w);
-            if (JUniqueTextField.this.idSelected > getTable().getUndefinedID()) {
-                selNum.andWhere(new Where(getTable().getKey(), "!=", JUniqueTextField.this.idSelected));
-            }
-            final String req = selNum.asString();
-            final Number l = (Number) getTable().getBase().getDataSource().execute(req, new IResultSetHandler(SQLDataSource.SCALAR_HANDLER, false));
-
-            final boolean b = (l.intValue() <= 0);
+            final Number idToExclude = this.idSelected > getTable().getUndefinedID() ? this.idSelected : null;
+            // FIXME withCache ignored
+            final boolean b = !exists(getField(), t, idToExclude, false);
             this.isValidated = b;
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {

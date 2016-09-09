@@ -78,10 +78,19 @@ public class ExceptionHandler extends RuntimeException {
     private static final Pattern NL_PATTERN = Pattern.compile("\r?\n");
     private static final String ILM_CONTACT = "http://www.ilm-informatique.fr/contact";
     private static String ForumURL = null;
+    private static boolean showProbably = false;
     private static IFactory<String> SOFTWARE_INFOS = null;
 
     public static void setForumURL(String url) {
         ForumURL = url;
+    }
+
+    public synchronized static void setShowProbably(boolean showProbably) {
+        ExceptionHandler.showProbably = showProbably;
+    }
+
+    public synchronized static boolean isShowProbably() {
+        return ExceptionHandler.showProbably;
     }
 
     public synchronized static void setSoftwareInformations(final IFactory<String> f) {
@@ -221,7 +230,7 @@ public class ExceptionHandler extends RuntimeException {
         c.gridheight = 1;
         c.gridx++;
         c.weightx = 1;
-        c.gridwidth = 2;
+        c.gridwidth = 1;
         p.add(l, c);
         c.gridy++;
 
@@ -229,18 +238,16 @@ public class ExceptionHandler extends RuntimeException {
         p.add(lError, c);
         c.gridy++;
 
-        p.add(new JLabel("Il s'agit probablement d'une mauvaise configuration ou installation du logiciel."), c);
+        if (isShowProbably()) {
+            p.add(new JLabel("Il s'agit probablement d'une mauvaise configuration ou installation du logiciel."), c);
+            c.gridy++;
+        }
 
         c.gridx = 0;
-        c.gridwidth = 4;
-        c.gridy++;
         c.weighty = 0;
-        c.gridwidth = 1;
-        c.gridx = 1;
-        c.gridy++;
+        c.gridwidth = 2;
 
-        c.fill = GridBagConstraints.NONE;
-        c.anchor = GridBagConstraints.EAST;
+        final JPanel btnPanel = new JPanel();
         final Desktop desktop = Desktop.isDesktopSupported() ? Desktop.getDesktop() : null;
         final boolean browseSupported = desktop != null && desktop.isSupported(Action.BROWSE);
         if (ForumURL != null) {
@@ -266,13 +273,11 @@ public class ExceptionHandler extends RuntimeException {
                     }
                 };
             }
-            p.add(new JButton(communityAction), c);
+            btnPanel.add(new JButton(communityAction));
         }
-        c.weightx = 0;
-        c.gridx++;
 
         final javax.swing.Action supportAction;
-        if (browseSupported)
+        if (browseSupported) {
             supportAction = new AbstractAction("Contacter l'assistance") {
                 @Override
                 public void actionPerformed(ActionEvent e) {
@@ -286,17 +291,22 @@ public class ExceptionHandler extends RuntimeException {
 
                 }
             };
-        else
+        } else {
             supportAction = new AbstractAction("Copier l'adresse de l'assistance") {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     copyToClipboard(ILM_CONTACT);
                 }
             };
+        }
+        btnPanel.add(new JButton(supportAction));
 
-        p.add(new JButton(supportAction), c);
-
-        c.gridx++;
+        btnPanel.add(new JButton(new AbstractAction("Copier l'erreur") {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                copyToClipboard(textArea.getText());
+            }
+        }));
 
         final javax.swing.Action submitAction = new AbstractAction("Soumettre l'erreur") {
             @Override
@@ -318,8 +328,8 @@ public class ExceptionHandler extends RuntimeException {
                     final Map<Info, String> systemInfos = SystemInfo.get(false);
                     final String os = systemInfos.remove(Info.OS);
                     final String java = systemInfos.toString();
-                    final String encodedData = "java=" + PercentEncoder.encode(java, cs) + "&os=" + PercentEncoder.encode(os, cs) + "&software=" + PercentEncoder.encode(name + version, cs)
-                            + "&stack=" + PercentEncoder.encode(computeSoftwareInformations() + "\n\n" + textArea.getText(), cs);
+                    final String encodedData = "java=" + PercentEncoder.encode(java, cs) + "&os=" + PercentEncoder.encode(os, cs) + "&software=" + PercentEncoder.encode(name + version, cs) + "&stack="
+                            + PercentEncoder.encode(computeSoftwareInformations() + "\n\n" + textArea.getText(), cs);
                     final String request = "http://bugreport.ilm-informatique.fr:5000/bugreport";
                     final URL url = new URL(request);
                     final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -352,17 +362,20 @@ public class ExceptionHandler extends RuntimeException {
             }
         };
 
-        p.add(new JButton(submitAction), c);
+        btnPanel.add(new JButton(submitAction));
+
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.EAST;
+        p.add(btnPanel, c);
 
         c.gridy++;
         c.gridx = 0;
-        c.gridwidth = 4;
+        c.gridwidth = 2;
         c.fill = GridBagConstraints.BOTH;
         c.insets = new Insets(0, 0, 0, 0);
         p.add(new JSeparator(), c);
 
         c.gridx = 0;
-        c.gridwidth = 3;
         c.gridy++;
         c.insets = new Insets(2, 4, 2, 4);
         p.add(new JLabel("Détails de l'erreur:"), c);
@@ -384,7 +397,6 @@ public class ExceptionHandler extends RuntimeException {
         scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         scroll.getViewport().setMinimumSize(new Dimension(200, 300));
         c.weighty = 1;
-        c.gridwidth = 4;
         c.gridx = 0;
         c.gridy++;
         p.add(scroll, c);

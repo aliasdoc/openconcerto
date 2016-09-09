@@ -95,8 +95,11 @@ public class ServerFinderPanel extends JPanel {
                 return new File(DesktopEnvironment.getDE().getDocumentsFolder().getAbsolutePath() + File.separator + ComptaPropsConfiguration.APP_NAME);
             }
         };
-        conf.setupLogging();
-
+        try {
+            conf.setupLogging();
+        } catch (Exception e) {
+            System.out.println("Logs désactivés : " + e.getMessage());
+        }
         final File confFile = ComptaPropsConfiguration.getConfFile();
         System.out.println("Reading configuration from: " + confFile.getAbsolutePath());
 

@@ -14,85 +14,227 @@
  package org.openconcerto.ui.light;
 
 import org.openconcerto.utils.io.JSONConverter;
+
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.List;
+
+import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
-public class LightUIFrame extends LightUIElement {
-    LightUIPanel mainPanel;
-    Boolean active = false;
-    String title;
+public class LightUIFrame extends LightUIContainer {
+
+    private Boolean active = false;
+    private String title;
+    private final LightUIPanel footerPanel = new LightUIPanel(this.getId() + ".footer.panel");
+
+    private List<LightUIFrame> childrenFrame;
 
     // Init from json constructor
     public LightUIFrame(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
     // Clone constructor
     public LightUIFrame(final LightUIFrame frame) {
         super(frame);
-        this.mainPanel = frame.mainPanel;
         this.active = frame.active;
         this.title = frame.title;
+        this.footerPanel.copy(frame.footerPanel);
+        this.childrenFrame = frame.childrenFrame;
     }
 
+    /**
+     * Creation of an instance of a frame, this one is initialized with an empty main panel
+     * 
+     * @param id Id of the frame
+     */
     public LightUIFrame(final String id) {
-        this.setId(id);
+        super(id);
         this.setType(TYPE_FRAME);
+
+        this.childrenFrame = new ArrayList<LightUIFrame>();
+        this.addChild(new LightUIPanel(this.getId() + ".main.panel"));
+        this.footerPanel.setParent(this);
     }
 
-    public LightUIPanel getMainPanel() {
-        return this.mainPanel;
-    }
-    
-    public void setMainPanel(final LightUIPanel mainPanel) {
-        this.mainPanel = mainPanel;
-    }
-    
     public String getTitle() {
         return this.title;
     }
-    
+
     public void setTitle(final String title) {
         this.title = title;
     }
-    
+
+    public LightUIPanel getFooterPanel() {
+        return this.footerPanel;
+    }
+
+    public void updateFooterPanel(final LightUIPanel footerPanel) {
+        if (footerPanel != null) {
+            this.footerPanel.copy(footerPanel);
+        } else {
+            this.footerPanel.clear();
+        }
+
+    }
+
     public boolean isActive() {
         return this.active;
     }
-    
+
     public void setActive(final boolean active) {
         this.active = active;
     }
-    
-    public LightUIElement getElementById(final String elementId) {
-        return this.mainPanel.getElementById(elementId);
+
+    public String getPanelId() {
+        return this.getId() + ".main.panel";
+    }
+
+    public void removeChildFrame(final LightUIFrame childFrame) {
+        this.childrenFrame.remove(childFrame);
+    }
+
+    public void removeChildFrame(final int index) {
+        this.childrenFrame.remove(index);
+    }
+
+    public void clearChildrenFrame() {
+        this.childrenFrame.clear();
+    }
+
+    @Override
+    /**
+     * Only one panel is accepted into a frame. And it's Id is always : frame.getId() +
+     * ".main.panel"
+     * 
+     * @param parent The parent frame of this one.
+     * @throws InvalidClassException
+     */
+    public void setParent(final LightUIElement parent) {
+        if (!(parent instanceof LightUIFrame)) {
+            throw new InvalidClassException(LightUIFrame.class.getName(), parent.getClassName(), parent.getId());
+        }
+        super.setParent(parent);
+
+        ((LightUIFrame) parent).childrenFrame.add(this);
+    }
+
+    @Override
+    public <T extends LightUIElement> T findChild(String searchParam, boolean byUUID, Class<T> childClass) {
+        final T result = super.findChild(searchParam, byUUID, childClass);
+        if (result != null) {
+            return result;
+        } else {
+            return this.footerPanel.findChild(searchParam, byUUID, childClass);
+        }
+    }
+
+    @Override
+    public void setReadOnly(boolean readOnly) {
+        super.setReadOnly(readOnly);
+        this.footerPanel.setReadOnly(readOnly);
+    }
+
+    @Override
+    /**
+     * Only one panel is accepted into a frame. And it's Id is always : frame.getId() +
+     * ".main.panel"
+     * 
+     * @param child The panel which will replace the main panel
+     * @throws InvalidClassException
+     */
+    public void addChild(final LightUIElement child) throws InvalidClassException {
+        if (!(child instanceof LightUIPanel)) {
+            throw new InvalidClassException(LightUIPanel.class.getName(), child.getClassName(), child.getId());
+        }
+        child.setId(this.getPanelId());
+        this.clear();
+        super.addChild(child);
+    }
+
+    @Override
+    /**
+     * Only one panel is accepted into a frame. And it's Id is always : frame.getId() +
+     * ".main.panel"
+     * 
+     * @param index No importance
+     * @param child The panel which will replace the main panel
+     * @throws InvalidClassException
+     */
+    public void insertChild(int index, LightUIElement child) throws InvalidClassException {
+        if (!(child instanceof LightUIPanel)) {
+            throw new InvalidClassException(LightUIPanel.class.getName(), child.getClassName(), child.getId());
+        }
+        child.setId(this.getPanelId());
+        this.clear();
+        super.insertChild(index, child);
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIFrame(json);
+            }
+        };
+    }
+
+    @Override
+    public void dump(final PrintStream out, final int depth) {
+        out.println("------------- LightUIFrame -------------");
+        super.dump(out, 0);
+
+        out.println("footer-panel: ");
+        if (this.footerPanel != null) {
+            this.footerPanel.dump(out, 0);
+        } else {
+            out.println("null");
+        }
+
+        out.println("--------------------------");
     }
 
     @Override
     public LightUIElement clone() {
-        return new LightUIFrame(this);
+        final LightUIFrame clone = new LightUIFrame(this);
+        clone.getFooterPanel().setParent(clone);
+        return clone;
     }
 
     @Override
     public JSONObject toJSON() {
         final JSONObject json = super.toJSON();
-        json.put("main-panel", this.mainPanel.toJSON());
-        if(this.active) {
+        if (this.active) {
             json.put("active", true);
         }
-        if(this.title != null) {
+        if (this.title != null) {
             json.put("title", this.title);
         }
+        json.put("footer-panel", this.footerPanel.toJSON());
         return json;
     }
 
     @Override
     public void fromJSON(final JSONObject json) {
         super.fromJSON(json);
-        final JSONObject jsonMainPanel = (JSONObject) JSONConverter.getParameterFromJSON(json, "main-panel", JSONObject.class, null);
-        if(jsonMainPanel != null) {
-            this.mainPanel = new LightUIPanel(jsonMainPanel);
+        this.active = (Boolean) JSONConverter.getParameterFromJSON(json, "active", Boolean.class, false);
+        this.title = (String) JSONConverter.getParameterFromJSON(json, "title", String.class);
+
+        final JSONObject jsonFooterPanel = (JSONObject) JSONConverter.getParameterFromJSON(json, "footer-panel", JSONObject.class, null);
+        if (jsonFooterPanel != null) {
+            this.footerPanel.fromJSON(jsonFooterPanel);
         }
-        this.active = (Boolean)JSONConverter.getParameterFromJSON(json, "active", Boolean.class, false);
-        this.title = (String)JSONConverter.getParameterFromJSON(json, "title", String.class);
+
+        final JSONArray jsonChildrenFrame = (JSONArray) JSONConverter.getParameterFromJSON(json, "children-frame", JSONArray.class, null);
+        this.childrenFrame = new ArrayList<LightUIFrame>();
+        if (jsonChildrenFrame != null) {
+            for (final Object objJsonFrame : jsonChildrenFrame) {
+                final JSONObject jsonFrame = JSONConverter.getObjectFromJSON(objJsonFrame, JSONObject.class);
+                final LightUIFrame childFrame = new LightUIFrame(jsonFrame);
+                this.childrenFrame.add(childFrame);
+            }
+        }
     }
 }

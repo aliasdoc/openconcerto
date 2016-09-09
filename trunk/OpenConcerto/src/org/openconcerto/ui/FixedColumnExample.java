@@ -74,7 +74,7 @@ public class FixedColumnExample extends JFrame {
                 data[row][col + 2] = obj;
             }
 
-            public boolean CellEditable(int row, int col) {
+            public boolean isCellEditable(int row, int col) {
                 return true;
             }
         };
@@ -82,13 +82,13 @@ public class FixedColumnExample extends JFrame {
         fixedTable = new JTable(fixedModel) {
             public void valueChanged(ListSelectionEvent e) {
                 super.valueChanged(e);
-               // checkSelection(true);
+                checkSelection(true);
             }
         };
         table = new JTable(model) {
             public void valueChanged(ListSelectionEvent e) {
                 super.valueChanged(e);
-               // checkSelection(false);
+                checkSelection(false);
             }
         };
         fixedTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);

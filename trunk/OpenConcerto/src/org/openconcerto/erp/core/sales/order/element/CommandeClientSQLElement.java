@@ -52,7 +52,9 @@ import org.openconcerto.erp.preferences.GestionCommercialeGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
 import org.openconcerto.sql.element.TreesOfSQLRows;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.model.ConnectionHandlerNoSetup;
 import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLField;
@@ -245,6 +247,17 @@ public class CommandeClientSQLElement extends ComptaSQLConfElement {
         allowedActions.add(cmdAction);
         allowedActions.addAll(mouseSheetXmlListeListener.getRowActions());
         getRowActions().addAll(allowedActions);
+    }
+
+    @Override
+    protected void setupLinks(SQLElementLinksSetup links) {
+        super.setupLinks(links);
+        if (getTable().contains("ID_ADRESSE")) {
+            links.get("ID_ADRESSE").setType(LinkType.ASSOCIATION);
+        }
+        if (getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            links.get("ID_ADRESSE_LIVRAISON").setType(LinkType.ASSOCIATION);
+        }
     }
 
     public SQLRow getNextCommandeToPrepare() {
@@ -456,13 +469,6 @@ public class CommandeClientSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected Set<String> getChildren() {
-        final Set<String> set = new HashSet<String>();
-        set.add("COMMANDE_CLIENT_ELEMENT");
-        return set;
-    }
-
-    @Override
     public Set<String> getReadOnlyFields() {
         final Set<String> s = new HashSet<String>();
         s.add("ID_DEVIS");
@@ -568,17 +574,18 @@ public class CommandeClientSQLElement extends ComptaSQLConfElement {
 
             int idArticle = ReferenceArticleSQLElement.getIdForCNM(rowArticle, true);
             SQLRow rowArticleFind = eltArticle.getTable().getRow(idArticle);
-            SQLInjector inj = SQLInjector.getInjector(rowArticle.getTable(), tableCmdElt);
-            SQLRowValues rowValsElt = new SQLRowValues(inj.createRowValuesFrom(rowArticleFind));
-            rowValsElt.put("ID_STYLE", sqlRow.getObject("ID_STYLE"));
-            rowValsElt.put("QTE", sqlRow.getObject("QTE"));
-            rowValsElt.put("T_POIDS", rowValsElt.getLong("POIDS") * rowValsElt.getInt("QTE"));
-            rowValsElt.put("T_PA_HT", ((BigDecimal) rowValsElt.getObject("PA_HT")).multiply(new BigDecimal(rowValsElt.getInt("QTE")), DecimalUtils.HIGH_PRECISION));
-            rowValsElt.put("T_PA_TTC",
-                    ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal((rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0)), DecimalUtils.HIGH_PRECISION));
-            rowValsElt.put("ID_DEVISE", rowCmd.getForeignRow("ID_TARIF").getForeignID("ID_DEVISE"));
-            map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
-
+            if (rowArticle != null) {
+                SQLInjector inj = SQLInjector.getInjector(rowArticle.getTable(), tableCmdElt);
+                SQLRowValues rowValsElt = new SQLRowValues(inj.createRowValuesFrom(rowArticleFind));
+                rowValsElt.put("ID_STYLE", sqlRow.getObject("ID_STYLE"));
+                rowValsElt.put("QTE", sqlRow.getObject("QTE"));
+                rowValsElt.put("T_POIDS", rowValsElt.getLong("POIDS") * rowValsElt.getInt("QTE"));
+                rowValsElt.put("T_PA_HT", ((BigDecimal) rowValsElt.getObject("PA_HT")).multiply(new BigDecimal(rowValsElt.getInt("QTE")), DecimalUtils.HIGH_PRECISION));
+                rowValsElt.put("T_PA_TTC",
+                        ((BigDecimal) rowValsElt.getObject("T_PA_HT")).multiply(new BigDecimal((rowValsElt.getForeign("ID_TAXE").getFloat("TAUX") / 100.0 + 1.0)), DecimalUtils.HIGH_PRECISION));
+                rowValsElt.put("ID_DEVISE", rowCmd.getForeignRow("ID_TARIF").getForeignID("ID_DEVISE"));
+                map.add(rowArticleFind.getForeignRow("ID_FOURNISSEUR"), rowValsElt);
+            }
         }
         MouvementStockSQLElement.createCommandeF(map, rowCmd.getForeignRow("ID_TARIF").getForeignRow("ID_DEVISE"), rowCmd.getString("NUMERO") + " - " + rowCmd.getString("NOM"));
     }

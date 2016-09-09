@@ -93,7 +93,7 @@ public class CurrencyWithSymbolRenderer extends DefaultTableCellRenderer {
                                 break;
                             }
                             final SQLRowAccessor foreign = rowVals.getForeign(s.getSingleField().getName());
-                            if (i == 0) {
+                            if (i == 0 && foreign != null) {
                                 rowVals = foreign.asRow();
                             } else {
                                 rowVals = foreign;

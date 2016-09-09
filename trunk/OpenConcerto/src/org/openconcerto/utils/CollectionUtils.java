@@ -18,6 +18,7 @@ import org.openconcerto.utils.cc.IPredicate;
 import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.cc.IdentityHashSet;
 import org.openconcerto.utils.cc.IdentitySet;
+import org.openconcerto.utils.cc.Transformer;
 
 import java.io.Serializable;
 import java.util.AbstractSet;
@@ -33,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.RandomAccess;
 import java.util.Set;
@@ -565,6 +567,25 @@ public class CollectionUtils {
         return res;
     }
 
+    public static <T> Set<T> union(final Collection<? extends Collection<? extends T>> colls) {
+        return union(new HashSet<T>(), colls);
+    }
+
+    public static <T> List<T> cat(final Collection<? extends Collection<? extends T>> colls) {
+        return union(new ArrayList<T>(), colls);
+    }
+
+    public static <T, C extends Collection<? super T>> C union(final C collector, final Collection<? extends Collection<? extends T>> colls) {
+        return union(collector, colls, Transformer.<Collection<? extends T>> nopTransformer());
+    }
+
+    public static <T, C extends Collection<? super T>, A> C union(final C collector, final Collection<? extends A> colls, final ITransformer<? super A, ? extends Collection<? extends T>> transf) {
+        for (final A coll : colls) {
+            collector.addAll(transf.transformChecked(coll));
+        }
+        return collector;
+    }
+
     @SuppressWarnings("unchecked")
     public static <T> Collection<T> subtract(final Collection<T> a, final Collection<? extends T> b) {
         return org.apache.commons.collections.CollectionUtils.subtract(a, b);
@@ -588,18 +609,28 @@ public class CollectionUtils {
     }
 
     /**
-     * Return the first item of <code>l</code> if it's the only one, otherwise <code>null</code>.
+     * Return the one and only item of <code>l</code>, otherwise <code>null</code>.
      * 
      * @param <T> type of list.
      * @param l the list.
-     * @return the first item of <code>l</code> or <code>null</code>.
+     * @param atMostOne <code>true</code> if the passed collection must not have more than one item.
+     * @return the only item of <code>l</code>, <code>null</code> if there's not exactly one.
+     * @throws IllegalArgumentException if <code>atMostOne</code> and <code>l.size() > 1</code>.
      */
-    public static <T> T getSole(List<T> l) {
-        return l.size() == 1 ? l.get(0) : null;
+    public static <T> T getSole(Collection<T> l, final boolean atMostOne) throws IllegalArgumentException {
+        final int size = l.size();
+        if (atMostOne && size > 1)
+            throw new IllegalArgumentException("More than one");
+        if (size != 1)
+            return null;
+        else if (l instanceof List)
+            return ((List<T>) l).get(0);
+        else
+            return l.iterator().next();
     }
 
     public static <T> T getSole(Collection<T> l) {
-        return l.size() == 1 ? l.iterator().next() : null;
+        return getSole(l, false);
     }
 
     public static <T> T getFirst(Collection<T> l) {
@@ -850,6 +881,20 @@ public class CollectionUtils {
     public static <K, V, M extends Map<K, V>> M fillMap(final M m, final Collection<? extends K> keys, final V val) {
         for (final K key : keys)
             m.put(key, val);
+        return m;
+    }
+
+    public static <K, V, M extends Map<K, V>> M invertMap(final M m, final Map<? extends V, ? extends K> source) {
+        for (final Entry<? extends V, ? extends K> e : source.entrySet()) {
+            m.put(e.getValue(), e.getKey());
+        }
+        return m;
+    }
+
+    public static <K, V, M extends CollectionMap2Itf<K, ?, V>> M invertMap(final M m, final Map<? extends V, ? extends K> source) {
+        for (final Entry<? extends V, ? extends K> e : source.entrySet()) {
+            m.add(e.getValue(), e.getKey());
+        }
         return m;
     }
 }

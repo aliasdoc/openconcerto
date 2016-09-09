@@ -17,6 +17,7 @@ import org.openconcerto.sql.Log;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect.LockStrength;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.graph.SQLKey;
 import org.openconcerto.sql.request.SQLRowItemView;
@@ -59,9 +60,16 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
 
     static public final boolean isReadOnly(SQLRowAccessor r) {
         final SQLRowAccessor roRow;
-        if (!r.getFields().contains(READ_ONLY_FIELD)) {
+        if (r.isUndefined()) {
+            return true;
+        } else if (!r.getFields().contains(READ_ONLY_FIELD)) {
             Log.get().warning(READ_ONLY_FIELD + " not provided : " + r);
-            roRow = r.getTable().getRow(r.getID());
+            if (r.hasID() && r.getID() != SQLRow.NONEXISTANT_ID) {
+                roRow = r.getTable().getRow(r.getID());
+            } else {
+                // Arrive avec une rowValues sans ID (ex : transfert avoir client)
+                return false;
+            }
         } else {
             roRow = r;
         }
@@ -69,7 +77,7 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
     }
 
     public static enum Mode {
-        INSERTION, MODIFICATION
+        INSERTION, MODIFICATION, READ_ONLY
     }
 
     public static enum ResetMode {
@@ -146,22 +154,33 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
     }
 
     public final void setMode(Mode m) {
-        // since the mode can influence the views (eg r/o fields not editable)
-        if (this.isInited() || this.getMode() != null)
-            throw new IllegalStateException("mode already set: " + this.getMode());
-        this.mode = m;
+        if (!m.equals(this.getMode())) {
+            this.mode = m;
+            this.modeChanged();
+        }
     }
 
-    public final void setEditable(boolean b) {
+    protected void modeChanged() {
+    }
+
+    public final boolean setEditable(boolean b) {
         // maintain old contract (there was no READ_ONLY)
-        this.setEditable(b ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+        return this.setEditable(b ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
     }
 
-    public abstract void setEditable(InteractionMode b);
+    public abstract boolean setEditable(InteractionMode b);
 
     public abstract int insert();
 
     public abstract int insert(SQLRow order);
+
+    public abstract SQLRowValues getLastKnownDBVals();
+
+    public final boolean updateLastKnownDBVals() {
+        return this.updateLastKnownDBVals(LockStrength.NONE);
+    }
+
+    public abstract boolean updateLastKnownDBVals(final LockStrength ls);
 
     public abstract void select(int id);
 
@@ -203,6 +222,18 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
         // by default do naught
     }
 
+    protected final SQLRowValues createValidDefaults() {
+        return checkDefaultsID(this.createDefaults());
+    }
+
+    private final SQLRowValues checkDefaultsID(final SQLRowValues res) {
+        // needed so that select() can tell the difference between programmatic values and values
+        // from the DB to update getLastKnownDBVals()
+        if (res != null && res.hasID())
+            throw new IllegalStateException("Defaults should be without ID : " + res);
+        return res;
+    }
+
     // called for each reset
     protected SQLRowValues createDefaults() {
         return this.defaults.createChecked();
@@ -219,7 +250,7 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
     }
 
     public final void setDefaults(final SQLRowValues defaults) {
-        this.setDefaultsFactory(new ConstantFactory<SQLRowValues>(defaults));
+        this.setDefaultsFactory(new ConstantFactory<SQLRowValues>(checkDefaultsID(defaults).toImmutable()));
     }
 
     public final void setDefaultsFactory(IFactory<SQLRowValues> defaults) {
@@ -269,10 +300,6 @@ public abstract class SQLComponent extends JPanel implements ValidObject {
 
     public final ElementSQLObject getSQLParent() {
         return this.parent;
-    }
-
-    public boolean isPrivate() {
-        return this.getSQLParent() != null;
     }
 
     public void analyze() {

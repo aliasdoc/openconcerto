@@ -26,8 +26,8 @@ import org.openconcerto.erp.core.sales.product.element.ReferenceArticleSQLElemen
 import org.openconcerto.erp.core.supplychain.order.ui.CommandeItemTable;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
 import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
-import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
 import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
+import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
 import org.openconcerto.erp.utils.TM;
@@ -57,11 +57,11 @@ import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ComboLockedMode;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.component.ITextCombo;
+import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.preferences.DefaultProps;
 import org.openconcerto.utils.ExceptionHandler;
 
 import java.awt.Color;
-import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -99,6 +99,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
     final JPanel panelAdrSpec = new JPanel(new GridBagLayout());
     protected ElementComboBox boxAdr;
     private JDate dateCommande = new JDate(true);
+    private ElementSQLObject componentPrincipaleAdr;
 
     public CommandeSQLComponent() {
         super(Configuration.getInstance().getDirectory().getElement("COMMANDE"));
@@ -258,8 +259,9 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                 // c.gridy++;
                 this.addView("ID_ADRESSE");
                 final DefaultElementSQLObject comp = (DefaultElementSQLObject) this.getView("ID_ADRESSE").getComp();
-                final ElementSQLObject componentPrincipale = (ElementSQLObject) this.getView("ID_ADRESSE");
-                ((AdresseSQLComponent) componentPrincipale.getSQLChild()).setDestinataireVisible(true);
+
+                componentPrincipaleAdr = (ElementSQLObject) this.getView("ID_ADRESSE");
+                ((AdresseSQLComponent) componentPrincipaleAdr.getSQLChild()).setDestinataireVisible(true);
                 final JCheckBox boxLivr = new JCheckBox("Livré par le fournisseur");
                 this.add(boxLivr, c);
                 this.addSQLObject(boxLivr, "LIVRAISON_F");
@@ -267,8 +269,10 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
                     @Override
                     public void actionPerformed(ActionEvent e) {
+
                         if (boxLivr.isSelected() && !comp.isCreated()) {
                             comp.setCreated(true);
+                            componentPrincipaleAdr.setEditable(InteractionMode.READ_WRITE);
                             if (CommandeSQLComponent.this.getTable().contains("ID_AFFAIRE")) {
 
                                 final SQLRow selectedRow = ((ElementComboBox) CommandeSQLComponent.this.getView("ID_AFFAIRE").getComp()).getSelectedRow();
@@ -300,6 +304,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                         } else {
                             if (!boxLivr.isSelected()) {
                                 comp.setCreated(false);
+                                componentPrincipaleAdr.setEditable(InteractionMode.DISABLED);
                             }
                         }
                     }
@@ -456,6 +461,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             c.weightx = 1;
             c.weighty = 0;
             c.fill = GridBagConstraints.NONE;
+            DefaultGridBagConstraints.lockMinimumSize(boxDevise);
             this.add(boxDevise, c);
             this.addView(boxDevise, "ID_DEVISE");
 
@@ -483,13 +489,20 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                 c.weightx = 1;
                 c.weighty = 0;
                 c.fill = GridBagConstraints.NONE;
-                ITextCombo box = new ITextCombo(ComboLockedMode.LOCKED);
+                final ITextCombo box = new ITextCombo(ComboLockedMode.LOCKED);
 
                 for (String s : ReferenceArticleSQLElement.CONDITIONS) {
                     box.addItem(s);
                 }
                 this.add(box, c);
                 this.addView(box, "INCOTERM", REQ);
+                box.addValueListener(new PropertyChangeListener() {
+
+                    @Override
+                    public void propertyChange(PropertyChangeEvent evt) {
+                        table.setIncoterms(box.getCurrentValue());
+                    }
+                });
             }
 
         }
@@ -629,15 +642,16 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         final JTextField textPoidsTotal = new JTextField(8);
         JTextField poids = new JTextField();
         if (b) {
-            final JPanel panelPoids = new JPanel();
-
-            panelPoids.add(new JLabel(getLabelFor("T_POIDS")), c);
-
+            final JPanel panelPoids = new JPanel(new GridBagLayout());
+            GridBagConstraints cPoids = new DefaultGridBagConstraints();
+            cPoids.weightx = 0;
+            panelPoids.add(new JLabel(getLabelFor("T_POIDS")), cPoids);
+            cPoids.weightx = 1;
             textPoidsTotal.setEnabled(false);
             textPoidsTotal.setHorizontalAlignment(JTextField.RIGHT);
             textPoidsTotal.setDisabledTextColor(Color.BLACK);
-
-            panelPoids.add(textPoidsTotal, c);
+            cPoids.gridx++;
+            panelPoids.add(textPoidsTotal, cPoids);
 
             c.gridx++;
             c.gridy = 0;
@@ -655,13 +669,14 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         }
 
         DeviseField textPortHT = new DeviseField();
-        ElementComboBox comboTaxePort = new ElementComboBox();
+        ElementComboBox comboTaxePort = new ElementComboBox(false, 10);
 
         if (getTable().contains("PORT_HT")) {
             addRequiredSQLObject(textPortHT, "PORT_HT");
             final JPanel panelPoids = new JPanel(new GridBagLayout());
             GridBagConstraints cPort = new DefaultGridBagConstraints();
             cPort.gridx = 0;
+            cPort.fill = GridBagConstraints.NONE;
             cPort.weightx = 0;
             panelPoids.add(new JLabel(getLabelFor("PORT_HT")), cPort);
             textPortHT.setHorizontalAlignment(JTextField.RIGHT);
@@ -675,7 +690,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             addRequiredSQLObject(comboTaxePort, "ID_TAXE_PORT");
             panelPoids.add(new JLabel(getLabelFor("ID_TAXE_PORT")), cPort);
             cPort.gridx++;
-            cPort.weightx = 0;
+            cPort.weightx = 1;
             panelPoids.add(comboTaxePort, cPort);
 
             c.gridx++;
@@ -725,6 +740,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
         c.anchor = GridBagConstraints.NORTHEAST;
         c.fill = GridBagConstraints.BOTH;
         c.weighty = 0;
+        c.weightx = 0;
         DefaultGridBagConstraints.lockMinimumSize(totalTTC);
 
         panel.add(totalTTC, c);
@@ -845,6 +861,10 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
                 compAdr.setCreated(false);
             }
         }
+        if (getTable().contains("LIVRAISON_F") && componentPrincipaleAdr != null) {
+            final boolean bLivraison = r != null && r.getFields().contains("ID_ADRESSE") && !r.isForeignEmpty("ID_ADRESSE");
+            componentPrincipaleAdr.setEditable(bLivraison ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+        }
 
         super.select(r);
         if (r != null) {
@@ -873,24 +893,7 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
             @Override
             public void run() {
                 try {
-                    // On efface les anciens mouvements de stocks
-                    SQLRow row = getTable().getRow(id);
-                    SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
-                    SQLSelect sel = new SQLSelect();
-                    sel.addSelect(eltMvtStock.getTable().getField("ID"));
-                    Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", row.getID());
-                    Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-                    sel.setWhere(w.and(w2));
 
-                    List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-                    if (l != null) {
-                        for (int i = 0; i < l.size(); i++) {
-                            Object[] tmp = (Object[]) l.get(i);
-
-                            eltMvtStock.archive(((Number) tmp[0]).intValue());
-
-                        }
-                    }
                     // Mise à jour du stock
                     updateStock(id);
                 } catch (Exception e) {
@@ -963,6 +966,9 @@ public class CommandeSQLComponent extends TransfertBaseSQLComponent {
 
         if (getTable().contains("ID_TAXE_PORT")) {
             rowVals.put("ID_TAXE_PORT", TaxeCache.getCache().getFirstTaxe().getID());
+        }
+        if (getTable().contains("LIVRAISON_F") && componentPrincipaleAdr != null) {
+            componentPrincipaleAdr.setEditable(InteractionMode.DISABLED);
         }
 
         return rowVals;

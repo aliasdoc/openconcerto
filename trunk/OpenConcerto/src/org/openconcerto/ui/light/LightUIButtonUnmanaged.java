@@ -13,11 +13,44 @@
  
  package org.openconcerto.ui.light;
 
+import net.minidev.json.JSONObject;
+
 public class LightUIButtonUnmanaged extends LightUIElement {
-    public LightUIButtonUnmanaged(String id, String label) {
+    public LightUIButtonUnmanaged(final JSONObject json) {
+        super(json);
+    }
+
+    public LightUIButtonUnmanaged(final String id, final String label) {
+        super(id);
         setType(LightUIElement.TYPE_BUTTON_UNMANAGED);
-        setId(id);
+
         setGridWidth(1);
         setLabel(label);
+    }
+
+    public LightUIButtonUnmanaged(final String id) {
+        super(id);
+        setType(LightUIElement.TYPE_BUTTON_UNMANAGED);
+
+        setGridWidth(1);
+    }
+
+    public LightUIButtonUnmanaged(final LightUIButtonUnmanaged button) {
+        super(button);
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIButtonUnmanaged(json);
+            }
+        };
+    }
+
+    @Override
+    public LightUIElement clone() {
+        return new LightUIButtonUnmanaged(this);
     }
 }

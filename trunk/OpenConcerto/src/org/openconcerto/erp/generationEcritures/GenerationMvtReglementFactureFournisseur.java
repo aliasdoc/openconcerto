@@ -17,6 +17,7 @@ import org.openconcerto.erp.core.common.element.BanqueSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.JournalSQLElement;
 import org.openconcerto.erp.core.finance.payment.element.ModeDeReglementSQLElement;
+import org.openconcerto.erp.core.finance.payment.element.TypeReglementSQLElement;
 import org.openconcerto.erp.model.PrixTTC;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -119,7 +120,16 @@ public final class GenerationMvtReglementFactureFournisseur extends GenerationEc
                 ajoutEcriture();
 
                 // compte de reglement, caisse, CB, ...
-                fillCompteBanqueFromRow(modeRegRow, "VenteCB", true);
+                if (typeRegRow.getID() == TypeReglementSQLElement.ESPECE) {
+                    int idCompteRegl = typeRegRow.getInt("ID_COMPTE_PCE_FOURN");
+                    if (idCompteRegl <= 1) {
+                        idCompteRegl = ComptePCESQLElement.getIdComptePceDefault("AchatEspece");
+                    }
+
+                    this.mEcritures.put("ID_COMPTE_PCE", Integer.valueOf(idCompteRegl));
+                } else {
+                    fillCompteBanqueFromRow(modeRegRow, "AchatCB", true);
+                }
                 this.mEcritures.put("DEBIT", Long.valueOf(0));
                 this.mEcritures.put("CREDIT", Long.valueOf(prixTTC.getLongValue()));
                 ajoutEcriture();

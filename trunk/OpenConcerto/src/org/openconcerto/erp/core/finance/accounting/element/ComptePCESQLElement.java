@@ -18,6 +18,7 @@ import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.DBSystemRoot;
 import org.openconcerto.sql.model.SQLBackgroundTableCache;
 import org.openconcerto.sql.model.SQLBackgroundTableCacheItem;
@@ -189,26 +190,28 @@ public class ComptePCESQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
-        // on verifie qu'aucune ecriture n'est asssociée à ce compte
-        SQLBase base = getTable().getBase();
-        SQLTable ecritureTable = base.getTable("ECRITURE");
-        SQLSelect selEcr = new SQLSelect(base);
-        selEcr.addSelect(ecritureTable.getField("ID_COMPTE_PCE"));
-        selEcr.setWhere(new Where(ecritureTable.getField("ID_COMPTE_PCE"), "=", row.getID()));
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        for (SQLRow row : trees.getRows()) {
+            // on verifie qu'aucune ecriture n'est asssociée à ce compte
+            SQLBase base = getTable().getBase();
+            SQLTable ecritureTable = base.getTable("ECRITURE");
+            SQLSelect selEcr = new SQLSelect();
+            selEcr.addSelect(ecritureTable.getField("ID_COMPTE_PCE"));
+            selEcr.setWhere(new Where(ecritureTable.getField("ID_COMPTE_PCE"), "=", row.getID()));
 
-        String reqEcriture = selEcr.asString();
+            String reqEcriture = selEcr.asString();
 
-        Object obEcriture = base.getDataSource().execute(reqEcriture, new ArrayListHandler());
+            Object obEcriture = base.getDataSource().execute(reqEcriture, new ArrayListHandler());
 
-        List myListEcriture = (List) obEcriture;
+            List myListEcriture = (List) obEcriture;
 
-        if (myListEcriture.size() != 0) {
+            if (myListEcriture.size() != 0) {
 
-            System.err.println("Impossible de supprimer un compte mouvementé!");
-            ExceptionHandler.handle("", new Exception("Impossible de supprimer un compte mouvementé!"));
-        } else {
-            super.archive(row, cutLinks);
+                System.err.println("Impossible de supprimer un compte mouvementé!");
+                ExceptionHandler.handle("", new Exception("Impossible de supprimer un compte mouvementé!"));
+            } else {
+                super.archive(new TreesOfSQLRows(this, row), cutLinks);
+            }
         }
     }
 

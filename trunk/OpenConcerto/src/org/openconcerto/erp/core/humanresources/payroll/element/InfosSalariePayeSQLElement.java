@@ -13,11 +13,14 @@
  
  package org.openconcerto.erp.core.humanresources.payroll.element;
 
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.model.PrixHT;
+import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ElementSQLObject;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
@@ -42,6 +45,11 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
         super("INFOS_SALARIE_PAYE", "des informations salarié-paye", "informations salariés-payes");
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
         l.add("ID_IDCC");
@@ -51,13 +59,6 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
         l.add("ID_IDCC");
-        return l;
-    }
-
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_CONTRAT_SALARIE");
-        l.add("ID_CLASSEMENT_CONVENTIONNEL");
         return l;
     }
 
@@ -136,8 +137,28 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
                 c.gridwidth = 2;
                 c.weightx = 0;
                 this.add(panelClassement, c);
-                c.gridwidth = 1;
 
+                // Classement conventionnel
+                final SQLBase base = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete();
+                if (base.getTable("COEFF_PRIME") != null) {
+                    c.fill = GridBagConstraints.BOTH;
+                    JPanel panelCoeff = new JPanel();
+                    panelCoeff.setOpaque(false);
+                    panelCoeff.setBorder(BorderFactory.createTitledBorder("Coefficient prime"));
+                    panelCoeff.setLayout(new GridBagLayout());
+                    this.addView("ID_COEFF_PRIME", REQ + ";" + DEC + ";" + SEP);
+                    ElementSQLObject eltCoeff = (ElementSQLObject) this.getView("ID_COEFF_PRIME");
+                    c.gridx = 0;
+                    c.gridy = 0;
+                    c.weightx = 1;
+                    panelCoeff.add(eltCoeff, c);
+                    c.gridy = 2;
+                    c.gridx = 0;
+                    c.gridwidth = 2;
+                    c.weightx = 0;
+                    this.add(panelCoeff, c);
+                    c.gridwidth = 1;
+                }
                 // Contrat
                 c.fill = GridBagConstraints.BOTH;
                 JPanel panelContrat = new JPanel();
@@ -155,7 +176,7 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
 
                 c.gridx = 2;
                 c.gridy = 1;
-                c.gridheight = 2;
+                c.gridheight = 3;
                 c.gridwidth = GridBagConstraints.REMAINDER;
                 c.weightx = 1;
                 this.add(panelContrat, c);
@@ -206,7 +227,7 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
                  * panelEntreeSortie.add(labelAnc, c); c.gridx++; panelEntreeSortie.add(textAnc, c);
                  */
                 c.gridx = 0;
-                c.gridy = 2;
+                c.gridy = 3;
                 c.gridwidth = 2;
                 this.add(panelEntreeSortie, c);
                 c.gridwidth = 1;
@@ -345,6 +366,19 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
                 c.weightx = 1;
                 panelBase.add(conges, c);
 
+                if (getTable().contains("BASE_FILLON_ANNUELLE")) {
+                    JLabel labelFillon = new JLabel(getLabelFor("BASE_FILLON_ANNUELLE"));
+                    labelFillon.setHorizontalAlignment(SwingConstants.RIGHT);
+                    JTextField fillon = new JTextField();
+                    c.gridx++;
+                    c.weightx = 0;
+                    panelBase.add(labelFillon, c);
+                    c.gridx++;
+                    c.weightx = 1;
+                    panelBase.add(fillon, c);
+                    addView(fillon, "BASE_FILLON_ANNUELLE");
+                }
+
                 // Code AT
                 JLabel labelCodeAT = new JLabel(getLabelFor("CODE_AT"));
                 labelCodeAT.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -370,7 +404,7 @@ public class InfosSalariePayeSQLElement extends ComptaSQLConfElement {
                 panelBase.add(sectionAT, c);
                 addView(sectionAT, "CODE_SECTION_AT");
 
-                c.gridy = 3;
+                c.gridy = 4;
                 c.gridx = 0;
                 c.gridwidth = GridBagConstraints.REMAINDER;
                 c.weighty = 1;

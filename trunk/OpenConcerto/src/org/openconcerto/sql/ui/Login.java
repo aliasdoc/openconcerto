@@ -14,6 +14,7 @@
  package org.openconcerto.sql.ui;
 
 import static java.util.Collections.singletonList;
+
 import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLName;
 import org.openconcerto.sql.model.SQLRow;
@@ -48,6 +49,7 @@ public class Login {
     public static final String UNKNOWN_USER = "unknownUser";
     public static final String MORE_THAN_ONE_USER = "multipleUser";
     public static final String WRONG_PASSWORD = "wrongPass";
+    public static final String DISABLED_USER = "disabledUser";
     private final DBRoot root;
     private final SQLTable userT;
 
@@ -103,17 +105,23 @@ public class Login {
         final List<SQLRow> users = this.findUser(login);
         if (users.size() == 1) {
             final SQLRow userRow = users.get(0);
-            final int size = passwords.size();
-            if (size == 0)
-                throw new IllegalArgumentException("No passwords");
 
-            String encPass = null;
-            // while the connection does not succeed
-            for (int i = 0; i < size && encPass == null; i++) {
-                final String pass = passwords.get(i);
-                encPass = this.connect(userRow, pass, encoded);
+            if (this.userT.contains("DISABLED") && userRow.getBoolean("DISABLED")) {
+                res = Tuple2.create(DISABLED_USER, null);
+            } else {
+
+                final int size = passwords.size();
+                if (size == 0)
+                    throw new IllegalArgumentException("No passwords");
+
+                String encPass = null;
+                // while the connection does not succeed
+                for (int i = 0; i < size && encPass == null; i++) {
+                    final String pass = passwords.get(i);
+                    encPass = this.connect(userRow, pass, encoded);
+                }
+                res = Tuple2.create(encPass == null ? WRONG_PASSWORD : null, encPass);
             }
-            res = Tuple2.create(encPass == null ? WRONG_PASSWORD : null, encPass);
         } else if (users.size() > 1) {
             res = Tuple2.create(MORE_THAN_ONE_USER, null);
         } else {
@@ -134,8 +142,12 @@ public class Login {
         final SQLSelect selUser = new SQLSelect();
         selUser.addSelect(this.userT.getField("ID"));
         selUser.addSelect(this.userT.getField("PASSWORD"));
+        if (this.userT.contains("DISABLED")) {
+            selUser.addSelect(this.userT.getField("DISABLED"));
+        }
 
         final SQLName name = this.userT.getField("LOGIN").getSQLName(this.userT);
+
         final String req = selUser.toString() + " AND LOWER(" + name.quote() + ")=LOWER('" + login + "')";
 
         @SuppressWarnings("unchecked")

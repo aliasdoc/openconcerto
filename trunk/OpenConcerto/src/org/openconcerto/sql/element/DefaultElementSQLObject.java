@@ -24,7 +24,6 @@ import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidObject;
 import org.openconcerto.utils.checks.ValidState;
 
-import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
@@ -216,8 +215,6 @@ public class DefaultElementSQLObject extends ElementSQLObject {
                 this.editP.add(this.separator, c);
             }
             this.add(this.editP);
-            // Lock minimum size
-            this.setMinimumSize(new Dimension(this.getPreferredSize()));
         }
         return this.editP;
     }

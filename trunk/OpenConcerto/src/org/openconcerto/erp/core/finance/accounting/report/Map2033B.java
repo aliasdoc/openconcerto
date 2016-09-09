@@ -13,6 +13,14 @@
  
  package org.openconcerto.erp.core.finance.accounting.report;
 
+import org.openconcerto.erp.config.ComptaPropsConfiguration;
+import org.openconcerto.erp.config.Gestion;
+import org.openconcerto.erp.core.finance.accounting.model.SommeCompte;
+import org.openconcerto.erp.preferences.TemplateNXProps;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.utils.GestionDevise;
+
 import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -23,14 +31,6 @@ import java.util.Map;
 
 import javax.swing.JProgressBar;
 import javax.swing.SwingUtilities;
-
-import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.config.Gestion;
-import org.openconcerto.erp.core.finance.accounting.model.SommeCompte;
-import org.openconcerto.erp.preferences.TemplateNXProps;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.utils.GestionDevise;
 
 public class Map2033B extends Thread {
     private Map<String, String> m;
@@ -266,7 +266,7 @@ public class Map2033B extends Thread {
          * REMUNERATION Du PERSONNEL
          ******************************************************************************************/
         // 250 SommeSolde( 640, 644* )+SommeSolde( 648, 649* )
-        long v250 = this.sommeCompte.soldeCompte(644, 644, true, this.dateDeb, this.dateFin) + this.sommeCompte.soldeCompte(648, 648, true, this.dateDeb, this.dateFin)
+        long v250 = this.sommeCompte.soldeCompte(644, 644, true, this.dateDeb, this.dateFin) + this.sommeCompte.soldeCompte(648, 649, true, this.dateDeb, this.dateFin)
                 + this.sommeCompte.soldeCompte(641, 641, true, this.dateDeb, this.dateFin);
         this.m.put("CHARGES3.14", GestionDevise.currencyToString(v250, false));
 
@@ -486,6 +486,11 @@ public class Map2033B extends Thread {
         this.m.put("T4.41", "");
         this.m.put("T2.42", "");
 
+        // final SQLField field =
+        // ComptaPropsConfiguration.getInstanceCompta().getRootSociete().getTable("COMPTE_PCE").getField("NUMERO");
+        // Where where = new Where(field, "LIKE", "6%");
+        // where = where.or(new Where(field, "LIKE", "7%"));
+        // this.sommeCompte.getNonUsedCompte(where, this.dateDeb, this.dateFin);
         p.generateFrom(this.m);
 
         SwingUtilities.invokeLater(new Runnable() {

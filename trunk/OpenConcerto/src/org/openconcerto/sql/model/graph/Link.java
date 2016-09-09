@@ -18,11 +18,13 @@ package org.openconcerto.sql.model.graph;
 
 import static org.openconcerto.xml.JDOMUtils.OUTPUTTER;
 import static java.util.Collections.singletonList;
+
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLIdentifier;
 import org.openconcerto.sql.model.SQLName;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.cc.HashingStrategy;
 import org.openconcerto.utils.cc.IPredicate;
 
 import java.io.IOException;
@@ -34,9 +36,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import net.jcip.annotations.ThreadSafe;
-
 import org.jdom2.Element;
+
+import net.jcip.annotations.ThreadSafe;
 
 /**
  * Un lien dans le graphe des tables. Par exemple, si la table ECLAIRAGE a un champ ID_LOCAL, alors
@@ -91,12 +93,14 @@ public class Link extends DirectedEdge<SQLTable> {
             this(table, oppositeRootName, oppositeTableName, null);
         }
 
-        public NamePredicate(SQLTable table, String oppositeRootName, String oppositeTableName, String fieldName) {
+        public NamePredicate(SQLTable table, String oppositeRootName, String oppositeTableName, List<String> fieldsNames) {
             super();
+            if (table == null)
+                throw new NullPointerException("Null table");
             this.table = table;
             this.oppositeRootName = oppositeRootName;
             this.oppositeTableName = oppositeTableName;
-            this.fieldsNames = fieldName == null ? null : Collections.singletonList(fieldName);
+            this.fieldsNames = fieldsNames;
         }
 
         @Override
@@ -105,6 +109,20 @@ public class Link extends DirectedEdge<SQLTable> {
             final SQLTable oppositeTable = l.oppositeVertex(this.table);
             return (this.fieldsNames == null || this.fieldsNames.equals(l.getCols())) && (this.oppositeTableName == null || this.oppositeTableName.equals(oppositeTable.getName()))
                     && (this.oppositeRootName == null || this.oppositeRootName.equals(oppositeTable.getDBRoot().getName()));
+        }
+
+        @Override
+        public String toString() {
+            final String links = this.fieldsNames == null ? " for links" : " for links through " + this.fieldsNames;
+            final String tables;
+            if (this.oppositeRootName == null && this.oppositeTableName == null) {
+                tables = " to/from " + this.table;
+            } else if (this.oppositeTableName == null) {
+                tables = " connecting " + this.table + " and a table in the root " + new SQLName(this.oppositeRootName);
+            } else {
+                tables = " connecting " + this.table + " and table(s) named " + new SQLName(this.oppositeRootName, this.oppositeTableName);
+            }
+            return this.getClass().getSimpleName() + links + tables;
         }
     }
 
@@ -274,6 +292,33 @@ public class Link extends DirectedEdge<SQLTable> {
     @Override
     public int hashCode() {
         return this.getFields().hashCode() + this.getRefFields().hashCode();
+    }
+
+    // instead of using SQLField, this class only uses String and SQLName
+    static private final HashingStrategy<Link> INTERSYSTEM_STRATEGY = new HashingStrategy<Link>() {
+        @Override
+        public boolean equals(final Link thisLink, final Link otherLink) {
+            if (thisLink == otherLink)
+                return true;
+            if (thisLink == null || otherLink == null)
+                return false;
+            return thisLink.getSource().getName().equals(otherLink.getSource().getName()) && thisLink.getCols().equals(otherLink.getCols()) && thisLink.getUpdateRule() == otherLink.getUpdateRule()
+                    && thisLink.getDeleteRule() == otherLink.getDeleteRule() && thisLink.getRefCols().equals(otherLink.getRefCols())
+                    && thisLink.getContextualName().equals(otherLink.getContextualName());
+        }
+
+        @Override
+        public int computeHashCode(Link l) {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + l.getCols().hashCode();
+            result = prime * result + l.getContextualName().hashCode();
+            return result;
+        }
+    };
+
+    public static final HashingStrategy<Link> getInterSystemHashStrategy() {
+        return INTERSYSTEM_STRATEGY;
     }
 
     void toXML(final Writer pWriter) throws IOException {

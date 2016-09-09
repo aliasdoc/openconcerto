@@ -382,6 +382,12 @@ public class GenerationEcritures {
                 calc.setRowDefaultCptService(serviceCompte);
             }
         }
+        if (row.getTable().contains("ID_COMPTE_PCE_VENTE") && !row.isForeignEmpty("ID_COMPTE_PCE_VENTE")) {
+            SQLRowAccessor produitCompte = row.getForeign("ID_COMPTE_PCE_VENTE");
+            if (!produitCompte.isUndefined()) {
+                calc.setRowDefaultCptProduit(produitCompte);
+            }
+        }
         long remise = 0;
         BigDecimal totalAvtRemise = BigDecimal.ZERO;
         if (row.getTable().contains("REMISE_HT")) {

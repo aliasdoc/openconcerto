@@ -44,8 +44,10 @@ public class CommandeXmlSheet extends AbstractSheetXMLWithDate {
         this.elt = Configuration.getInstance().getDirectory().getElement("COMMANDE");
         MetaDataSheet meta = new MetaDataSheet();
         SQLRow foreign = this.row.getForeign("ID_FOURNISSEUR");
-        if (foreign != null && !foreign.isUndefined())
+        if (foreign != null && !foreign.isUndefined()) {
             meta.setKeywords(Arrays.asList(foreign.getString("NOM")));
+            this.setMetaGeneration(meta);
+        }
     }
 
     @Override

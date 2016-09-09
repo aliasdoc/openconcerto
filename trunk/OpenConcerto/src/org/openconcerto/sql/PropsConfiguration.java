@@ -13,6 +13,33 @@
  
  package org.openconcerto.sql;
 
+import org.openconcerto.sql.element.SQLElementDirectory;
+import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.sql.model.DBStructureItem;
+import org.openconcerto.sql.model.DBSystemRoot;
+import org.openconcerto.sql.model.FieldMapper;
+import org.openconcerto.sql.model.HierarchyLevel;
+import org.openconcerto.sql.model.SQLBase;
+import org.openconcerto.sql.model.SQLDataSource;
+import org.openconcerto.sql.model.SQLFilter;
+import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLServer;
+import org.openconcerto.sql.model.SQLSystem;
+import org.openconcerto.sql.request.SQLFieldTranslator;
+import org.openconcerto.sql.users.rights.UserRightsManager;
+import org.openconcerto.utils.CollectionUtils;
+import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.FileUtils;
+import org.openconcerto.utils.LogUtils;
+import org.openconcerto.utils.MultipleOutputStream;
+import org.openconcerto.utils.NetUtils;
+import org.openconcerto.utils.ProductInfo;
+import org.openconcerto.utils.RTInterruptedException;
+import org.openconcerto.utils.StreamUtils;
+import org.openconcerto.utils.Value;
+import org.openconcerto.utils.cc.IClosure;
+import org.openconcerto.utils.i18n.TranslationManager;
+
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -36,7 +63,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Locale;
-import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.ResourceBundle.Control;
 import java.util.Set;
@@ -54,35 +80,6 @@ import org.apache.commons.collections.Predicate;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.element.SQLElementDirectory;
-import org.openconcerto.sql.element.SQLElementDirectory.DirectoryListener;
-import org.openconcerto.sql.model.DBRoot;
-import org.openconcerto.sql.model.DBStructureItem;
-import org.openconcerto.sql.model.DBSystemRoot;
-import org.openconcerto.sql.model.FieldMapper;
-import org.openconcerto.sql.model.HierarchyLevel;
-import org.openconcerto.sql.model.SQLBase;
-import org.openconcerto.sql.model.SQLDataSource;
-import org.openconcerto.sql.model.SQLFilter;
-import org.openconcerto.sql.model.SQLRow;
-import org.openconcerto.sql.model.SQLServer;
-import org.openconcerto.sql.model.SQLSystem;
-import org.openconcerto.sql.request.SQLFieldTranslator;
-import org.openconcerto.sql.users.rights.UserRightsManager;
-import org.openconcerto.utils.CollectionMap;
-import org.openconcerto.utils.CollectionUtils;
-import org.openconcerto.utils.ExceptionHandler;
-import org.openconcerto.utils.FileUtils;
-import org.openconcerto.utils.LogUtils;
-import org.openconcerto.utils.MultipleOutputStream;
-import org.openconcerto.utils.NetUtils;
-import org.openconcerto.utils.ProductInfo;
-import org.openconcerto.utils.RTInterruptedException;
-import org.openconcerto.utils.StreamUtils;
-import org.openconcerto.utils.Value;
-import org.openconcerto.utils.cc.IClosure;
-import org.openconcerto.utils.i18n.TranslationManager;
 import net.jcip.annotations.GuardedBy;
 import net.jcip.annotations.ThreadSafe;
 
@@ -187,7 +184,6 @@ public class PropsConfiguration extends Configuration {
     // rest
     @GuardedBy("restLock")
     private ProductInfo productInfo;
-    private final Addable<ShowAs> showAs;
     @GuardedBy("restLock")
     private SQLFilter filter;
     private final Addable<SQLFieldTranslator> translator;
@@ -234,79 +230,6 @@ public class PropsConfiguration extends Configuration {
 
     public PropsConfiguration(final Properties props) {
         this.props = props;
-        // ShowAs is thread-safe
-        this.showAs = new Addable<ShowAs>() {
-
-            @GuardedBy("this")
-            private DirectoryListener directoryListener;
-
-            @Override
-            protected ShowAs create() {
-                final ShowAs res = createShowAs();
-                final SQLElementDirectory dir = getDirectory();
-                synchronized (this) {
-                    assert this.directoryListener == null;
-                    this.directoryListener = new DirectoryListener() {
-                        @Override
-                        public void elementRemoved(final SQLElement elem) {
-                            res.removeTable(elem.getTable());
-                        }
-
-                        @Override
-                        public void elementAdded(final SQLElement elem) {
-                            final CollectionMap<String, String> sa = elem.getShowAs();
-                            if (sa != null) {
-                                for (final Entry<String, Collection<String>> e : sa.entrySet()) {
-                                    try {
-                                        if (e.getKey() == null)
-                                            res.show(elem.getTable(), (List<String>) e.getValue());
-                                        else
-                                            res.show(elem.getTable().getField(e.getKey()), (List<String>) e.getValue());
-                                    } catch (RuntimeException exn) {
-                                        throw new IllegalStateException("Couldn't add showAs for " + elem + " : " + e, exn);
-                                    }
-                                }
-                            }
-                        }
-                    };
-                    // ATTN SQLElementDirectory cannot access ShowAs otherwise deadlock
-                    synchronized (dir) {
-                        for (final SQLElement elem : dir.getElements()) {
-                            this.directoryListener.elementAdded(elem);
-                        }
-                        dir.addListener(this.directoryListener);
-                    }
-                }
-
-                return res;
-            }
-
-            @Override
-            protected void destroy(Future<ShowAs> future) {
-                // don't cancel future, just wait it out. Prevent other callers from getting an
-                // exception.
-                try {
-                    future.get();
-                } catch (Exception e) {
-                    // don't care about the result, we just want it to finish
-                }
-                assert future.isDone();
-                final DirectoryListener l;
-                synchronized (this) {
-                    l = this.directoryListener;
-                }
-                // create() might have thrown an exception before completing
-                if (l != null) {
-                    getDirectory().removeListener(l);
-                }
-                super.destroy(future);
-            }
-
-            @Override
-            protected void add(ShowAs obj, Configuration conf) {
-                obj.putAll(conf.getShowAs());
-            }
-        };
         // SQLElementDirectory is thread-safe
         this.directory = new Addable<SQLElementDirectory>() {
             @Override
@@ -348,7 +271,6 @@ public class PropsConfiguration extends Configuration {
                 UserRightsManager.clearInstanceIfSame(this.urMngr);
         }
 
-        this.showAs.destroy();
         this.translator.destroy();
         this.directory.destroy();
         super.destroy();
@@ -893,10 +815,6 @@ public class PropsConfiguration extends Configuration {
         }
     }
 
-    protected ShowAs createShowAs() {
-        return new ShowAs(this.getRoot());
-    }
-
     protected SQLElementDirectory createDirectory() {
         return new SQLElementDirectory();
     }
@@ -961,7 +879,6 @@ public class PropsConfiguration extends Configuration {
      */
     @Override
     public final Configuration add(final Configuration conf) {
-        this.showAs.add(conf);
         this.translator.add(conf);
         this.directory.add(conf);
         return this;
@@ -1070,7 +987,7 @@ public class PropsConfiguration extends Configuration {
 
     @Override
     public final ShowAs getShowAs() {
-        return this.showAs.get();
+        return this.getDirectory().getShowAs();
     }
 
     @Override

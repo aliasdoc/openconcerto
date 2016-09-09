@@ -14,6 +14,7 @@
  package org.openconcerto.erp.modules;
 
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.utils.ListMap;
 
 import java.util.Collections;
 import java.util.List;
@@ -62,5 +63,10 @@ public abstract class ModuleElement extends ComptaSQLConfElement {
 
     protected String createCodeSuffix() {
         return getTable().getName();
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, getComboFields());
     }
 }

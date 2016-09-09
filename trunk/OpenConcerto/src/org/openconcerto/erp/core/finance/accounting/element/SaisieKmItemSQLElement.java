@@ -28,6 +28,11 @@ public class SaisieKmItemSQLElement extends ComptaSQLConfElement {
         super("SAISIE_KM_ELEMENT", "un élément de saisie au kilomètre", "éléments de saisie au kilomètre");
     }
 
+    @Override
+    protected String getParentFFName() {
+        return "ID_SAISIE_KM";
+    }
+
     public List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
         l.add("NUMERO");

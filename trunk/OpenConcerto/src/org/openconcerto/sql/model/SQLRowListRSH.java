@@ -181,17 +181,7 @@ public final class SQLRowListRSH implements ResultSetHandler {
             tables.add(ref.getTable());
         }
 
-        return new IResultSetHandler(create(indexes)) {
-            @Override
-            public boolean readCache() {
-                return readCache;
-            }
-
-            @Override
-            public boolean writeCache() {
-                return writeCache;
-            }
-
+        return new IResultSetHandler(create(indexes), readCache, writeCache) {
             @Override
             public Set<? extends SQLData> getCacheModifiers() {
                 return tables;

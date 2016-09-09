@@ -455,19 +455,19 @@ public class HistoriqueClientBilanPanel extends JPanel {
                     } else if (HistoriqueClientBilanPanel.this.nbChequesNonEncaisses == nb) {
                         HistoriqueClientBilanPanel.this.labelCheques.setText(" " + nb + " chèques non encaissés d'un montant total de " + total + " € HT");
                     } else {
-                        HistoriqueClientBilanPanel.this.labelCheques.setText(" " + nb + " chèques d'un montant total de " + total + " € HT dont "
-                                + HistoriqueClientBilanPanel.this.nbChequesNonEncaisses + " non encaissés");
+                        HistoriqueClientBilanPanel.this.labelCheques
+                                .setText(" " + nb + " chèques d'un montant total de " + total + " € HT dont " + HistoriqueClientBilanPanel.this.nbChequesNonEncaisses + " non encaissés");
                     }
                 }
                 // Factures impayées
                 nb = HistoriqueClientBilanPanel.this.nbFacturesImpayees;
                 total = GestionDevise.currencyToString(HistoriqueClientBilanPanel.this.totalFacturesImpayees, true);
                 if (nb == 0) {
-                    HistoriqueClientBilanPanel.this.labelEcheances.setText(" pas de facture impayée");
+                    HistoriqueClientBilanPanel.this.labelEcheances.setText(" pas de facture non payée");
                 } else if (nb == 1) {
-                    HistoriqueClientBilanPanel.this.labelEcheances.setText(" une facture impayée d'un montant de " + total + " € HT");
+                    HistoriqueClientBilanPanel.this.labelEcheances.setText(" une facture non payée d'un montant de " + total + " € HT");
                 } else {
-                    HistoriqueClientBilanPanel.this.labelEcheances.setText(" " + nb + " factures impayées d'un montant total de " + total + " € HT");
+                    HistoriqueClientBilanPanel.this.labelEcheances.setText(" " + nb + " factures non payées d'un montant total de " + total + " € HT");
                 }
                 // Relances
                 nb = HistoriqueClientBilanPanel.this.nbRelances;

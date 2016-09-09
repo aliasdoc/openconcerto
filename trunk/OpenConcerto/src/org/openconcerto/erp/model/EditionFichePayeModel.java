@@ -329,9 +329,7 @@ public class EditionFichePayeModel extends AbstractTableModel {
                                 FichePayeSheetXML sheet = new FichePayeSheetXML(rowFiche);
                                 sheet.createDocumentAsynchronous();
                                 Boolean bPrint = (Boolean) m.get("IMPRESSION");
-                                if (bPrint.booleanValue()) {
-                                    sheet.showPrintAndExportAsynchronous(false, true, false);
-                                }
+                                sheet.showPrintAndExportAsynchronous(false, bPrint.booleanValue(), true);
 
                                 EditionFichePayeModel.this.bar.setValue(tmp++);
 

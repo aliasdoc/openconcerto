@@ -27,7 +27,7 @@ import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.ui.EmailComposer;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.ExceptionHandler;
 
 public abstract class ContactSQLElementBase extends ConfSQLElement {
@@ -92,8 +92,8 @@ public abstract class ContactSQLElementBase extends ConfSQLElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        return CollectionMap.singleton(null, "NOM", "TEL_STANDARD");
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM", "TEL_STANDARD");
     }
 
     /*

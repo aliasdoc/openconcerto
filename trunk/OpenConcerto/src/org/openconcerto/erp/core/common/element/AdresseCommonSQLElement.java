@@ -14,16 +14,23 @@
  package org.openconcerto.erp.core.common.element;
 
 import org.openconcerto.erp.core.common.component.AdresseCommonSQLComponent;
+import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.model.DBRoot;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class AdresseCommonSQLElement extends ConfSQLElement {
 
+    public AdresseCommonSQLElement(DBRoot root) {
+        super(root.getTable("ADRESSE_COMMON"), "une adresse", "adresses");
+    }
+
     public AdresseCommonSQLElement() {
-        super("ADRESSE_COMMON", "une adresse", "adresses");
+        this(Configuration.getInstance().getRoot());
     }
 
     protected List<String> getListFields() {
@@ -38,6 +45,16 @@ public class AdresseCommonSQLElement extends ConfSQLElement {
         l.add("RUE");
         l.add("VILLE");
         return l;
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "RUE", "VILLE");
+    }
+
+    @Override
+    public boolean isPrivate() {
+        return true;
     }
 
     /*

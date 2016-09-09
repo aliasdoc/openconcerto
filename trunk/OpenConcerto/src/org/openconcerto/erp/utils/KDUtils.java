@@ -16,9 +16,9 @@
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.sales.quote.element.DevisSQLElement.Month;
 import org.openconcerto.sql.model.SQLRowAccessor;
+import org.openconcerto.utils.OSFamily;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -85,9 +85,8 @@ public class KDUtils {
         // Récupération du dossier RAPPORTS en fonction du système (Windows (X|Y|Z):/RAPPORTS ;
         // Linux /mnt/username/Serveur/RAPPORTS)
         String path = null;
-        final boolean windows = System.getProperty("os.name").startsWith("Windows");
-        if (windows) {
-
+        if (OSFamily.getInstance() == OSFamily.Windows) {
+            // TODO call "net use | grep -F '\\kdfs.alphacadet.fr\Serveur'"
             File f = new File("Z:" + File.separator + "RAPPORTS");
             if (f.exists()) {
                 path = f.getAbsolutePath();
@@ -108,16 +107,7 @@ public class KDUtils {
         } else {
             String username = System.getProperty("user.name");
             File f = new File(File.separator + "mnt" + File.separator + username + "-ILM-server" + File.separator + "RAPPORTS");
-            if (f.exists()) {
-                path = f.getAbsolutePath();
-            } else {
-                f = new File(File.separator + "mnt" + File.separator + username + File.separator + "Serveur" + File.separator + "RAPPORTS");
-                if (f.exists()) {
-                    path = f.getAbsolutePath();
-                } else {
-                    throw new IllegalArgumentException("Impossible d'accéder au dossier " + f.getAbsolutePath());
-                }
-            }
+            path = f.getAbsolutePath();
         }
 
         return new File(path + File.separator + map.get(idSociete));
@@ -127,11 +117,11 @@ public class KDUtils {
     public static List<File> getDevisFolders(SQLRowAccessor rowDevis, Folder folder) {
         File root = new File(getRapportDirectory(), folder.getFolderName());
 
-        final SQLRowAccessor rowClient = rowDevis.getForeign("ID_CLIENT").getForeign("ID_CLIENT");
+        final Number idClient = rowDevis.getForeign("ID_CLIENT").getForeignIDNumber("ID_CLIENT");
 
         // Récupération du dossier client
 
-        File[] clientFolders = { new File(root, String.valueOf(rowClient.getID())) };
+        File[] clientFolders = { new File(root, String.valueOf(idClient)) };
 
         // Recherche du dossier associé au devis
         Calendar date = rowDevis.getDate("DATE");
@@ -140,7 +130,7 @@ public class KDUtils {
         List<File> foldersToOpen = new ArrayList<File>();
         final int devisYear = date.get(Calendar.YEAR);
         for (File clientFolder : clientFolders) {
-            System.err.println(clientFolder.getAbsolutePath());
+            // System.err.println(clientFolder.getAbsolutePath());
             for (int year = devisYear; year <= devisYear + 1; year++) {
                 for (Month m : Month.values()) {
                     File testFolder = new File(clientFolder, year + File.separator + m.getPath() + File.separator + numero);

@@ -92,7 +92,7 @@ public final class AlterTable extends ChangeTable<AlterTable> {
      * @return this.
      */
     public final AlterTable dropColumnsCascade(Collection<String> columns) {
-        for (final Link l : this.t.getDBSystemRoot().getGraph().getForeignLinks(this.t))
+        for (final Link l : this.t.getForeignLinks())
             if (CollectionUtils.containsAny(l.getCols(), columns))
                 this.dropForeignConstraint(l.getName());
         for (final Constraint c : this.t.getConstraints())

@@ -30,6 +30,11 @@ public class CommandeElementSQLElement extends ComptaSQLConfElement {
         super("COMMANDE_ELEMENT", "un element de commande", "éléments de commande");
     }
 
+    @Override
+    protected String getParentFFName() {
+        return "ID_COMMANDE";
+    }
+
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
         l.add("ID_STYLE");

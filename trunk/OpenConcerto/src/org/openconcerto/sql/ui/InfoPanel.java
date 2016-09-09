@@ -20,6 +20,9 @@ import org.openconcerto.ui.SystemInfoPanel;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.Arrays;
 
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -47,6 +50,24 @@ public class InfoPanel extends JPanel {
         final JLabel res = new JLabel(TM.tr(text));
         final Font font = res.getFont();
         res.setFont(font.deriveFont(font.getSize2D() * 1.2f).deriveFont(Font.BOLD));
+        res.setToolTipText(TM.tr("infoPanel.refresh"));
+        res.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                refresh(Arrays.asList(InfoPanel.this.getComponents()).indexOf(res) + 1);
+            }
+        });
         return res;
+    }
+
+    public final void refresh() {
+        this.refresh(-1);
+    }
+
+    private final void refresh(final int index) {
+        if (index < 0 || index == 1)
+            ((SoftwareInfoPanel) this.getComponent(1)).refresh();
+        if (index < 0 || index == 3)
+            ((SystemInfoPanel) this.getComponent(3)).refresh();
     }
 }

@@ -35,6 +35,9 @@ public class LightControler implements Externalizable, Transferable {
     public static final String TYPE_REMOVE = "remove";
     public static final String TYPE_UP = "up";
     public static final String TYPE_DOWN = "down";
+    public static final String TYPE_CLOSE = "close";
+    public static final String TYPE_TILT_PREVIOUS = "tilt.previous";
+    public static final String TYPE_TILT_NEXT = "tilt.next";
 
     public LightControler() {
         // Serialization

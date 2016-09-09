@@ -24,6 +24,7 @@ import org.openconcerto.ui.component.text.TextComponent;
 import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.OrderedSet;
 import org.openconcerto.utils.SwingWorker2;
+import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.checks.MutableValueObject;
 import org.openconcerto.utils.model.DefaultIMutableListModel;
 import org.openconcerto.utils.text.DocumentFilterList;
@@ -144,9 +145,14 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
     }
 
     private Where whereAdditionnal;
+    private ITransformer<SQLSelect, SQLSelect> selTransformer;
 
     public void setWhere(Where w) {
         this.whereAdditionnal = w;
+    }
+
+    public void setSelectTransformer(ITransformer<SQLSelect, SQLSelect> selTransformer) {
+        this.selTransformer = selTransformer;
     }
 
     public void setTextEditor(final JTextComponent atext) {
@@ -291,6 +297,9 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
                 wMatchingCode = wMatchingCode.and(this.whereAdditionnal);
             }
             selMatchingCode.setWhere(wMatchingCode);
+            if (this.selTransformer != null) {
+                selMatchingCode = this.selTransformer.transformChecked(selMatchingCode);
+            }
             listSel.add(selMatchingCode);
 
             // CODE ARTICLE LIKE %aText% with limit
@@ -306,8 +315,13 @@ public class ITextArticleWithCompletion extends JPanel implements DocumentListen
             if (this.whereAdditionnal != null) {
                 wContains = wContains.and(this.whereAdditionnal);
             }
+
             selContains.setWhere(wContains.and(wMatchingCode.not()));
+            selContains.setExcludeUndefined(false, this.tableArticle.getForeignTable("ID_STOCK"));
             selContains.setLimit(SQL_RESULT_LIMIT);
+            if (this.selTransformer != null) {
+                selContains = this.selTransformer.transformChecked(selContains);
+            }
             listSel.add(selContains);
 
             // CODE ARTICLE = aText

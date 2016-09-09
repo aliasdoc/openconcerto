@@ -15,9 +15,12 @@
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
+import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
+import org.openconcerto.erp.core.customerrelationship.customer.element.RelanceSQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.MouvementSQLElement;
-import org.openconcerto.erp.core.finance.payment.element.ModeDeReglementSQLElement;
+import org.openconcerto.erp.core.sales.invoice.report.MailRelanceCreator;
+import org.openconcerto.erp.core.sales.invoice.report.VenteFactureXmlSheet;
 import org.openconcerto.erp.rights.ComptaUserRight;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
@@ -43,16 +46,16 @@ import org.openconcerto.sql.view.list.SQLTableModelSourceOnline;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.EmailComposer;
 import org.openconcerto.ui.JDate;
-import org.openconcerto.utils.CollectionMap;
 import org.openconcerto.utils.CollectionUtils;
-import org.openconcerto.utils.DecimalUtils;
+import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.GestionDevise;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
+import java.io.File;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -65,6 +68,7 @@ import javax.swing.AbstractAction;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 
 public class EcheanceClientSQLElement extends ComptaSQLConfElement {
 
@@ -145,8 +149,8 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
                         SQLRow rowPiece = rowMvt.getForeignRow("ID_PIECE");
                         piece = rowPiece.getString("NOM");
                     }
-                    int answer = JOptionPane.showConfirmDialog(null, "Etes vous sûr de vouloir régulariser l'échéance de " + nomClient + " d'un montant de " + price
-                            + "€ avec une saisie au kilometre?\nNom de la piéce : " + piece + ".");
+                    int answer = JOptionPane.showConfirmDialog(null,
+                            "Etes vous sûr de vouloir régulariser l'échéance de " + nomClient + " d'un montant de " + price + "€ avec une saisie au kilometre?\nNom de la piéce : " + piece + ".");
                     if (answer == JOptionPane.YES_OPTION) {
 
                         SQLRowValues rowVals = row.createEmptyUpdateRow();
@@ -176,11 +180,12 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
     }
 
 
-    private void sendMail(SQLRow row) {
+    private void sendMail(final SQLRow row) {
 
         SQLBase base = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete();
 
         if (row != null) {
+
             int idMvtSource = MouvementSQLElement.getSourceId(row.getInt("ID_MOUVEMENT"));
             SQLRow rowMvtSource = base.getTable("MOUVEMENT").getRow(idMvtSource);
 
@@ -191,6 +196,7 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
             int idFact = rowMvtSource.getInt("IDSOURCE");
             SQLRow rowFacture = base.getTable("SAISIE_VENTE_FACTURE").getRow(idFact);
 
+
             Set<SQLField> setContact = null;
             SQLTable tableContact = Configuration.getInstance().getRoot().findTable("CONTACT");
             setContact = row.getTable().getForeignKeys(tableContact);
@@ -199,64 +205,7 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
             SQLTable tableClient = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete().getTable("CLIENT");
             setClient = row.getTable().getForeignKeys(tableClient);
 
-            // Infos facture
-            Long lTotal = (Long) rowFacture.getObject("T_TTC");
-            Long lRestant = (Long) row.getObject("MONTANT");
-            long lRestantDevise = lRestant.longValue();
-            final String devise;
-            SQLRow rowTarif = rowFacture.getForeign("ID_TARIF");
-            if (rowTarif != null && !rowTarif.isUndefined()) {
-                SQLRow rowDevise = rowTarif.getForeign("ID_DEVISE");
-                BigDecimal t = (BigDecimal) rowDevise.getObject("TAUX");
-                BigDecimal bigDecimal = new BigDecimal(lRestantDevise);
-                lRestantDevise = t.signum() == 0 ? lRestantDevise : bigDecimal.multiply(t, DecimalUtils.HIGH_PRECISION).setScale(0, BigDecimal.ROUND_HALF_UP).longValue();
-                if (rowDevise.getString("CODE").trim().length() > 0) {
-                    devise = rowDevise.getString("CODE");
-                } else {
-                    devise = "€";
-                }
-            } else {
-                devise = "€";
-            }
-
-            Long lVerse = new Long(lTotal.longValue() - lRestant.longValue());
-            // m.put("FactureNumero", rowFacture.getString("NUMERO"));
-            // m.put("FactureTotal", GestionDevise.currencyToString(lTotal.longValue(), true));
-            // m.put("FactureRestant", GestionDevise.currencyToString(lRestant.longValue(), true));
-            // m.put("FactureVerse", GestionDevise.currencyToString(lVerse.longValue(), true));
-            // m.put("FactureDate", dateFormat2.format((Date) rowFacture.getObject("DATE")));
-            Date dFacture = (Date) rowFacture.getObject("DATE");
-            SQLRow modeRegRow = rowFacture.getForeignRow("ID_MODE_REGLEMENT");
-            Date dateEch = ModeDeReglementSQLElement.calculDate(modeRegRow.getInt("AJOURS"), modeRegRow.getInt("LENJOUR"), dFacture);
-
-            final String references = rowFacture.getString("NOM");
-            final String text = "Date: "
-                    + dateFormat.format(new Date())
-                    + "\n"
-                    + "Concerning : Late Payment reminder\n"
-                    + "\n\n\nTo "
-                    + rowFacture.getForeign("ID_CLIENT").getString("NOM")
-                    + ","
-                    +
-
-                    "\n\n\nIt has come to our attention that the following invoice has not been paid to this day."
-                    +
-
-                    "\nInvoice # "
-                    + rowFacture.getString("NUMERO")
-                    + " from "
-                    + dateFormat.format(rowFacture.getDate("DATE").getTime())
-                    + " of "
-                    + devise
-                    + " "
-                    + GestionDevise.currencyToString(lRestantDevise, true)
-                    + " duedate "
-                    + dateFormat.format(dateEch)
-                    + (references.trim().length() == 0 ? "" : (". Your references : " + references))
-                    + ".\nWe assume that this is a mere oversight and we would appreciate it if you would settle this invoice as soon as possible. In the event that this has already been accomplished in the meantime, please ignore this notice."
-                    +
-
-                    "\n\n\nThanking you in advance.";
+            // Récupération du mail du client
             String mail = "";
             for (SQLField field : setContact) {
                 if (mail == null || mail.trim().length() == 0) {
@@ -270,20 +219,57 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
                     mail = rowCli.getString("MAIL");
                 }
             }
-
             final String adresseMail = mail;
+
+            MailRelanceCreator creator = new MailRelanceCreator();
+            final String references = creator.getObject(row);
+            final String text = creator.getValue(row);
 
             final Thread t = new Thread() {
                 @Override
                 public void run() {
 
                     try {
-                        EmailComposer.getInstance().compose(adresseMail, "Late Payment reminder - " + references, text);
+                        EmailComposer.getInstance().compose(adresseMail, references, text);
+
+                        // Création d'une relance
+                        String numero = NumerotationAutoSQLElement.getNextNumero(RelanceSQLElement.class);
+                        SQLRowValues rowValsR = new SQLRowValues(row.getTable().getTable("RELANCE"));
+                        rowValsR.put("DATE", new Date());
+                        rowValsR.put("NUMERO", numero);
+                        rowValsR.put("ID_CLIENT", row.getForeignID("ID_CLIENT"));
+                        rowValsR.put("ID_SAISIE_VENTE_FACTURE", row.getForeignID("ID_SAISIE_VENTE_FACTURE"));
+                        rowValsR.put("MONTANT", row.getObject("MONTANT"));
+                        rowValsR.put("INFOS", "Email");
+                        rowValsR.put("ID_ECHEANCE_CLIENT", row.getID());
+                        try {
+                            rowValsR.insert();
+
+                            SQLTable tableNum = getTable().getBase().getTable("NUMEROTATION_AUTO");
+                            SQLRowValues rowVals = new SQLRowValues(tableNum);
+                            int val = tableNum.getRow(2).getInt("RELANCE_START");
+                            val++;
+                            rowVals.put("RELANCE_START", Integer.valueOf(val));
+
+                            rowVals.update(2);
+
+                            // Incrémentation du nombre de relance
+                            int nbRelance = row.getInt("NOMBRE_RELANCE");
+                            nbRelance++;
+
+                            SQLRowValues rowValsEch = new SQLRowValues(row.getTable());
+                            rowValsEch.put("NOMBRE_RELANCE", nbRelance);
+                            rowValsEch.put("DATE_LAST_RELANCE", new Date());
+
+                            rowValsEch.update(row.getID());
+
+                        } catch (SQLException e) {
+
+                            e.printStackTrace();
+                        }
                     } catch (IOException exn) {
-                        // TODO Bloc catch auto-généré
                         exn.printStackTrace();
                     } catch (InterruptedException exn) {
-                        // TODO Bloc catch auto-généré
                         exn.printStackTrace();
                     }
 
@@ -295,8 +281,8 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        CollectionMap<String, String> map = new CollectionMap<String, String>();
+    public ListMap<String, String> getShowAs() {
+        ListMap<String, String> map = new ListMap<String, String>();
         return map;
     }
 
@@ -324,15 +310,9 @@ public class EcheanceClientSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(this.getTable(), this.getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.put("REG_COMPTA", null);
-                graphToFetch.put("REGLE", null);
-            }
-        };
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("REG_COMPTA", "REGLE");
     }
 
     /*

@@ -367,7 +367,7 @@ public class SQLTableElement {
         }
     }
 
-    public boolean isCellEditable(SQLRowValues vals) {
+    public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
 
         return this.isEditable;
     }

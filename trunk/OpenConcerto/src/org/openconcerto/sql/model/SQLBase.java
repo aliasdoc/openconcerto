@@ -626,7 +626,7 @@ public class SQLBase extends SQLIdentifier {
             final SQLException sqlExn = SQLUtils.findWithSQLState(exn);
             final boolean tableNotFound = sqlExn != null && (sqlExn.getSQLState().equals("42S02") || sqlExn.getSQLState().equals("42P01"));
             if (!tableNotFound)
-                throw new IllegalStateException("Not a missing table exception", sqlExn);
+                throw new IllegalStateException("Not a missing table exception", exn);
 
             // The following fall back should not currently be needed since the table is created
             // by JDBCStructureSource.getNames(). Even without that most DB should contain the

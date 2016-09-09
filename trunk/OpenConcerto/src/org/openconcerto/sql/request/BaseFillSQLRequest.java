@@ -272,8 +272,16 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest implements Clone
         }
     }
 
+    public final void addToGraphToFetch(final String... fields) {
+        this.addToGraphToFetch(Arrays.asList(fields));
+    }
+
     public final void addToGraphToFetch(final Collection<String> fields) {
         this.addToGraphToFetch(null, fields);
+    }
+
+    public final void addForeignToGraphToFetch(final String foreignField, final Collection<String> fields) {
+        this.addToGraphToFetch(new Path(getPrimaryTable()).addForeignField(foreignField), fields);
     }
 
     /**
@@ -319,15 +327,12 @@ public abstract class BaseFillSQLRequest extends BaseSQLRequest implements Clone
         synchronized (this) {
             fetcher.setOrder(getOrder());
             fetcher.setReturnedRowsUnmodifiable(true);
-            final ITransformer<SQLSelect, SQLSelect> origSelTransf = fetcher.getSelTransf();
-            fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+            fetcher.appendSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
                 @Override
                 public SQLSelect transformChecked(SQLSelect sel) {
-                    if (origSelTransf != null)
-                        sel = origSelTransf.transformChecked(sel);
                     sel = transformSelect(sel);
                     if (isLockSelect())
-                        sel.addWaitPreviousWriteTXTable(tableName);
+                        sel.addLockedTable(tableName);
                     return sel.andWhere(getWhere());
                 }
             });

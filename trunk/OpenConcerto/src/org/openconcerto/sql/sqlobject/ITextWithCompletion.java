@@ -15,6 +15,7 @@
 
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
+import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTableEvent;
 import org.openconcerto.sql.model.SQLTableModifiedListener;
 import org.openconcerto.sql.model.Where;
@@ -22,6 +23,7 @@ import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.ui.component.text.TextComponent;
 import org.openconcerto.utils.OrderedSet;
 import org.openconcerto.utils.SwingWorker2;
+import org.openconcerto.utils.cc.ITransformer;
 import org.openconcerto.utils.checks.MutableValueObject;
 import org.openconcerto.utils.model.DefaultIMutableListModel;
 import org.openconcerto.utils.text.DocumentFilterList;
@@ -584,6 +586,11 @@ public class ITextWithCompletion extends JPanel implements DocumentListener, Tex
 
     public void setSelectionAutoEnabled(boolean b) {
         this.selectAuto = b;
+    }
+
+    public void setSelectTransformer(ITransformer<SQLSelect, SQLSelect> selTrans) {
+        this.comboRequest.setSelectTransf(selTrans);
+        loadCacheAsynchronous();
     }
 
     public void setWhere(Where w) {

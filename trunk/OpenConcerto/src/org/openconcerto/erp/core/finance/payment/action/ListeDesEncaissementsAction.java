@@ -21,6 +21,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.view.IListFrame;
+import org.openconcerto.sql.view.ListeAddPanel;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 
@@ -45,7 +46,10 @@ public class ListeDesEncaissementsAction extends CreateFrameAbstractAction {
         // FIXME Cacher les encaissements de reports (créer à partir d'une échéance pour la reporter
         // ????)
 
-        IListFrame frame = new IListFrame(new ListeViewPanel(elementEchClient, new IListe(elementEchClient.getTableSource(true))));
+        ListeViewPanel panel = new ListeViewPanel(elementEchClient, new IListe(elementEchClient.getTableSource(true)));
+        panel.setAddVisible(false);
+        panel.setDeleteVisible(false);
+        IListFrame frame = new IListFrame(panel);
 
         List<SQLField> fields = new ArrayList<SQLField>(2);
         fields.add(elementEchClient.getTable().getField("MONTANT"));

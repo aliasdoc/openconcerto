@@ -27,6 +27,7 @@ import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.cc.ITransformer;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
@@ -43,6 +44,33 @@ public class ProductHelper {
 
     public ProductHelper(DBRoot root) {
         this.root = root;
+    }
+
+    public interface PriceField {
+    };
+
+    public enum SupplierPriceField implements PriceField {
+        PRIX_ACHAT, COEF_TRANSPORT_PORT, COEF_TAXE_D, COEF_TRANSPORT_SIEGE, COEF_FRAIS_MOULE, COEF_FRAIS_INDIRECTS, COEF_PRIX_MINI
+    };
+
+    public BigDecimal getEnumPrice(final SQLRowAccessor r, PriceField field) {
+        final PriceField[] values = field.getClass().getEnumConstants();
+        BigDecimal result = r.getBigDecimal(values[0].toString());
+        if (result == null) {
+            return null;
+        }
+
+        for (int i = 1; i < values.length; i++) {
+
+            BigDecimal m0 = r.getBigDecimal(values[i].toString());
+            if (m0 != null && m0.floatValue() > 0) {
+                result = result.divide(m0, 2, RoundingMode.HALF_UP);
+            }
+            if (values[i] == field) {
+                break;
+            }
+        }
+        return result;
     }
 
     public BigDecimal getUnitCostForQuantity(SQLRowAccessor rArticle, int qty) {
@@ -78,7 +106,7 @@ public class ProductHelper {
      * Get the minimum quantity used to provide a cost for a product
      * 
      * @return -1 if no quantity are provided
-     * */
+     */
     public int getMinQuantityForCostCalculation(int productId) {
         final SQLTable costTable = root.getTable("ARTICLE_PRIX_REVIENT");
         final SQLSelect sel = new SQLSelect();
@@ -105,20 +133,24 @@ public class ProductHelper {
      * Get the cost for products and quantities
      * 
      * @return for each product ID the unit cost
-     * */
+     */
     public Map<Long, BigDecimal> getUnitCost(Map<Long, Integer> productQties, TypePrice type) {
         final Map<Long, BigDecimal> result = new HashMap<Long, BigDecimal>();
+
+        String fieldPrice = (type == TypePrice.ARTICLE_TARIF_FOURNISSEUR ? "PRIX_ACHAT_DEVISE_F" : "PRIX");
+        String fieldDate = (type == TypePrice.ARTICLE_TARIF_FOURNISSEUR ? "DATE_PRIX" : "DATE");
+
         // get all costs
         final SQLTable costTable = root.getTable(type.name());
         final SQLSelect sel = new SQLSelect();
         sel.addSelect(costTable.getKey());
         sel.addSelect(costTable.getField("ID_ARTICLE"));
         sel.addSelect(costTable.getField("QTE"));
-        sel.addSelect(costTable.getField("PRIX"));
-        sel.addSelect(costTable.getField("DATE"));
+        sel.addSelect(costTable.getField(fieldPrice));
+        sel.addSelect(costTable.getField(fieldDate));
         sel.setWhere(new Where(costTable.getField("ID_ARTICLE"), true, productQties.keySet()));
         sel.addFieldOrder(costTable.getField("QTE"));
-        sel.addFieldOrder(costTable.getField("DATE"));
+        sel.addFieldOrder(costTable.getField(fieldDate));
         final SQLDataSource src = root.getDBSystemRoot().getDataSource();
         @SuppressWarnings("unchecked")
         final List<SQLRow> l = (List<SQLRow>) src.execute(sel.asString(), SQLRowListRSH.createFromSelect(sel));
@@ -135,11 +167,11 @@ public class ProductHelper {
                     // stop when the max qty is found
                     if (row.getLong("QTE") > qty) {
                         if (cost == null) {
-                            cost = row.getBigDecimal("PRIX");
+                            cost = row.getBigDecimal(fieldPrice);
                         }
                         break;
                     }
-                    cost = row.getBigDecimal("PRIX");
+                    cost = row.getBigDecimal(fieldPrice);
 
                 }
             }
@@ -302,7 +334,7 @@ public class ProductHelper {
     }
 
     public enum TypePrice {
-        ARTICLE_PRIX_REVIENT, ARTICLE_PRIX_MIN_VENTE
+        ARTICLE_PRIX_REVIENT, ARTICLE_PRIX_MIN_VENTE, ARTICLE_PRIX_PUBLIC, ARTICLE_TARIF_FOURNISSEUR
     };
 
     public BigDecimal getBomPriceForQuantity(int qty, Collection<? extends SQLRowAccessor> rowValuesProductItems, TypePrice type) {
@@ -357,17 +389,21 @@ public class ProductHelper {
 
     private Map<Long, Date> getUnitCostDate(Map<Long, Integer> productQties, TypePrice type) {
         final Map<Long, Date> result = new HashMap<Long, Date>();
+
+        String fieldPrice = (type == TypePrice.ARTICLE_TARIF_FOURNISSEUR ? "PRIX_ACHAT_DEVISE_F" : "PRIX");
+        String fieldDate = (type == TypePrice.ARTICLE_TARIF_FOURNISSEUR ? "DATE_PRIX" : "DATE");
+
         // get all costs
         final SQLTable costTable = root.getTable(type.name());
         final SQLSelect sel = new SQLSelect();
         sel.addSelect(costTable.getKey());
         sel.addSelect(costTable.getField("ID_ARTICLE"));
         sel.addSelect(costTable.getField("QTE"));
-        sel.addSelect(costTable.getField("PRIX"));
-        sel.addSelect(costTable.getField("DATE"));
+        sel.addSelect(costTable.getField(fieldPrice));
+        sel.addSelect(costTable.getField(fieldDate));
         sel.setWhere(new Where(costTable.getField("ID_ARTICLE"), true, productQties.keySet()));
         sel.addFieldOrder(costTable.getField("QTE"));
-        sel.addFieldOrder(costTable.getField("DATE"));
+        sel.addFieldOrder(costTable.getField(fieldDate));
         final SQLDataSource src = root.getDBSystemRoot().getDataSource();
         @SuppressWarnings("unchecked")
         final List<SQLRow> l = (List<SQLRow>) src.execute(sel.asString(), SQLRowListRSH.createFromSelect(sel));

@@ -16,8 +16,9 @@
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.changer.Changer;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLink;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.model.DBSystemRoot;
-import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLSystem;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.graph.Link;
@@ -64,10 +65,7 @@ public class SetFFRules extends Changer<SQLTable> {
 
         getStream().println(t);
         final AlterTable alterTable = new AlterTable(t);
-        final String parentFF = elem.getParentForeignFieldName();
-        if (parentFF != null) {
-            setDeleteRule(t, parentFF, alterTable, Rule.CASCADE);
-        }
+        setDeleteRule(t, elem.getParentLink(), alterTable, Rule.CASCADE);
         // MySQL doesn't support SET_DEFAULT
         final Rule normalRule;
         if (t.getServer().getSQLSystem() != SQLSystem.MYSQL) {
@@ -75,16 +73,10 @@ public class SetFFRules extends Changer<SQLTable> {
         } else {
             normalRule = this.cascadeNormalFF ? Rule.CASCADE : Rule.NO_ACTION;
         }
-        for (final String ff : elem.getNormalForeignFields()) {
-            setDeleteRule(t, ff, alterTable, normalRule);
-        }
         // NO_ACTION is more permissive and MySQL though it accepts RESTRICT, always return
         // NO_ACTION
-        for (final String privateFF : elem.getPrivateForeignFields()) {
-            setDeleteRule(t, privateFF, alterTable, Rule.NO_ACTION);
-        }
-        for (final String ff : elem.getSharedForeignFields()) {
-            setDeleteRule(t, ff, alterTable, Rule.NO_ACTION);
+        for (final SQLElementLink link : elem.getOwnedLinks().getByPath().values()) {
+            setDeleteRule(t, link, alterTable, link.getLinkType() == LinkType.ASSOCIATION && !link.getOwned().isShared() ? normalRule : Rule.NO_ACTION);
         }
         if (!alterTable.isEmpty()) {
             // MySQL cannot drop and add in the same statement
@@ -107,17 +99,20 @@ public class SetFFRules extends Changer<SQLTable> {
         }
     }
 
-    private void setDeleteRule(final SQLTable t, final String ffName, final AlterTable alterTable, final Rule rule) throws SQLException {
+    private void setDeleteRule(final SQLTable t, final SQLElementLink link, final AlterTable alterTable, final Rule rule) throws SQLException {
+        if (link != null && !link.isJoin())
+            setDeleteRule(t, link.getSingleLink(), alterTable, rule);
+    }
+
+    private void setDeleteRule(final SQLTable t, final Link l, final AlterTable alterTable, final Rule rule) throws SQLException {
         if (rule != Rule.CASCADE && rule != Rule.NO_ACTION && rule != Rule.SET_DEFAULT)
             throw new IllegalArgumentException("SET_NULL is usually impossible, RESTRICT means NO_ACTION for MySQL : " + rule);
-        final SQLField ff = t.getField(ffName);
-        final Link l = t.getDBSystemRoot().getGraph().getForeignLink(ff);
         if (l.getDeleteRule() != rule) {
             alterTable.dropForeignConstraint(l.getName());
             // ATTN this is not robust, see Index#getCols()
             final boolean hasIndex = t.getIndexes(l.getCols()).size() > 0;
             alterTable.addForeignConstraint(new FCSpec(l.getCols(), l.getContextualName(), l.getRefCols(), l.getUpdateRule(), rule), !hasIndex);
-            getStream().println("Will change " + ff + " to " + rule);
+            getStream().println("Will change " + l + " to " + rule);
         }
     }
 }

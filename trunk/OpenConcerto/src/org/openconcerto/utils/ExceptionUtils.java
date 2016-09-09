@@ -49,6 +49,18 @@ public class ExceptionUtils {
         return instance;
     }
 
+    /*
+     * return an exception so that the caller can "throw ExceptionUtils.throwExn(exn,
+     * SQLException.class, RuntimeException.class);" otherwise the compiler will complain that the
+     * method doesn't return. Obviously the return will never be used.
+     */
+    static public <T extends Throwable, X extends T, Y extends T> X throwExn(T toThrow, Class<X> classX, Class<Y> classY) throws X, Y {
+        if (classX.isInstance(toThrow))
+            throw classX.cast(toThrow);
+        else
+            throw classY.cast(toThrow);
+    }
+
     /**
      * Crée une RuntimeException.
      * 

@@ -13,118 +13,80 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+
+import java.awt.Color;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.openconcerto.utils.io.JSONConverter;
-import org.openconcerto.utils.io.Transferable;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
-public class LightUIPanel extends LightUIElement implements Transferable {
-
-    public static final int STYLE_DIV = 0;
-    public static final int STYLE_TABLE = 1;
-
+public class LightUIPanel extends LightUIContainer implements Transferable, IUserControlContainer {
     private static final long serialVersionUID = -3399395824294128572L;
 
     private String title;
-    private int panelStyle = STYLE_DIV;
-    private List<LightUILine> lines = new ArrayList<LightUILine>();
+    private boolean verticallyScrollable = false;
+
+    private Color titleColor;
+    private Color titleBackgroundColor;
+
     private final List<LightControler> controlers = new ArrayList<LightControler>();
 
-    public LightUIPanel() {
-        // Serialization
-    }
-
     public LightUIPanel(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
     // Clone constructor
     public LightUIPanel(final LightUIPanel panelElement) {
         super(panelElement);
-        this.title = panelElement.title;
-        this.panelStyle = panelElement.panelStyle;
-        this.lines = panelElement.lines;
-        this.controlers.addAll(panelElement.controlers);
     }
 
-    public LightUIPanel(String id) {
-        this.setId(id);
+    public LightUIPanel(final String id) {
+        super(id);
         this.setType(TYPE_PANEL);
+        this.setWeightX(1);
+        this.setFillWidth(true);
     }
 
-    public void addLine(LightUILine line) {
-        this.lines.add(line);
-    }
-
-    public void insertLine(final LightUILine line, final int index) {
-        final int linesSize = this.lines.size();
-        if (index < 0 || index > linesSize - 1) {
-            throw new IllegalArgumentException("index is out of bounds, it must be in [0 - " + String.valueOf(linesSize) + "] but this was found (" + String.valueOf(index) + ")");
-        }
-        LightUILine swap = this.lines.get(index);
-        this.lines.set(index, line);
-        for (int i = index + 1; i < linesSize; i++) {
-            final LightUILine tmpLine = this.lines.get(i);
-            this.lines.set(i, swap);
-            swap = tmpLine;
-        }
-        this.lines.add(swap);
-    }
-
-    public LightUILine getLastLine() {
-        if (this.lines.size() == 0) {
+    public final LightUILine getLastLine() {
+        final int childCount = this.getChildrenCount();
+        if (childCount == 0) {
             final LightUILine l = new LightUILine();
-            this.lines.add(l);
+            this.addChild(l);
+
             return l;
         }
-        return this.lines.get(this.lines.size() - 1);
-    }
-
-    public void dump(PrintStream out) {
-        final int size = this.lines.size();
-        out.println("------LightUIPanel-----");
-        out.println("ID : " + this.getId());
-        out.println("Title : " + this.title);
-        out.println(getId() + " : " + this.title);
-        out.println("Line count : " + size + " lines ");
-        for (int i = 0; i < size; i++) {
-            LightUILine line = this.lines.get(i);
-            out.println("LightUIPanel line " + i);
-            line.dump(out);
-            out.println();
-        }
-        out.println("------------------------");
-    }
-
-    public int getPanelType() {
-        return this.panelStyle;
-    }
-
-    public void setPanelType(final int panelStyle) {
-        this.panelStyle = panelStyle;
-    }
-
-    public LightUILine getLine(int i) {
-        return this.lines.get(i);
-    }
-
-    public int getSize() {
-        return this.lines.size();
+        return this.getChild(childCount - 1, LightUILine.class);
     }
 
     public String getTitle() {
         return this.title;
     }
 
-    public void setTitle(String title) {
+    public void setTitle(final String title) {
         this.title = title;
     }
 
-    public void addControler(LightControler controler) {
+    public boolean isVerticallyScrollable() {
+        return this.verticallyScrollable;
+    }
+
+    public void setVerticallyScrollable(final boolean verticallyScrollable) {
+        this.verticallyScrollable = verticallyScrollable;
+    }
+
+    public void setTitleColor(final Color c) {
+        this.titleColor = c;
+    }
+
+    public void setTitleBackgoundColor(final Color c) {
+        this.titleBackgroundColor = c;
+    }
+
+    public void addControler(final LightControler controler) {
         this.controlers.add(controler);
     }
 
@@ -132,64 +94,124 @@ public class LightUIPanel extends LightUIElement implements Transferable {
         return this.controlers;
     }
 
-    public void dumpControllers(PrintStream out) {
+    public void dumpControllers(final PrintStream out) {
         dumpControllers(out, 0);
     }
 
-    public void dumpControllers(PrintStream out, int depth) {
+    public void dumpControllers(final PrintStream out, final int depth) {
         addSpacer(out, depth);
         out.println("Contollers for id:" + this.getId() + " title: " + this.title);
         for (LightControler controler : this.controlers) {
             addSpacer(out, depth);
             out.println(controler);
         }
-        final int size = this.lines.size();
+
+        final int lineCount = this.getChildrenCount();
         addSpacer(out, depth);
         out.println(getId() + " : " + this.title);
         addSpacer(out, depth);
-        out.println("LightUIPanel " + size + " lines ");
-        for (int i = 0; i < size; i++) {
-            final LightUILine line = this.lines.get(i);
-            for (int j = 0; j < line.getSize(); j++) {
-                final LightUIElement e = line.getElement(j);
+        out.println("LightUIPanel " + lineCount + " lines ");
+        for (int i = 0; i < lineCount; i++) {
+            final LightUILine line = this.getChild(i, LightUILine.class);
+            for (int j = 0; j < line.getChildrenCount(); j++) {
+                final LightUIElement e = line.getChild(j);
                 if (e instanceof LightUIPanel) {
                     ((LightUIPanel) e).dumpControllers(out, depth + 1);
-
                 }
             }
         }
     }
 
-    private void addSpacer(PrintStream out, int depth) {
-        for (int i = 0; i < depth; i++) {
-            out.print("  ");
+    @Override
+    public void copy(final LightUIElement element) {
+        super.copy(element);
+        if (!(element instanceof LightUIPanel)) {
+            throw new InvalidClassException(LightUIPanel.class.getName(), element.getClassName(), element.getId());
         }
-
+        final LightUIPanel panelElement = (LightUIPanel) element;
+        this.title = panelElement.title;
+        this.verticallyScrollable = panelElement.verticallyScrollable;
+        this.titleColor = panelElement.titleColor;
+        this.titleBackgroundColor = panelElement.titleBackgroundColor;
+        this.controlers.addAll(panelElement.controlers);
     }
 
-    public boolean replaceElement(final LightUIElement pelement) {
-        if (this.lines != null) {
-            final int lineSize = this.lines.size();
-            for (int i = 0; i < lineSize; i++) {
-                if (this.lines.get(i).replaceElement(pelement)) {
-                    return true;
+    @Override
+    public void clear() {
+        super.clear();
+        this.controlers.clear();
+    }
+
+    @Override
+    public void addChild(final LightUIElement line) {
+        if (!(line instanceof LightUILine)) {
+            throw new IllegalArgumentException("Only LightUILine are accepted in LightUIPanel");
+        }
+        // Ensure uniqueness of line id
+        line.setId(LightUILine.createId(this));
+        super.addChild(line);
+    }
+
+    @Override
+    public void setReadOnly(final boolean readOnly) {
+        super.setReadOnly(readOnly);
+        final int lineCount = this.getChildrenCount();
+        for (int i = 0; i < lineCount; i++) {
+            final LightUILine line = this.getChild(i, LightUILine.class);
+            line.setReadOnly(readOnly);
+        }
+    }
+
+    @Override
+    public String getClassName() {
+        return this.getClass().getName();
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIPanel(json);
+            }
+        };
+    }
+
+    @Override
+    public void dump(final PrintStream out, final int depth) {
+        this.addSpacer(out, depth);
+        out.println("------LightUIPanel-----");
+        this.addSpacer(out, depth);
+        out.println("Title : " + this.title);
+        this.addSpacer(out, depth);
+        out.println("v-scroll : " + this.verticallyScrollable + " title-color: " + this.titleColor.toString() + " bg-title-color: " + this.titleBackgroundColor.toString());
+        super.dump(out, depth);
+        this.addSpacer(out, depth);
+        out.println("------------------------");
+    }
+
+    @Override
+    public void setValueFromContext(final Object value) {
+        final JSONObject jsonContext = (JSONObject) JSONConverter.getObjectFromJSON(value, JSONObject.class);
+        final int childCount = this.getChildrenCount();
+        for (int i = 0; i < childCount; i++) {
+            final LightUILine line = this.getChild(i, LightUILine.class);
+            final int lineChildCount = line.getChildrenCount();
+            for (int j = 0; j < lineChildCount; j++) {
+                final LightUIElement lineChild = line.getChild(j);
+                if (lineChild instanceof IUserControlContainer) {
+                    if (!jsonContext.containsKey(lineChild.getUUID())) {
+                        throw new IllegalArgumentException("Impossible to find key " + lineChild.getUUID() + " in context, LightUIElement id: " + lineChild.getId());
+                    }
+                    ((IUserControlContainer) lineChild).setValueFromContext(jsonContext.get(lineChild.getUUID()));
+                } else if (lineChild instanceof IUserControl) {
+                    if (!jsonContext.containsKey(lineChild.getUUID())) {
+                        throw new IllegalArgumentException("Impossible to find key " + lineChild.getUUID() + " in context, LightUIElement id: " + lineChild.getId());
+                    }
+                    ((IUserControl) lineChild).setValueFromContext(jsonContext.get(lineChild.getUUID()));
                 }
             }
         }
-        return false;
-    }
-
-    public LightUIElement getElementById(final String id) {
-        if (this.lines != null) {
-            final int lineSize = this.lines.size();
-            for (int i = 0; i < lineSize; i++) {
-                final LightUIElement element = this.lines.get(i).getElementById(id);
-                if (element != null) {
-                    return element;
-                }
-            }
-        }
-        return null;
     }
 
     @Override
@@ -203,15 +225,19 @@ public class LightUIPanel extends LightUIElement implements Transferable {
         if (this.title != null) {
             result.put("title", this.title);
         }
-        if(!this.lines.isEmpty()) {
-            result.put("lines", JSONConverter.getJSON(this.lines));
+        if (this.titleColor != null) {
+            result.put("title-color", JSONConverter.getJSON(this.titleColor));
+        }
+        if (this.titleBackgroundColor != null) {
+            result.put("title-bgcolor", JSONConverter.getJSON(this.titleBackgroundColor));
+        }
+        if (this.verticallyScrollable) {
+            result.put("vertically-scrollable", true);
         }
         if (!this.controlers.isEmpty()) {
             result.put("controlers", JSONConverter.getJSON(this.controlers));
         }
-        if(this.panelStyle != STYLE_DIV) {
-            result.put("panel-style", this.panelStyle);
-        }
+
         return result;
     }
 
@@ -219,26 +245,25 @@ public class LightUIPanel extends LightUIElement implements Transferable {
     public void fromJSON(final JSONObject json) {
         super.fromJSON(json);
         this.title = (String) JSONConverter.getParameterFromJSON(json, "title", String.class, null);
-        this.panelStyle = (Integer) JSONConverter.getParameterFromJSON(json, "panel-style", Integer.class, STYLE_DIV);
-
-        final JSONArray jsonLines = (JSONArray) JSONConverter.getParameterFromJSON(json, "lines", JSONArray.class, null);
-        this.lines.clear();
-        if (jsonLines != null) {
-            final int linesSize = jsonLines.size();
-            for (int i = 0; i < linesSize; i++) {
-                final JSONObject jsonLine = (JSONObject) JSONConverter.getObjectFromJSON(jsonLines.get(i), JSONObject.class);
-                this.lines.add(new LightUILine(jsonLine));
-            }
-        }
+        this.verticallyScrollable = (Boolean) JSONConverter.getParameterFromJSON(json, "vertically-scrollable", Boolean.class, false);
+        this.titleColor = (Color) JSONConverter.getParameterFromJSON(json, "title-color", Color.class, null);
+        this.titleBackgroundColor = (Color) JSONConverter.getParameterFromJSON(json, "title-bgcolor", Color.class, null);
 
         final JSONArray jsonControlers = (JSONArray) JSONConverter.getParameterFromJSON(json, "controlers", JSONArray.class);
-        this.controlers.clear();
         if (jsonControlers != null) {
             final int controlersSize = jsonControlers.size();
             for (int i = 0; i < controlersSize; i++) {
                 final JSONObject jsonControler = (JSONObject) JSONConverter.getObjectFromJSON(jsonControlers.get(i), JSONObject.class);
                 this.controlers.add(new LightControler((JSONObject) jsonControler));
             }
+        }
+    }
+
+    @Override
+    public void setFoldable(boolean foldable) {
+        super.setFoldable(foldable);
+        if (foldable && this.title == null) {
+            this.title = "missing title on panel " + this.getId();
         }
     }
 }

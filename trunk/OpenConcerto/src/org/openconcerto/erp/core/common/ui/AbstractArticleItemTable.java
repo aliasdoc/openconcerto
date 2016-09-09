@@ -302,7 +302,8 @@ public abstract class AbstractArticleItemTable extends JPanel {
 
     public void setTarif(SQLRowAccessor idTarif, boolean ask) {
         this.tarif = idTarif;
-        if (!this.tarif.isForeignEmpty("ID_DEVISE") && this.defaultRowVals != null) {
+        // Test si ID_DEVISE est dans la table pour KD
+        if (this.tarif != null && this.tarif.getTable().contains("ID_DEVISE") && !this.tarif.isForeignEmpty("ID_DEVISE") && this.defaultRowVals != null) {
             this.defaultRowVals.put("ID_DEVISE", this.tarif.getForeignID("ID_DEVISE"));
         }
     }
@@ -343,13 +344,15 @@ public abstract class AbstractArticleItemTable extends JPanel {
                         if (rowVals.getObject("NIVEAU") != null) {
                             niveauCourant = rowVals.getInt("NIVEAU");
                         }
-                        if (niveauCourant < niveau || niveauCourant == 1) {
-                            break;
-                        } else if (niveauCourant == niveau) {
-                            update = true;
-                            // Cumul des valeurs
-                            prixUnitHT = prixUnitHT.add(rowVals.getBigDecimal("PV_HT").multiply(new BigDecimal(rowVals.getInt("QTE"))).multiply(rowVals.getBigDecimal("QTE_UNITAIRE")));
-                            prixUnitHA = prixUnitHA.add(rowVals.getBigDecimal("PA_HT").multiply(new BigDecimal(rowVals.getInt("QTE"))).multiply(rowVals.getBigDecimal("QTE_UNITAIRE")));
+                        if (niveauCourant > 0) {
+                            if (niveauCourant < niveau || niveauCourant == 1) {
+                                break;
+                            } else if (niveauCourant == niveau) {
+                                update = true;
+                                // Cumul des valeurs
+                                prixUnitHT = prixUnitHT.add(rowVals.getBigDecimal("PV_HT").multiply(new BigDecimal(rowVals.getInt("QTE"))).multiply(rowVals.getBigDecimal("QTE_UNITAIRE")));
+                                prixUnitHA = prixUnitHA.add(rowVals.getBigDecimal("PA_HT").multiply(new BigDecimal(rowVals.getInt("QTE"))).multiply(rowVals.getBigDecimal("QTE_UNITAIRE")));
+                            }
                         }
                     }
                     if (update) {

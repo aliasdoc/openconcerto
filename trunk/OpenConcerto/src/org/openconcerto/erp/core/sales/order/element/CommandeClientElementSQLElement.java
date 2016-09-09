@@ -18,7 +18,7 @@ import org.openconcerto.erp.core.common.ui.DeviseField;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.UISQLComponent;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +29,11 @@ public class CommandeClientElementSQLElement extends ComptaSQLConfElement {
 
     public CommandeClientElementSQLElement() {
         super("COMMANDE_CLIENT_ELEMENT", "un element de commande", "éléments de commande");
+    }
+
+    @Override
+    protected String getParentFFName() {
+        return "ID_COMMANDE_CLIENT";
     }
 
     protected List<String> getListFields() {
@@ -54,12 +59,12 @@ public class CommandeClientElementSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
+    public ListMap<String, String> getShowAs() {
+        final ListMap<String, String> res = new ListMap<String, String>();
         if (getTable().contains("ID_ARTICLE")) {
-            res.put("ID_ARTICLE", "ID_FAMILLE_ARTICLE");
+            res.putCollection("ID_ARTICLE", "ID_FAMILLE_ARTICLE");
         }
-        res.put(null, "NOM");
+        res.putCollection(null, "NOM");
         return res;
     }
 

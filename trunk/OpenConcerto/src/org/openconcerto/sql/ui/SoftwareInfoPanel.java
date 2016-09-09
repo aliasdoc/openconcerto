@@ -94,23 +94,29 @@ public class SoftwareInfoPanel extends JPanel {
         return res;
     }
 
-    public SoftwareInfoPanel() {
-        final Map<Info, String> infos = get(true);
-        final FormLayouter l = new FormLayouter(this, 1);
+    private final FormLayouter l;
 
-        l.add(TM.tr("infoPanel.rights"), new JLabel(infos.get(Info.RIGHTS)));
+    public SoftwareInfoPanel() {
+        this.l = new FormLayouter(this, 1);
+        this.refresh();
+    }
+
+    public final void refresh() {
+        this.l.clear();
+        final Map<Info, String> infos = get(true);
+        this.l.add(TM.tr("infoPanel.rights"), new JLabel(infos.get(Info.RIGHTS)));
         final String user = infos.get(Info.USER);
         if (user != null) {
-            l.add(org.openconcerto.utils.i18n.TM.tr("user"), new JLabel(user));
+            this.l.add(org.openconcerto.utils.i18n.TM.tr("user"), new JLabel(user));
         }
 
-        l.add(TM.tr("infoPanel.appName"), new JLabel(infos.get(Info.APP_NAME)));
-        l.add(TM.tr("infoPanel.version"), new JLabel(infos.get(Info.APP_VERSION)));
+        this.l.add(TM.tr("infoPanel.appName"), new JLabel(infos.get(Info.APP_NAME)));
+        this.l.add(TM.tr("infoPanel.version"), new JLabel(infos.get(Info.APP_VERSION)));
         final String secureLink = infos.get(Info.SECURE_LINK);
         if (secureLink != null) {
-            l.add(TM.tr("infoPanel.secureLink"), new JLabel(secureLink));
+            this.l.add(TM.tr("infoPanel.secureLink"), new JLabel(secureLink));
         }
-        l.add(TM.tr("infoPanel.dbURL"), new JLabel(infos.get(Info.DB_URL)));
-        l.add(TM.tr("infoPanel.dirs"), new HTMLTextField(infos.get(Info.DIRS)));
+        this.l.add(TM.tr("infoPanel.dbURL"), new JLabel(infos.get(Info.DB_URL)));
+        this.l.add(TM.tr("infoPanel.dirs"), new HTMLTextField(infos.get(Info.DIRS)));
     }
 }

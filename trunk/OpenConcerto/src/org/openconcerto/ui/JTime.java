@@ -21,6 +21,7 @@ import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.text.ParseException;
@@ -99,6 +100,9 @@ public final class JTime extends JPanel implements ValueWrapper<Date>, TextCompo
         formatter.setMaximum(dateFromTimeInMillis(DAY_LENGTH - 1));
 
         this.text = new JFormattedTextField(formatter);
+        final int h = this.text.getPreferredSize().height;
+        this.text.setMinimumSize(new Dimension(40, h));
+        this.text.setPreferredSize(new Dimension(50, h));
         this.add(this.text, BorderLayout.CENTER);
 
         this.text.addPropertyChangeListener("editValid", new PropertyChangeListener() {

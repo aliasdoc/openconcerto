@@ -13,7 +13,7 @@
  
  package org.openconcerto.erp.core.sales.pos.ui;
 
-import org.openconcerto.erp.core.sales.pos.Caisse;
+import org.openconcerto.erp.core.sales.pos.POSConfiguration;
 import org.openconcerto.erp.core.sales.pos.model.Ticket;
 import org.openconcerto.sql.PropsConfiguration;
 import org.openconcerto.sql.RemoteShell;
@@ -26,6 +26,7 @@ import java.awt.Dimension;
 import java.awt.Toolkit;
 import java.io.File;
 import java.net.MalformedURLException;
+import java.util.List;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -47,7 +48,7 @@ public class CaisseFrame extends JFrame {
         try {
             System.out.println("Lancement du module de caisse");
             ToolTipManager.sharedInstance().setInitialDelay(0);
-            RemoteShell.startDefaultInstance();
+            RemoteShell.startDefaultInstance(null, null);
 
             System.setProperty(PropsConfiguration.REDIRECT_TO_FILE, "true");
             System.setProperty(SQLBase.ALLOW_OBJECT_REMOVAL, "true");
@@ -59,12 +60,14 @@ public class CaisseFrame extends JFrame {
             System.setProperty("sun.java2d.pmoffscreen", "false");
             System.setProperty(SQLBase.STRUCTURE_USE_XML, "true");
             System.setProperty(PropsConfiguration.REDIRECT_TO_FILE, "true");
-            if (Caisse.isUsingJPos()) {
+            if (POSConfiguration.getInstance().isUsingJPos()) {
                 ClassPathLoader c = ClassPathLoader.getInstance();
                 try {
-                    final String posDirectory = Caisse.getJPosDirectory();
-                    if (posDirectory != null && !posDirectory.trim().isEmpty()) {
-                        c.addJarFromDirectory(new File(posDirectory.trim()));
+                    final List<String> posDirectories = POSConfiguration.getInstance().getJPosDirectories();
+                    for (String posDirectory : posDirectories) {
+                        if (posDirectory != null && !posDirectory.trim().isEmpty()) {
+                            c.addJarFromDirectory(new File(posDirectory.trim()));
+                        }
                     }
                 } catch (MalformedURLException e) {
                     e.printStackTrace();
@@ -85,7 +88,7 @@ public class CaisseFrame extends JFrame {
                         System.setProperty("swing.aatext", "true");
                         System.setProperty(ElementComboBox.CAN_MODIFY, "true");
 
-                        Caisse.createConnexion();
+                        POSConfiguration.getInstance().createConnexion();
                         CaisseFrame f = new CaisseFrame();
                         f.setUndecorated(true);
                         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -93,8 +96,8 @@ public class CaisseFrame extends JFrame {
                         f.pack();
                         f.setLocation(0, 0);
                         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-                        if (Caisse.getScreenWidth() > 0 && Caisse.getScreenHeight() > 0) {
-                            f.setSize(new Dimension(Caisse.getScreenWidth(), Caisse.getScreenHeight()));
+                        if (POSConfiguration.getInstance().getScreenWidth() > 0 && POSConfiguration.getInstance().getScreenHeight() > 0) {
+                            f.setSize(new Dimension(POSConfiguration.getInstance().getScreenWidth(), POSConfiguration.getInstance().getScreenHeight()));
                         } else {
                             f.setSize(screenSize);
                         }
@@ -104,7 +107,6 @@ public class CaisseFrame extends JFrame {
                             JOptionPane.showMessageDialog(f,
                                     "La résolution de votre écran est trop faible.\nLa largeur doit être au minium de 1280 pixels.\nLa hauteur doit être au minium de 720 pixels.");
                         }
-
                     } catch (Throwable e) {
                         // Catch throwable to be able to see NoClassDefFound and other hard issues
                         ExceptionHandler.handle("Erreur d'initialisation de la caisse (main)", e);
@@ -124,6 +126,7 @@ public class CaisseFrame extends JFrame {
         this.setContentPane(new CaisseMenuPanel(this));
         this.validate();
         this.repaint();
+        t.getControler().setLCD("OpenConcerto", "Menu", 0);
 
     }
 
@@ -133,7 +136,8 @@ public class CaisseFrame extends JFrame {
         this.setContentPane(this.t);
         this.validate();
         this.repaint();
-
+        t.getControler().setLCD("OpenConcerto", "Caisse", 0);
+        t.getControler().setLCDDefaultDisplay(5);
     }
 
     public void showTickets(Ticket t) {
@@ -147,4 +151,7 @@ public class CaisseFrame extends JFrame {
 
     }
 
+    public CaisseControler getControler() {
+        return t.getControler();
+    }
 }

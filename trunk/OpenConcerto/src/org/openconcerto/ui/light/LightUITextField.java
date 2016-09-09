@@ -13,10 +13,52 @@
  
  package org.openconcerto.ui.light;
 
-public class LightUITextField extends LightUIElement {
-    public LightUITextField(String id) {
-        this.setId(id);
+import org.openconcerto.utils.io.JSONConverter;
+
+import net.minidev.json.JSONObject;
+
+public class LightUITextField extends LightUIElement implements IUserControl {
+    public LightUITextField(final String id) {
+        super(id);
         this.setType(TYPE_TEXT_FIELD);
         this.setValueType(LightUIElement.VALUE_TYPE_STRING);
+    }
+
+    public LightUITextField(final JSONObject json) {
+        super(json);
+    }
+
+    public LightUITextField(final LightUITextField text) {
+        super(text);
+    }
+
+    @Override
+    public LightUIElement clone() {
+        return new LightUITextField(this);
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUITextField(json);
+            }
+        };
+    }
+
+    @Override
+    public Object getValueFromContext() {
+        return this.getValue();
+    }
+
+    @Override
+    public void setValueFromContext(final Object value) {
+        final String strValue = (String) JSONConverter.getObjectFromJSON(value, String.class);
+        if (strValue != null && !strValue.trim().isEmpty()) {
+            this.setValue(strValue);
+        } else {
+            this.setValue(null);
+        }
     }
 }

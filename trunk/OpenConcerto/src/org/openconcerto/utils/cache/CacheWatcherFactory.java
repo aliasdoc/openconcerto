@@ -13,16 +13,15 @@
  
  package org.openconcerto.utils.cache;
 
-public interface CacheWatcherFactory<K, D> {
+public interface CacheWatcherFactory<D> {
 
     /**
      * Creates the appropriate watcher for listening to <code>data</code>.
      * 
-     * @param cache the cache.
      * @param data the data to watch.
      * @return the corresponding watcher.
      * @throws Exception if the watcher could not be created.
      */
-    CacheWatcher<K, D> createWatcher(ICache<K, ?, D> cache, D data) throws Exception;
+    CacheWatcher<D> createWatcher(D data) throws Exception;
 
 }

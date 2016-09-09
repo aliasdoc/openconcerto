@@ -23,6 +23,7 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -45,6 +46,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.tree.TreePath;
 
@@ -77,10 +79,9 @@ public class RubriqueNetSQLElement extends ConfSQLElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_PERIODE_VALIDITE");
-        return l;
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "CODE", "NOM");
     }
 
     /*
@@ -314,6 +315,16 @@ public class RubriqueNetSQLElement extends ConfSQLElement {
                 cPanel.gridy++;
                 JCheckBox checkBrut = new JCheckBox(getLabelFor("BRUT"));
                 panelProp.add(checkBrut, cPanel);
+
+                // Compte
+                cPanel.gridy++;
+                cPanel.gridwidth = 1;
+                JLabel labelCpt = new JLabel(getLabelFor("NUMERO_COMPTE_PCE_CHARGES"));
+                panelProp.add(labelCpt, cPanel);
+                cPanel.gridx++;
+                JTextField textCpt = new JTextField(getLabelFor("NUMERO_COMPTE_PCE_CHARGES"));
+                panelProp.add(textCpt, cPanel);
+                addView(textCpt, "NUMERO_COMPTE_PCE_CHARGES");
 
                 // Tabbed Pane
                 JTabbedPane tab = new JTabbedPane();

@@ -1036,7 +1036,7 @@ public abstract class ChangeTable<T extends ChangeTable<T>> {
             // resolve relative path, a table is identified by root.table
             final SQLName relRefTable = fk.getRefTable();
             final SQLName refTable = transf.transformLinkDestTableName(getRootName(), getName(), relRefTable);
-            res.add(getConstraintPrefix() + this.getSyntax().getFK(this.name + "_", fk.getCols(), refTable, fk.getRefCols(), fk.getUpdateRule(), fk.getDeleteRule()));
+            res.add(getConstraintPrefix() + this.getSyntax().getFK(this.name, fk.getCols(), refTable, fk.getRefCols(), fk.getUpdateRule(), fk.getDeleteRule()));
         }
         return res;
     }

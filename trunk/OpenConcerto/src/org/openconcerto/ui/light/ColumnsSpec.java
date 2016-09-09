@@ -13,6 +13,9 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -20,11 +23,9 @@ import java.io.ObjectOutput;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jdom.Document;
-import org.jdom.Element;
+import org.jdom2.Document;
+import org.jdom2.Element;
 
-import org.openconcerto.utils.io.JSONConverter;
-import org.openconcerto.utils.io.Transferable;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
@@ -36,9 +37,10 @@ public class ColumnsSpec implements Externalizable, Transferable {
     private List<String> possibleColumnIds = new ArrayList<String>();
     // Ids of the sorted columns
     private List<String> sortedIds = new ArrayList<String>();
-    // number of fixed columns, used for vertical "split"
+    // number of fixed columns, used for ve rtical "split"
     private int fixedColumns;
-    
+
+    private Boolean adaptWidth = false;
     private Boolean allowMove = false;
     private Boolean allowResize = false;
 
@@ -56,7 +58,7 @@ public class ColumnsSpec implements Externalizable, Transferable {
             throw new IllegalArgumentException("null id");
         }
         this.id = id;
-        
+
         // Columns checks
         if (columns == null) {
             throw new IllegalArgumentException("null columns");
@@ -74,15 +76,10 @@ public class ColumnsSpec implements Externalizable, Transferable {
             throw new IllegalArgumentException("empty possible column ids");
         }
         this.possibleColumnIds = possibleColumnIds;
-        
+
         // Sort assign
         this.sortedIds = sortedIds;
-        
-        // Allow move assign
-        this.allowMove = allowMove;
-        
-        // Allow resize assign
-        this.allowMove = allowResize;
+
     }
 
     public String getId() {
@@ -114,17 +111,27 @@ public class ColumnsSpec implements Externalizable, Transferable {
     public ColumnSpec setColumn(int i, final ColumnSpec column) {
         return this.columns.set(i, column);
     }
-    
+
+    public Boolean isAdaptWidth() {
+        return this.adaptWidth;
+    }
+
+    public void setAdaptWidth(final boolean adaptWidth) {
+        this.adaptWidth = adaptWidth;
+    }
+
     public Boolean isAllowMove() {
         return this.allowMove;
     }
+
     public void setAllowMove(final boolean allowMove) {
         this.allowMove = allowMove;
     }
-    
+
     public Boolean isAllowResize() {
         return this.allowResize;
     }
+
     public void setAllowResize(final boolean allowResize) {
         this.allowResize = allowResize;
     }
@@ -147,47 +154,59 @@ public class ColumnsSpec implements Externalizable, Transferable {
             }
             final List<Element> xmlColumns = rootElement.getChildren();
             final int columnsCount = this.columns.size();
-            if (xmlColumns.size() != columnsCount) {
-                throw new IllegalArgumentException("incorrect columns count in xml");
-            }
+            if (xmlColumns.size() == columnsCount) {
+                for (int i = 0; i < columnsCount; i++) {
+                    final ColumnSpec columnSpec = this.columns.get(i);
+                    final String columnId = columnSpec.getId();
+                    boolean find = false;
 
-            for (int i = 0; i < columnsCount; i++) {
-                final ColumnSpec columnSpec = this.columns.get(i);
-                final String columnId = columnSpec.getId();
-                boolean find = false;
+                    for (int j = 0; j < columnsCount; j++) {
+                        final Element xmlColumn = xmlColumns.get(j);
+                        final String xmlColumnId = xmlColumn.getAttribute("id").getValue();
 
-                for (int j = 0; j < columnsCount; j++) {
-                    final Element xmlColumn = xmlColumns.get(j);
-                    final String xmlColumnId = xmlColumn.getAttribute("id").getValue();
+                        if (xmlColumnId.equals(columnId)) {
 
-                    if (xmlColumnId.equals(columnId)) {
+                            if (!xmlColumn.getName().equals("column")) {
+                                throw new IllegalArgumentException("ColumnSpec setPrefs - Invalid xml, element node column expected but " + xmlColumn.getName() + " found");
+                            }
+                            if (xmlColumn.getAttribute("width") == null || xmlColumn.getAttribute("min-width") == null || xmlColumn.getAttribute("max-width") == null) {
+                                throw new IllegalArgumentException("ColumnSpec setPrefs - Invalid column node for " + columnId + ", it must have attribute width, min-width, max-width");
+                            }
 
-                        if (!xmlColumn.getName().equals("column")) {
-                            throw new IllegalArgumentException("ColumnSpec setPrefs - Invalid xml, element node column expected but " + xmlColumn.getName() + " found");
+                            final int width = Integer.parseInt(xmlColumn.getAttribute("width").getValue());
+                            final int maxWidth = Integer.parseInt(xmlColumn.getAttribute("max-width").getValue());
+                            final int minWidth = Integer.parseInt(xmlColumn.getAttribute("min-width").getValue());
+
+                            columnSpec.setPrefs(width, maxWidth, minWidth);
+                            if (i != j) {
+                                final ColumnSpec swap = this.columns.get(i);
+                                this.columns.set(i, this.columns.get(j));
+                                this.columns.set(j, swap);
+                            }
+                            find = true;
+                            break;
                         }
-                        if (xmlColumn.getAttribute("width") == null || xmlColumn.getAttribute("min-width") == null || xmlColumn.getAttribute("max-width") == null) {
-                            throw new IllegalArgumentException("ColumnSpec setPrefs - Invalid column node for " + columnId + ", it must have attribute width, min-width, max-width");
-                        }
-
-                        final int width = Integer.parseInt(xmlColumn.getAttribute("width").getValue());
-                        final int maxWidth = Integer.parseInt(xmlColumn.getAttribute("max-width").getValue());
-                        final int minWidth = Integer.parseInt(xmlColumn.getAttribute("min-width").getValue());
-
-                        columnSpec.setPrefs(width, maxWidth, minWidth);
-                        if (i != j) {
-                            final ColumnSpec swap = this.columns.get(i);
-                            this.columns.set(i, this.columns.get(j));
-                            this.columns.set(j, swap);
-                        }
-                        find = true;
-                        break;
+                    }
+                    if (!find) {
+                        System.out.println("XML columns preferences does'nt contain this column: " + columnId);
                     }
                 }
-                if (!find) {
-                    throw new IllegalArgumentException("xml contain unknow column: " + columnId);
-                }
+            } else {
+                System.out.println("ColumnsSpec.setUserPrefs() - Incorrect columns count in XML for ColumnsSpec: " + this.id);
             }
         }
+    }
+
+    public Document createDefaultXmlPref() {
+        final Element rootElement = new Element("list");
+
+        for (final ColumnSpec column : this.columns) {
+            final Element columnElement = column.createXmlColumnPref();
+            rootElement.addContent(columnElement);
+        }
+        final Document xmlConf = new Document(rootElement);
+
+        return xmlConf;
     }
 
     @Override
@@ -199,6 +218,7 @@ public class ColumnsSpec implements Externalizable, Transferable {
         out.writeObject(this.sortedIds);
         out.writeBoolean(this.allowMove);
         out.writeBoolean(this.allowResize);
+        out.writeBoolean(this.adaptWidth);
     }
 
     @Override
@@ -210,6 +230,7 @@ public class ColumnsSpec implements Externalizable, Transferable {
         this.sortedIds = (List<String>) in.readObject();
         this.allowMove = in.readBoolean();
         this.allowResize = in.readBoolean();
+        this.adaptWidth = in.readBoolean();
     }
 
     public List<Object> getDefaultValues() {
@@ -246,19 +267,22 @@ public class ColumnsSpec implements Externalizable, Transferable {
         result.put("class", "ColumnsSpec");
         result.put("id", this.id);
         result.put("fixed-columns", this.fixedColumns);
-        if(this.sortedIds != null && this.sortedIds.size() > 0) {
+        if (this.sortedIds != null && this.sortedIds.size() > 0) {
             result.put("sorted-ids", this.sortedIds);
         }
-        if(this.possibleColumnIds != null && this.possibleColumnIds.size() > 0) {
+        if (this.possibleColumnIds != null && this.possibleColumnIds.size() > 0) {
             result.put("possible-column-ids", this.possibleColumnIds);
         }
-        if(this.columns != null && this.columns.size() > 0) {
+        if (this.columns != null && this.columns.size() > 0) {
             result.put("columns", JSONConverter.getJSON(this.columns));
         }
-        if(this.allowMove) {
+        if (this.adaptWidth) {
+            result.put("adapt-width", JSONConverter.getJSON(true));
+        }
+        if (this.allowMove) {
             result.put("allow-move", JSONConverter.getJSON(true));
         }
-        if(this.allowResize) {
+        if (this.allowResize) {
             result.put("allow-resize", JSONConverter.getJSON(true));
         }
         return result;
@@ -268,14 +292,15 @@ public class ColumnsSpec implements Externalizable, Transferable {
     public void fromJSON(final JSONObject json) {
         this.id = (String) JSONConverter.getParameterFromJSON(json, "id", String.class);
         this.fixedColumns = (Integer) JSONConverter.getParameterFromJSON(json, "fixed-columns", Integer.class);
+        this.adaptWidth = (Boolean) JSONConverter.getParameterFromJSON(json, "adapt-width", Boolean.class, false);
         this.allowMove = (Boolean) JSONConverter.getParameterFromJSON(json, "allow-move", Boolean.class, false);
         this.allowResize = (Boolean) JSONConverter.getParameterFromJSON(json, "allow-resize", Boolean.class, false);
         final JSONArray jsonSortedIds = (JSONArray) JSONConverter.getParameterFromJSON(json, "sorted-ids", JSONArray.class, null);
-        if(jsonSortedIds != null) {
+        if (jsonSortedIds != null) {
             this.sortedIds = (List<String>) (List<?>) jsonSortedIds;
         }
         final JSONArray jsonPossibleColumnIds = (JSONArray) JSONConverter.getParameterFromJSON(json, "possible-column-ids", JSONArray.class, null);
-        if(jsonPossibleColumnIds != null) {
+        if (jsonPossibleColumnIds != null) {
             this.possibleColumnIds = (List<String>) (List<?>) jsonPossibleColumnIds;
         }
 

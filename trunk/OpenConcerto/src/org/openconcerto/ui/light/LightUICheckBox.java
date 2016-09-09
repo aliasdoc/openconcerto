@@ -15,17 +15,22 @@
 
 import net.minidev.json.JSONObject;
 
-public class LightUICheckBox extends LightUIElement {
+public class LightUICheckBox extends LightUIElement implements IUserControl {
 
     public LightUICheckBox(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
     public LightUICheckBox(final String id, final String label) {
+        super(id);
         this.setType(TYPE_CHECKBOX);
-        this.setId(id);
+
         this.setLabel(label);
         this.setValueType(LightUIElement.VALUE_TYPE_BOOLEAN);
+    }
+
+    public LightUICheckBox(final LightUICheckBox button) {
+        super(button);
     }
 
     public void setChecked(boolean checked) {
@@ -41,5 +46,39 @@ public class LightUICheckBox extends LightUIElement {
             return false;
         }
         return this.getValue().equals("true");
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUICheckBox(json);
+            }
+        };
+    }
+
+    @Override
+    public LightUIElement clone() {
+        return new LightUICheckBox(this);
+    }
+
+    @Override
+    public Object getValueFromContext() {
+        return this.isChecked();
+    }
+
+    @Override
+    public void setValueFromContext(Object value) {
+        boolean bValue = false;
+        if (value != null) {
+            if (value.equals("true")) {
+                bValue = true;
+            }
+            if (value.equals(true)) {
+                bValue = true;
+            }
+        }
+        this.setChecked(bValue);
     }
 }

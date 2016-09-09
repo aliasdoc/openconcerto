@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 public class OOXMLTableElement {
 
@@ -124,7 +124,9 @@ public class OOXMLTableElement {
             // }
             // // #endif
 
-            return cache.getReferentRows(this.row, tableElt, this.tableau.getAttributeValue("groupBy"), this.tableau.getAttributeValue("orderBy"));
+            return cache.getReferentRows(this.row, tableElt, this.tableau.getAttributeValue("groupBy"), this.tableau.getAttributeValue("orderBy"),
+                    Boolean.valueOf(this.tableau.getAttributeValue("expandNomenclature")), this.tableau.getAttributeValue("foreignField"),
+                    Boolean.valueOf(this.tableau.getAttributeValue("excludeZeroQty")));
 
         } else {
             System.err.println("OOXMLTableElement.getRows() Table " + tableElt + " is null!");

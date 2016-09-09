@@ -182,6 +182,8 @@ public class MutableCell<D extends ODDocument> extends Cell<D> {
     }
 
     private void setValue(ODValueType type, Object value, String textP) {
+        // as in LO, setting a cell value clears the formula
+        this.setFormula(null);
         this.setValueAttributes(type, value);
         this.setTextP(textP);
     }
@@ -343,7 +345,7 @@ public class MutableCell<D extends ODDocument> extends Cell<D> {
         // from 19.642 table:formula of OpenDocument-v1.2 : Whenever the initial text of a formula
         // has the appearance of an NCName followed by ":", an OpenDocument producer shall provide a
         // valid namespace prefix in order to eliminate any ambiguity.
-        final String nsPrefix = getFormulaNSPrefix(formula).get0();
+        final String nsPrefix = formula == null ? null : getFormulaNSPrefix(formula).get0();
         if (nsPrefix != null && this.getElement().getNamespace(nsPrefix) == null) {
             throw new IllegalArgumentException("Unknown namespace prefix : " + nsPrefix);
         }
@@ -351,7 +353,10 @@ public class MutableCell<D extends ODDocument> extends Cell<D> {
     }
 
     private final void setFormulaNoCheck(final String formula) {
-        this.getElement().setAttribute("formula", formula, getTABLE());
+        if (formula == null)
+            this.getElement().removeAttribute("formula", getTABLE());
+        else
+            this.getElement().setAttribute("formula", formula, getTABLE());
     }
 
     public final void setFormulaAndNamespace(final Tuple2<Namespace, String> formula) {
@@ -363,7 +368,9 @@ public class MutableCell<D extends ODDocument> extends Cell<D> {
     }
 
     public final void setFormulaAndNamespace(final Namespace ns, final String formula) {
-        if (getODDocument().getVersion() == XMLVersion.OOo) {
+        if (formula == null) {
+            this.setFormulaNoCheck(formula);
+        } else if (getODDocument().getVersion() == XMLVersion.OOo) {
             if (ns != null)
                 throw new IllegalArgumentException("Namespaces not supported by this version : " + ns);
             this.setFormulaNoCheck(formula);

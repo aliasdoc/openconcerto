@@ -14,7 +14,6 @@
  package org.openconcerto.erp.generationDoc;
 
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
-import org.openconcerto.erp.core.common.ui.FastPrintAskFrame;
 import org.openconcerto.erp.core.common.ui.PreviewFrame;
 import org.openconcerto.erp.generationDoc.element.TypeModeleSQLElement;
 import org.openconcerto.erp.storage.CloudStorageEngine;
@@ -28,11 +27,13 @@ import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.utils.ExceptionHandler;
 
+import java.awt.print.PrinterJob;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,11 +42,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import javax.print.PrintService;
-import javax.print.PrintServiceLookup;
+import javax.swing.JOptionPane;
 
 import org.jopendocument.model.OpenDocument;
 
@@ -85,7 +86,16 @@ public abstract class SheetXml {
     protected static final SQLBase base = ((ComptaPropsConfiguration) Configuration.getInstance()).getSQLBaseSociete();
 
     // single threaded and kill its thread after 3 seconds (to allow the program to exit)
-    protected static final ExecutorService runnableQueue = new ThreadPoolExecutor(0, 1, 3L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+    protected static final ExecutorService runnableQueue = new ThreadPoolExecutor(0, 1, 3L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), new ThreadFactory() {
+
+        @Override
+        public Thread newThread(Runnable r) {
+            final Thread res = new Thread(r);
+            res.setUncaughtExceptionHandler(DEFAULT_HANDLER);
+
+            return res;
+        }
+    });
 
     protected static UncaughtExceptionHandler DEFAULT_HANDLER = new UncaughtExceptionHandler() {
         @Override
@@ -101,7 +111,7 @@ public abstract class SheetXml {
     /**
      * Show, print and export the document to PDF. This method is asynchronous, but is executed in a
      * single threaded queue shared with createDocument
-     * */
+     */
     public Future<SheetXml> showPrintAndExportAsynchronous(final boolean showDocument, final boolean printDocument, final boolean exportToPDF) {
         final Callable<SheetXml> c = new Callable<SheetXml>() {
             @Override
@@ -114,8 +124,9 @@ public abstract class SheetXml {
 
     }
 
-    public static void submitInQueue(Runnable r) {
-        runnableQueue.submit(r);
+    public static Future<?> submitInQueue(final Runnable r) {
+
+        return runnableQueue.submit(r);
     }
 
     public void showPrintAndExport(final boolean showDocument, final boolean printDocument, boolean exportToPDF) {
@@ -124,13 +135,13 @@ public abstract class SheetXml {
 
     /**
      * Show, print and export the document to PDF. This method is synchronous
-     * */
+     */
     public void showPrintAndExport(final boolean showDocument, final boolean printDocument, boolean exportToPDF, boolean useODSViewer, boolean exportPDFSynch) {
 
         final File generatedFile = getGeneratedFile();
         final File pdfFile = getGeneratedPDFFile();
         if (generatedFile == null || !generatedFile.exists()) {
-            ExceptionHandler.handle("Fichier généré manquant: " + generatedFile);
+            JOptionPane.showMessageDialog(null, "Fichier généré manquant : " + generatedFile);
             return;
         }
 
@@ -158,7 +169,7 @@ public abstract class SheetXml {
                 if (printDocument) {
                     // Print !
                     DefaultNXDocumentPrinter printer = new DefaultNXDocumentPrinter();
-                    printer.print(doc);
+                    printer.print(Arrays.asList(doc));
                 }
 
                 // FIXME Profiler pour utiliser moins de ram --> ex : demande trop de mémoire pour
@@ -255,7 +266,7 @@ public abstract class SheetXml {
 
     /**
      * Path of the directory used for storage. Ex: Devis/2010
-     * */
+     */
     public final String getStoragePath() {
         final String res = STORAGE_DIRS == null ? null : STORAGE_DIRS.getStoragePath(this);
         if (res != null)
@@ -290,12 +301,12 @@ public abstract class SheetXml {
      * Name of the generated document (without extension), do not rely on this name.
      * 
      * Use getGeneratedFile().getName() to get the generated file name.
-     * */
+     */
     public abstract String getName();
 
     /**
      * @return the template id for this template (ex: "sales.quote")
-     * */
+     */
     public String getTemplateId() {
         if (this.row != null && this.row.getTable().getFieldsName().contains("ID_MODELE")) {
             if (row.isForeignEmpty("ID_MODELE")) {
@@ -326,7 +337,7 @@ public abstract class SheetXml {
      * get the File that is, or must be generated.
      * 
      * @return a file (not null)
-     * */
+     */
     public abstract File getGeneratedFile();
 
     public File getGeneratedPDFFile() {
@@ -343,7 +354,7 @@ public abstract class SheetXml {
 
     /**
      * Creates the document if needed and returns the generated file (OpenDocument)
-     * */
+     */
     public File getOrCreateDocumentFile() throws Exception {
         File f = getGeneratedFile();
         if (!f.exists()) {
@@ -360,7 +371,7 @@ public abstract class SheetXml {
      * @return
      * @throws Exception
      * 
-     * */
+     */
     public File getOrCreatePDFDocumentFile(boolean createRecent) throws Exception {
         return getOrCreatePDFDocumentFile(createRecent, Boolean.getBoolean("org.openconcerto.oo.useODSViewer"));
     }
@@ -384,7 +395,7 @@ public abstract class SheetXml {
      * Open the document with the native application
      * 
      * @param synchronous
-     * */
+     */
     public void openDocument(boolean synchronous) {
         Runnable r = new Runnable() {
 
@@ -416,72 +427,29 @@ public abstract class SheetXml {
         PreviewFrame.show(f);
     }
 
-    public void fastPrintDocument() {
-        FastPrintAskFrame f = new FastPrintAskFrame(this);
-        f.display();
-    }
-
-    public void fastPrintDocument(short copies) {
-
-        try {
-            final File f = getOrCreateDocumentFile();
-
-            if (!Boolean.getBoolean("org.openconcerto.oo.useODSViewer")) {
-
-                final Component doc = ComptaPropsConfiguration.getOOConnexion().loadDocument(f, true);
-
-                Map<String, Object> map = new HashMap<String, Object>();
-                if (this.printer == null || this.printer.trim().length() == 0) {
-                    PrintService printer = PrintServiceLookup.lookupDefaultPrintService();
-                    this.printer = printer.getName();
-                }
-                map.put("Name", this.printer);
-                Map<String, Object> map2 = new HashMap<String, Object>();
-                map2.put("CopyCount", copies);
-
-                // http://www.openoffice.org/issues/show_bug.cgi?id=99606
-                // fix bug if collate = false then print squared number of copies
-                map2.put("Collate", Boolean.TRUE);
-                doc.printDocument(map, map2);
-                doc.close();
-
-            } else {
-                // Load the spreadsheet.
-                final OpenDocument doc = new OpenDocument(f);
-
-                // Print !
-                DefaultNXDocumentPrinter printer = new DefaultNXDocumentPrinter(this.printer, copies);
-                printer.print(doc);
-            }
-        } catch (Exception e) {
-
-            ExceptionHandler.handle("Impossible de charger le document OpentOffice", e);
-            e.printStackTrace();
-        }
-    }
-
     public void printDocument() {
+        printDocument(null);
+    }
+
+    public void printDocument(PrinterJob job) {
 
         try {
             final File f = getOrCreateDocumentFile();
 
             if (!Boolean.getBoolean("org.openconcerto.oo.useODSViewer")) {
-
                 final Component doc = ComptaPropsConfiguration.getOOConnexion().loadDocument(f, true);
                 doc.printDocument();
                 doc.close();
             } else {
                 // Load the spreadsheet.
                 final OpenDocument doc = new OpenDocument(f);
-
                 // Print !
                 DefaultNXDocumentPrinter printer = new DefaultNXDocumentPrinter();
-                printer.print(doc);
+                printer.print(Arrays.asList(doc), job);
             }
 
         } catch (Exception e) {
-
-            ExceptionHandler.handle("Impossible de charger le document OpenOffice", e);
+            ExceptionHandler.handle("Impossible d'imprimer le document OpenOffice", e);
             e.printStackTrace();
         }
     }

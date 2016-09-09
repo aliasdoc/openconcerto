@@ -16,6 +16,7 @@
 import org.openconcerto.sql.model.SQLField.Properties;
 import org.openconcerto.sql.model.graph.TablesMap;
 import org.openconcerto.sql.utils.ChangeTable.ClauseType;
+import org.openconcerto.sql.utils.SQLUtils;
 import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.NetUtils;
 import org.openconcerto.utils.Tuple2;
@@ -30,6 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.h2.constant.ErrorCode;
 
 class SQLSyntaxH2 extends SQLSyntax {
 
@@ -46,10 +49,16 @@ class SQLSyntaxH2 extends SQLSyntax {
         this.typeNames.addAll(Timestamp.class, "timestamp", "smalldatetime", "datetime");
         this.typeNames.addAll(java.util.Date.class, "date");
         this.typeNames.addAll(Blob.class, "blob", "tinyblob", "mediumblob", "longblob", "image",
-        // byte[]
+                // byte[]
                 "bytea", "raw", "varbinary", "longvarbinary", "binary");
         this.typeNames.addAll(Clob.class, "clob", "text", "tinytext", "mediumtext", "longtext");
         this.typeNames.addAll(String.class, "varchar", "longvarchar", "char", "character", "CHARACTER VARYING");
+    }
+
+    @Override
+    public int getMaximumIdentifierLength() {
+        // http://www.h2database.com/html/advanced.html#limits_limitations
+        return Short.MAX_VALUE;
     }
 
     @Override
@@ -254,7 +263,7 @@ class SQLSyntaxH2 extends SQLSyntax {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getConstraints(SQLBase b, TablesMap tables) throws SQLException {
         final String sel = "SELECT \"TABLE_SCHEMA\", \"TABLE_NAME\", \"CONSTRAINT_NAME\", \n"
-        //
+                //
                 + "case \"CONSTRAINT_TYPE\"  when 'REFERENTIAL' then 'FOREIGN KEY' else \"CONSTRAINT_TYPE\" end as \"CONSTRAINT_TYPE\", \"COLUMN_LIST\", \"CHECK_EXPRESSION\" AS \"DEFINITION\"\n"
                 //
                 + "FROM INFORMATION_SCHEMA.CONSTRAINTS " + getTablesMapJoin(b, tables)
@@ -280,5 +289,15 @@ class SQLSyntaxH2 extends SQLSyntax {
         if (tables.size() > 0)
             throw new UnsupportedOperationException();
         return super.getUpdate(t, tables, setPart);
+    }
+
+    @Override
+    public boolean isDeadLockException(SQLException exn) {
+        final SQLException stateExn = SQLUtils.findWithSQLState(exn);
+        // in H2 deadlock is only detected at the table level (e.g DDL)
+        // in MVCC, if two transactions modify the same row the second one will repeatedly throw
+        // CONCURRENT_UPDATE_1 until LockTimeout
+        // otherwise, the second one will timeout while waiting for the table lock
+        return stateExn.getErrorCode() == ErrorCode.DEADLOCK_1 || stateExn.getErrorCode() == ErrorCode.LOCK_TIMEOUT_1;
     }
 }

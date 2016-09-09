@@ -38,7 +38,11 @@ public class SQLTableModelColumnPath extends SQLTableModelColumn {
 
     // try to find a RowItemDesc, fall back to SQLFieldTranslator.getDefaultDesc()
     private static final RowItemDesc getDescFor(SQLField field) {
-        final Configuration conf = Configuration.getInstance();
+        // FIXME : remove Configuration.getInstance() need
+        return getDescFor(field, Configuration.getInstance());
+    }
+
+    public static final RowItemDesc getDescFor(SQLField field, Configuration conf) {
         final RowItemDesc res = conf == null ? SQLFieldTranslator.NULL_DESC : conf.getTranslator().getDescFor(field.getTable(), field.getName());
         if (res.equals(SQLFieldTranslator.NULL_DESC))
             return SQLFieldTranslator.getDefaultDesc(field);

@@ -27,7 +27,10 @@ import java.text.ParseException;
 import java.util.Date;
 
 import javax.swing.JComponent;
+import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 
 /**
  * Allow to edit a date with a time.
@@ -159,5 +162,24 @@ public final class JDateTime extends JPanel implements ValueWrapper<Date> {
     @Override
     public void removeValidListener(ValidListener l) {
         // nothing to do
+    }
+
+    public static void main(String[] args) {
+        final Runnable r = new Runnable() {
+            public void run() {
+                try {
+                    UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+                } catch (Exception e1) {
+                    e1.printStackTrace();
+                }
+                final JFrame f = new JFrame();
+                f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                f.setContentPane(new JDateTime());
+                f.pack();
+                f.setLocationRelativeTo(null);
+                f.setVisible(true);
+            }
+        };
+        SwingUtilities.invokeLater(r);
     }
 }

@@ -23,7 +23,9 @@
  */
 public final class CacheResult<V> {
 
+    @SuppressWarnings("rawtypes")
     private static final CacheResult INTERRUPTED = new CacheResult(State.INTERRUPTED);
+    @SuppressWarnings("rawtypes")
     private static final CacheResult NOT_IN_CACHE = new CacheResult(State.NOT_IN_CACHE);
 
     @SuppressWarnings("unchecked")
@@ -36,35 +38,42 @@ public final class CacheResult<V> {
         return INTERRUPTED;
     }
 
-    public enum State {
+    static public enum State {
         VALID, NOT_IN_CACHE, INTERRUPTED
     };
 
     private final State state;
-    private final V res;
+    // store the whole CacheValue (instead of just V) so that this it can be returned from
+    // ICache.check() and passed to put()
+    // no need to store the value as it is still accessible once the CacheValue is invalid
+    private final CacheItem<?, V, ?> val;
 
-    private CacheResult(State state,/* K key, */V res) {
+    private CacheResult(final State state, final CacheItem<?, V, ?> val) {
         this.state = state;
-        this.res = res;
+        this.val = val;
     }
 
-    CacheResult(V res) {
-        this(State.VALID, res);
+    CacheResult(final CacheItem<?, V, ?> val) {
+        this(val.getState() == CacheItem.State.VALID ? State.VALID : State.NOT_IN_CACHE, val);
     }
 
-    CacheResult(State state) {
+    private CacheResult(State state) {
         this(state, null);
     }
 
     public V getRes() {
         if (this.state == State.VALID)
-            return this.res;
+            return this.val.getValue();
         else
             throw new IllegalStateException(this + " is not valid : " + this.getState());
     }
 
     public State getState() {
         return this.state;
+    }
+
+    final CacheItem<?, V, ?> getVal() {
+        return this.val;
     }
 
     @Override

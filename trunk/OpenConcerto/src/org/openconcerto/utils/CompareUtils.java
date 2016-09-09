@@ -30,6 +30,36 @@ import java.util.List;
  */
 public class CompareUtils {
 
+    static public final <A extends Comparable<A>, B extends Comparable<B>> int compare(final A a1, final B b1, final A a2, final B b2) {
+        final int res = a1.compareTo(a2);
+        if (res != 0)
+            return res;
+        return b1.compareTo(b2);
+    }
+
+    static public final <A extends Comparable<A>, B extends Comparable<B>, C extends Comparable<C>> int compare(final A a1, final B b1, final C c1, final A a2, final B b2, final C c2) {
+        final int res = compare(a1, b1, a2, b2);
+        if (res != 0)
+            return res;
+        return c1.compareTo(c2);
+    }
+
+    static public final <A extends Comparable<A>, B extends Comparable<B>, C extends Comparable<C>, D extends Comparable<D>> int compare(final A a1, final B b1, final C c1, final D d1, final A a2,
+            final B b2, final C c2, final D d2) {
+        final int res = compare(a1, b1, c1, a2, b2, c2);
+        if (res != 0)
+            return res;
+        return d1.compareTo(d2);
+    }
+
+    static public final <A extends Comparable<A>, B extends Comparable<B>> int compare(final Tuple2<A, B> t1, final Tuple2<A, B> t2) {
+        return compare(t1.get0(), t1.get1(), t2.get0(), t2.get1());
+    }
+
+    static public final <A extends Comparable<A>, B extends Comparable<B>, C extends Comparable<C>> int compare(final Tuple3<A, B, C> t1, final Tuple3<A, B, C> t2) {
+        return compare(t1.get0(), t1.get1(), t1.get2(), t2.get0(), t2.get1(), t2.get2());
+    }
+
     /**
      * Compare 2 nombres entier avec longValue().
      * 
@@ -57,6 +87,56 @@ public class CompareUtils {
             return 0;
         else
             return +1;
+    }
+
+    static public final <T extends Comparable<T>> int compareList(final List<? extends T> l1, final List<? extends T> l2) {
+        return compareList(l1, l2, CompareUtils.<T> naturalOrder(), true);
+    }
+
+    static public final <T> int compareList(final List<? extends T> l1, final List<? extends T> l2, final Comparator<? super T> comp, final boolean longerAfter) {
+        if (l1 == l2)
+            return 0;
+
+        final Iterator<? extends T> iter1 = l1.iterator();
+        final Iterator<? extends T> iter2 = l2.iterator();
+        while (iter1.hasNext() && iter2.hasNext()) {
+            final T t1 = iter1.next();
+            final T t2 = iter2.next();
+            final int res = comp.compare(t1, t2);
+            if (res != 0)
+                return res;
+        }
+        if (!iter1.hasNext() && !iter2.hasNext()) {
+            return 0;
+        } else if (iter1.hasNext()) {
+            return longerAfter ? 1 : -1;
+        } else {
+            assert iter2.hasNext();
+            return longerAfter ? -1 : 1;
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static final Comparator LIST_COMPARATOR = new Comparator<List>() {
+        @SuppressWarnings("unchecked")
+        @Override
+        public int compare(List l1, List l2) {
+            return compareList(l1, l2);
+        }
+    };
+
+    @SuppressWarnings("unchecked")
+    static public final <T extends Comparable<T>> Comparator<List<T>> getListComparator() {
+        return LIST_COMPARATOR;
+    }
+
+    static public final <T> Comparator<List<T>> createListComparator(final Comparator<? super T> comp, final boolean longerAfter) {
+        return new Comparator<List<T>>() {
+            @Override
+            public int compare(List<T> o1, List<T> o2) {
+                return compareList(o1, o2, comp, longerAfter);
+            }
+        };
     }
 
     /**

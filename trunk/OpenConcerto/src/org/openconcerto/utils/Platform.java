@@ -20,11 +20,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * To abstract differences between platform for non java tasks.
@@ -128,14 +131,20 @@ public abstract class Platform {
         return new PingBuilder(this);
     }
 
-    protected abstract boolean ping(InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException;
+    protected abstract PingResult ping(InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException;
 
-    protected final boolean ping(final List<String> command, final String successMarker, final int totalCount, int requiredCount) throws IOException {
+    protected abstract BigDecimal parsePingAverageRT(String statsLine);
+
+    protected final PingResult ping(final String command, final int totalCount, int requiredCount) throws IOException {
         if (requiredCount <= 0)
             requiredCount = totalCount;
-        final int replied = Integer.parseInt(cmdSubstitution(eval(CollectionUtils.join(command, " ") + " | grep -c " + successMarker)).trim());
+        final List<String> countAndLastLine = StringUtils.splitIntoLines(cmdSubstitution(eval(command)));
+        if (countAndLastLine.size() != 2)
+            throw new IllegalStateException("Not 2 lines in " + countAndLastLine);
+        final int replied = Integer.parseInt(countAndLastLine.get(0));
         assert replied <= totalCount;
-        return replied >= requiredCount;
+        final PingResult res = new PingResult(totalCount, replied, requiredCount, replied == 0 ? null : parsePingAverageRT(countAndLastLine.get(1).trim()));
+        return res;
     }
 
     /**
@@ -202,6 +211,19 @@ public abstract class Platform {
             }
         }
 
+        // Linux : rtt min/avg/max/mdev = 12.552/13.399/14.247/0.855 ms
+        // FreeBSD : round-trip min/avg/max/stddev = 0.301/0.371/0.442/0.071 ms
+        private static final Pattern PING_STATS_PATTERN = Pattern
+                .compile("^\\p{Blank}*(?:rtt|round-trip)\\p{Blank}+min/avg/max/(?:mdev|stddev)\\p{Blank}+=\\p{Blank}+([0-9\\.]+)/([0-9\\.]+)/([0-9\\.]+)/([0-9\\.]+)\\p{Blank}+ms$");
+
+        @Override
+        protected BigDecimal parsePingAverageRT(String statsLine) {
+            final Matcher m = PING_STATS_PATTERN.matcher(statsLine);
+            if (!m.matches())
+                throw new IllegalArgumentException("Not matching " + PING_STATS_PATTERN + " : " + statsLine);
+            return new BigDecimal(m.group(2));
+        }
+
         @Override
         public boolean isAdmin() throws IOException {
             // root is uid 0
@@ -211,7 +233,7 @@ public abstract class Platform {
 
     private static final Platform LINUX = new UnixPlatform() {
         @Override
-        public boolean ping(final InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException {
+        public PingResult ping(final InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException {
             if (routingTableIndex > 0)
                 throw new UnsupportedOperationException("On Linux, choosing a different routing table requires changing the system policy");
             final List<String> command = new ArrayList<String>(16);
@@ -237,16 +259,20 @@ public abstract class Platform {
                 command.add("-t");
                 command.add(String.valueOf(pingBuilder.getTTL()));
             }
+            if (pingBuilder.getSourceAddress() != null) {
+                command.add("-I");
+                command.add(pingBuilder.getSourceAddress());
+            }
 
             command.add(host.getHostAddress());
 
-            return ping(command, "ttl=", totalCount, pingBuilder.getRequiredReplies());
+            return ping("out=$(" + CollectionUtils.join(command, " ") + ") ; grep -c ttl= <<< \"$out\" ; tail -n1 <<< \"$out\"", totalCount, pingBuilder.getRequiredReplies());
         }
     };
 
     private static final Platform FREEBSD = new UnixPlatform() {
         @Override
-        public boolean ping(final InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException {
+        public PingResult ping(final InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException {
             final List<String> command = new ArrayList<String>(16);
             command.add("setfib");
             command.add(String.valueOf(routingTableIndex));
@@ -271,14 +297,18 @@ public abstract class Platform {
                 command.add("-m");
                 command.add(String.valueOf(pingBuilder.getTTL()));
             }
+            if (pingBuilder.getSourceAddress() != null) {
+                command.add("-S");
+                command.add(pingBuilder.getSourceAddress());
+            }
 
             command.add(host.getHostAddress());
 
-            return ping(command, "ttl=", totalCount, pingBuilder.getRequiredReplies());
+            return ping("out=$(" + CollectionUtils.join(command, " ") + ") ; grep -c ttl= <<< \"$out\" ; tail -n1 <<< \"$out\"", totalCount, pingBuilder.getRequiredReplies());
         }
     };
 
-    private static final Platform CYGWIN = new Platform() {
+    private static final class CygwinPlatform extends Platform {
 
         @Override
         public boolean supportsPID() {
@@ -326,7 +356,7 @@ public abstract class Platform {
         }
 
         @Override
-        public boolean ping(final InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException {
+        public PingResult ping(final InetAddress host, final PingBuilder pingBuilder, final int routingTableIndex) throws IOException {
             if (routingTableIndex > 0)
                 throw new UnsupportedOperationException("Only one routing table on Windows");
             final List<String> command = new ArrayList<String>(16);
@@ -351,16 +381,33 @@ public abstract class Platform {
                 command.add("-i");
                 command.add(String.valueOf(pingBuilder.getTTL()));
             }
+            if (pingBuilder.getSourceAddress() != null) {
+                command.add("-S");
+                command.add(pingBuilder.getSourceAddress());
+            }
 
             command.add(host.getHostAddress());
 
-            return ping(command, "TTL=", totalCount, pingBuilder.getRequiredReplies());
+            // can't use local variable : never could work out newlines problem
+            // see https://cygwin.com/ml/cygwin-announce/2011-02/msg00027.html
+            return ping("tmpF=$(mktemp) && " + CollectionUtils.join(command, " ") + " > $tmpF ; grep -c \"TTL=\" < $tmpF ; tail -n1 $tmpF; rm \"$tmpF\"", totalCount, pingBuilder.getRequiredReplies());
+        }
+
+        // Minimum = 35ms, Maximum = 36ms, Moyenne = 35ms
+        private static final Pattern PING_STATS_PATTERN = Pattern.compile("^\\p{Blank}*\\p{Alpha}+ = ([0-9\\.]+)ms, \\p{Alpha}+ = ([0-9\\.]+)ms, \\p{Alpha}+ = ([0-9\\.]+)ms$");
+
+        @Override
+        protected BigDecimal parsePingAverageRT(String statsLine) {
+            final Matcher m = PING_STATS_PATTERN.matcher(statsLine);
+            if (!m.matches())
+                throw new IllegalArgumentException("Not matching " + PING_STATS_PATTERN + " : " + statsLine);
+            return new BigDecimal(m.group(3));
         }
 
         @Override
         public boolean isAdmin() throws IOException {
-            // SID administrators S-1-5-32-544
-            return this.exitStatus(this.eval("id -G | grep '\\b544\\b'")) == 0;
+            // SID administrators S-1-5-32-544 or S-1-5-114
+            return this.exitStatus(this.eval("id -G | egrep '\\b(544|114)\\b'")) == 0;
         }
 
         @Override
@@ -376,6 +423,8 @@ public abstract class Platform {
             return FileUtils.addSuffix(dir, ".lnk");
         }
     };
+
+    private static final Platform CYGWIN = new CygwinPlatform();
 
     public static String toCygwinPath(File dir) {
         final List<File> ancestors = getAncestors(dir);
@@ -402,6 +451,44 @@ public abstract class Platform {
         return res;
     }
 
+    public static final class PingResult {
+
+        private final int wantedCount, repliesCount, requiredReplies;
+        private final BigDecimal averageRTT;
+
+        private PingResult(final int wantedCount, final int repliesCount, final int requiredReplies, final BigDecimal averageRTT) {
+            this.wantedCount = wantedCount;
+            this.repliesCount = repliesCount;
+            this.requiredReplies = requiredReplies;
+            this.averageRTT = averageRTT;
+        }
+
+        public final int getRepliesCount() {
+            return this.repliesCount;
+        }
+
+        public final int getRequiredReplies() {
+            return this.requiredReplies;
+        }
+
+        public final boolean hasRequiredReplies() {
+            return this.hasEnoughReplies(this.getRequiredReplies());
+        }
+
+        public final boolean hasEnoughReplies(final int min) {
+            return this.getRepliesCount() >= min;
+        }
+
+        public final BigDecimal getAverageRTT() {
+            return this.averageRTT;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + " " + this.getRepliesCount() + "/" + this.wantedCount + " reply(ies), average RTT : " + this.getAverageRTT() + " ms";
+        }
+    }
+
     public static final class PingBuilder {
 
         private final Platform platform;
@@ -410,6 +497,7 @@ public abstract class Platform {
         private int waitTime = 4000;
         private boolean dontFragment = false;
         private int length = -1;
+        private String srcAddr = null;
         private int ttl = -1;
         private int totalCount = 4;
         private int requiredReplies = -1;
@@ -445,6 +533,15 @@ public abstract class Platform {
             return this;
         }
 
+        public String getSourceAddress() {
+            return this.srcAddr;
+        }
+
+        public PingBuilder setSourceAddress(String srcAddr) {
+            this.srcAddr = srcAddr;
+            return this;
+        }
+
         public final int getTTL() {
             return this.ttl;
         }
@@ -474,12 +571,28 @@ public abstract class Platform {
             return this;
         }
 
-        public final boolean execute(final InetAddress host) throws IOException {
-            return this.execute(host, 0);
+        public final boolean isAlive(final InetAddress host) throws IOException {
+            return this.isAlive(host, 0);
         }
 
-        public final boolean execute(final InetAddress host, final int routingTableIndex) throws IOException {
+        public final boolean isAlive(final InetAddress host, final int routingTableIndex) throws IOException {
+            return execute(host, routingTableIndex).hasRequiredReplies();
+        }
+
+        public PingResult execute(final InetAddress host) throws IOException {
+            return execute(host, 0);
+        }
+
+        public PingResult execute(final InetAddress host, final int routingTableIndex) throws IOException {
             return this.platform.ping(host, this, routingTableIndex);
+        }
+    }
+
+    public static final class Ping {
+        public static void main(String[] args) throws IOException {
+            final int totalCount = Integer.parseInt(System.getProperty("count", "4"));
+            final String srcAddr = System.getProperty("srcAddr");
+            System.out.println(Platform.getInstance().createPingBuilder().setTotalCount(totalCount).setSourceAddress(srcAddr).execute(InetAddress.getByName(args[0])));
         }
     }
 }

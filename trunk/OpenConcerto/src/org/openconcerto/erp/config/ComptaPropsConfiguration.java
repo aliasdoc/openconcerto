@@ -14,6 +14,7 @@
  package org.openconcerto.erp.config;
 
 import static java.util.Arrays.asList;
+
 import org.openconcerto.erp.core.common.component.SocieteCommonSQLElement;
 import org.openconcerto.erp.core.common.element.AdresseCommonSQLElement;
 import org.openconcerto.erp.core.common.element.AdresseSQLElement;
@@ -71,6 +72,8 @@ import org.openconcerto.erp.core.humanresources.employe.element.ObjectifSQLEleme
 import org.openconcerto.erp.core.humanresources.payroll.element.AcompteSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CaisseCotisationSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.ClassementConventionnelSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.CodeBaseAssujettieSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.CodeCaisseTypeRubriqueSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CodeCaractActiviteSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CodeContratTravailSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CodeDroitContratSQLElement;
@@ -80,14 +83,26 @@ import org.openconcerto.erp.core.humanresources.payroll.element.CodeRegimeSQLEle
 import org.openconcerto.erp.core.humanresources.payroll.element.CodeStatutCategorielConventionnelSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CodeStatutCategorielSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CodeStatutProfSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.CodeTypeRubriqueBrutSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.CoefficientPrimeSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.ContratDetacheExpatrieSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.ContratDispositifPolitiqueSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.ContratModaliteTempsSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.ContratMotifRecoursSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.ContratRegimeMaladieSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.ContratRegimeVieillesseSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.ContratSalarieSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CumulsCongesSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.CumulsPayeSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.DSNNatureSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.FichePayeElementSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.FichePayeSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.ImpressionRubriqueSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.InfosSalariePayeSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.ModeReglementPayeSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.MotifArretTravailSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.MotifFinContratSQLElement;
+import org.openconcerto.erp.core.humanresources.payroll.element.MotifRepriseArretTravailSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.PeriodeValiditeSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.ProfilPayeElementSQLElement;
 import org.openconcerto.erp.core.humanresources.payroll.element.ProfilPayeSQLElement;
@@ -173,8 +188,13 @@ import org.openconcerto.erp.generationDoc.provider.PrixUVProvider;
 import org.openconcerto.erp.generationDoc.provider.PrixUnitaireProvider;
 import org.openconcerto.erp.generationDoc.provider.PrixUnitaireRemiseProvider;
 import org.openconcerto.erp.generationDoc.provider.QteTotalProvider;
+import org.openconcerto.erp.generationDoc.provider.RecapFactureProvider;
 import org.openconcerto.erp.generationDoc.provider.RefClientValueProvider;
 import org.openconcerto.erp.generationDoc.provider.RemiseProvider;
+import org.openconcerto.erp.generationDoc.provider.RemiseTotalProvider;
+import org.openconcerto.erp.generationDoc.provider.RestantAReglerProvider;
+import org.openconcerto.erp.generationDoc.provider.SaledTotalNotDiscountedProvider;
+import org.openconcerto.erp.generationDoc.provider.StockLocationProvider;
 import org.openconcerto.erp.generationDoc.provider.TotalAcompteProvider;
 import org.openconcerto.erp.generationDoc.provider.TotalCommandeClientProvider;
 import org.openconcerto.erp.generationDoc.provider.UserCreateInitialsValueProvider;
@@ -465,9 +485,12 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
             }
             StorageEngines.getInstance().addEngine(new CloudStorageEngine());
         } else {
+            // FIXME
             // Local database
-            setProperty("server.login", "openconcerto");
-            setProperty("server.password", "openconcerto");
+            {
+                setProperty("server.login", "openconcerto");
+                setProperty("server.password", "openconcerto");
+            }
             this.setProperty("server.ip", getProperty("server.ip").replace(DATA_DIR_VAR, getDataDir().getPath()));
             final SQLSystem system = getSystem();
             this.isServerless = system == SQLSystem.H2 && system.getHostname(getServerIp()) == null;
@@ -509,12 +532,17 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         AdresseVilleNomClientValueProvider.register();
         AdresseFullClientValueProvider.register();
         QteTotalProvider.register();
+        StockLocationProvider.register();
         RefClientValueProvider.register();
         ModeDeReglementDetailsProvider.register();
         FormatedGlobalQtyTotalProvider.register();
         MergedGlobalQtyTotalProvider.register();
         PaiementRemainedProvider.register();
         RemiseProvider.register();
+        RemiseTotalProvider.register();
+        RecapFactureProvider.register();
+        RestantAReglerProvider.register();
+        SaledTotalNotDiscountedProvider.register();
     }
 
     @Override
@@ -565,6 +593,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
                         }, 1, TimeUnit.SECONDS);
                     }
                 }
+
             });
         }
     }
@@ -686,31 +715,6 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
     }
 
     @Override
-    protected ShowAs createShowAs() {
-        final ShowAs showAs = super.createShowAs();
-
-        showAs.show("ADRESSE_COMMON", SQLRow.toList("RUE,VILLE"));
-
-        showAs.show("CAISSE_COTISATION", "NOM");
-
-        showAs.show("EXERCICE_COMMON", SQLRow.toList("NUMERO,DATE_DEB,DATE_FIN"));
-
-        showAs.show("IMPRESSION_RUBRIQUE", "NOM");
-
-        showAs.show("OBJET", "NOM");
-        showAs.show("PERIODE_VALIDITE", "JANVIER");
-        showAs.show("PROFIL_PAYE", "NOM");
-
-        showAs.show("RUBRIQUE_COTISATION", "CODE", "NOM");
-        showAs.show("RUBRIQUE_NET", "CODE", "NOM");
-        showAs.show("RUBRIQUE_BRUT", "CODE", "NOM");
-        showAs.show("TYPE_RUBRIQUE_BRUT", "NOM");
-        showAs.show("TYPE_RUBRIQUE_NET", "NOM");
-
-        return showAs;
-    }
-
-    @Override
     protected SQLElementDirectory createDirectory() {
         final SQLElementDirectory dir = super.createDirectory();
         dir.addSQLElement(new AdresseCommonSQLElement());
@@ -718,6 +722,22 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
         dir.addSQLElement(DeviseSQLElement.class);
         dir.addSQLElement(TypeModeleSQLElement.class);
         dir.addSQLElement(new SocieteCommonSQLElement());
+
+        // DSN
+        dir.addSQLElement(CodeBaseAssujettieSQLElement.class);
+        dir.addSQLElement(ContratModaliteTempsSQLElement.class);
+        dir.addSQLElement(CodeCaisseTypeRubriqueSQLElement.class);
+        dir.addSQLElement(CodeTypeRubriqueBrutSQLElement.class);
+        dir.addSQLElement(MotifArretTravailSQLElement.class);
+        dir.addSQLElement(ContratDispositifPolitiqueSQLElement.class);
+        dir.addSQLElement(ContratDetacheExpatrieSQLElement.class);
+        dir.addSQLElement(ContratRegimeMaladieSQLElement.class);
+        dir.addSQLElement(ContratMotifRecoursSQLElement.class);
+        dir.addSQLElement(ContratRegimeVieillesseSQLElement.class);
+        dir.addSQLElement(MotifFinContratSQLElement.class);
+        dir.addSQLElement(MotifRepriseArretTravailSQLElement.class);
+        dir.addSQLElement(DSNNatureSQLElement.class);
+
         return dir;
     }
 
@@ -733,6 +753,7 @@ public final class ComptaPropsConfiguration extends ComptaBasePropsConfiguration
             dir.addSQLElement(ArticleDesignationSQLElement.class);
             dir.addSQLElement(BanqueSQLElement.class);
             dir.addSQLElement(ClientDepartementSQLElement.class);
+            dir.addSQLElement(CoefficientPrimeSQLElement.class);
             dir.addSQLElement(ContactFournisseurSQLElement.class);
             dir.addSQLElement(ContactAdministratifSQLElement.class);
             dir.addSQLElement(new TitrePersonnelSQLElement());

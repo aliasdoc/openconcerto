@@ -23,7 +23,7 @@ import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.preferences.SQLPreferences;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,11 +65,8 @@ public class ArticleFournisseurSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        final CollectionMap<String, String> res = new CollectionMap<String, String>();
-        res.put(null, "NOM");
-        res.put(null, "ID_FAMILLE_ARTICLE_FOURNISSEUR");
-        return res;
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM", "ID_FAMILLE_ARTICLE_FOURNISSEUR");
     }
 
     protected List<String> getComboFields() {

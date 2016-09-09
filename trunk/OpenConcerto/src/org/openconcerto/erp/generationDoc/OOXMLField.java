@@ -44,8 +44,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.jdom.Attribute;
-import org.jdom.Element;
+import org.jdom2.Attribute;
+import org.jdom2.Element;
 
 public class OOXMLField extends OOXMLElement {
 
@@ -134,9 +134,9 @@ public class OOXMLField extends OOXMLElement {
 
                 // sinon on recupere directement la valeur
 
-                if (this.op != null && this.op.trim().length() > 0) {
+                String typeComp = this.elt.getAttributeValue("type");
+                if (this.op != null && this.op.trim().length() > 0 && !(typeComp != null && typeComp.trim().length() > 0 && typeComp.toLowerCase().startsWith("deviselettre"))) {
                     String field2 = this.elt.getAttributeValue("name2");
-                    String typeComp = this.elt.getAttributeValue("type");
                     Number o = (Number) this.row.getObject(field);
 
                     Number o2;
@@ -208,7 +208,6 @@ public class OOXMLField extends OOXMLElement {
                 if (bIsCondValid) {
 
                     // Type du champ
-                    String typeComp = this.elt.getAttributeValue("type");
                     Object o = getSpecialValue(typeComp);
 
                     String stringValue;
@@ -623,9 +622,22 @@ public class OOXMLField extends OOXMLElement {
      * @param value
      * @return la devise exprimée en lettres
      */
-    private static String getLettreFromDevise(long value, int langue, Tuple2<String, String> deviseName) {
+    private String getLettreFromDevise(long value, int langue, Tuple2<String, String> deviseName) {
 
         StringBuffer result = new StringBuffer();
+
+        if (this.op != null && this.op.trim().length() > 0) {
+            String field2 = this.elt.getAttributeValue("name2");
+
+            Number o2;
+            if (field2 != null && field2.trim().length() > 0) {
+                o2 = (Number) this.row.getObject(field2);
+            } else {
+                o2 = Double.parseDouble(this.elt.getAttributeValue("number"));
+            }
+
+            value = calcul(value, o2, this.op).setScale(0, RoundingMode.HALF_UP).longValue();
+        }
 
         Long decimal = Long.valueOf(value % 100);
         Long entier = Long.valueOf(value / 100);
@@ -636,15 +648,22 @@ public class OOXMLField extends OOXMLElement {
         // result.append(n1.getText() + " euros");
         result.append(n1.getText() + " " + deviseName.get0().trim());
 
-        if (decimal.intValue() > 0) {
+        if (decimal.intValue() > 0)
+
+        {
             // result.append(" et " + n2.getText() + " cents");
             result.append(" " + n1.getLocal().getSeparateurLabel() + " " + n2.getText() + deviseName.get1());
         }
-        if (result != null && result.length() > 0) {
+        if (result != null && result.length() > 0)
+
+        {
             return result.toString().replaceFirst(String.valueOf(result.charAt(0)), String.valueOf(result.charAt(0)).toUpperCase());
-        } else {
+        } else
+
+        {
             return result.toString();
         }
+
     }
 
     private static BigDecimal calcul(Object o1, Object o2, String op) {

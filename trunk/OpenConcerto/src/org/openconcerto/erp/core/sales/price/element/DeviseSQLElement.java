@@ -14,12 +14,14 @@
  package org.openconcerto.erp.core.sales.price.element;
 
 import org.openconcerto.erp.core.finance.accounting.model.Currency;
+import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.component.combo.ISearchableTextCombo;
-import org.openconcerto.utils.CollectionMap;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.model.DefaultIListModel;
 
 import java.awt.GridBagConstraints;
@@ -32,8 +34,12 @@ import javax.swing.JTextField;
 
 public class DeviseSQLElement extends ConfSQLElement {
 
+    public DeviseSQLElement(DBRoot root) {
+        super(root.getTable("DEVISE"), "une devise", "devises");
+    }
+
     public DeviseSQLElement() {
-        super("DEVISE", "une devise", "devises");
+        this(Configuration.getInstance().getRoot());
     }
 
     @Override
@@ -54,9 +60,9 @@ public class DeviseSQLElement extends ConfSQLElement {
     }
 
     @Override
-    public CollectionMap<String, String> getShowAs() {
-        CollectionMap<String, String> map = new CollectionMap<String, String>();
-        map.put(null, "CODE");
+    public ListMap<String, String> getShowAs() {
+        ListMap<String, String> map = new ListMap<String, String>();
+        map.putCollection(null, "CODE");
         return map;
     }
 

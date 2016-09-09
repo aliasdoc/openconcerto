@@ -31,8 +31,8 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
-import org.jdom.Attribute;
-import org.jdom.Element;
+import org.jdom2.Attribute;
+import org.jdom2.Element;
 
 public class OOXMLElement {
     protected Element elt;
@@ -124,6 +124,11 @@ public class OOXMLElement {
             res = null;
         }
 
+        final String k = this.elt.getAttributeValue("removeBreakLine");
+        boolean rmBreakLines = (k == null) ? false : k.equalsIgnoreCase("true");
+        if (rmBreakLines) {
+            res = (res == null ? res : res.toString().replaceAll("\n", ","));
+        }
         return res;
     }
 
@@ -136,7 +141,7 @@ public class OOXMLElement {
     }
 
 
-    public static DateFormat format = new SimpleDateFormat("dd/MM/yyyy");
+    public DateFormat format = new SimpleDateFormat("dd/MM/yyyy");
 
     protected String getStringProposition(SQLRowAccessor rowProp) {
 
@@ -199,6 +204,12 @@ public class OOXMLElement {
         // gestion manuel du multiligne
         final String multiLineValue = this.elt.getAttributeValue("controleMultiline");
         return (multiLineValue == null) ? true : !multiLineValue.equalsIgnoreCase("false");
+    }
+
+    public boolean isKeepingEmptyLines() {
+        // gestion manuel du multiligne
+        final String k = this.elt.getAttributeValue("keepEmptyLines");
+        return (k == null) ? false : k.equalsIgnoreCase("true");
     }
 
 }

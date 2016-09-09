@@ -62,7 +62,8 @@ public class StockItemsUpdater {
     public static enum TypeStockUpdate {
 
         VIRTUAL_RECEPT(true, TypeStockMouvement.THEORIQUE), REAL_RECEPT(true, TypeStockMouvement.REEL), VIRTUAL_DELIVER(false, TypeStockMouvement.THEORIQUE), REAL_DELIVER(false,
-                TypeStockMouvement.REEL), REAL_VIRTUAL_RECEPT(true, TypeStockMouvement.REEL_THEORIQUE), REAL_VIRTUAL_DELIVER(false, TypeStockMouvement.REEL_THEORIQUE);
+                TypeStockMouvement.REEL), REAL_VIRTUAL_RECEPT(true,
+                        TypeStockMouvement.REEL_THEORIQUE), RETOUR_AVOIR_CLIENT(true, TypeStockMouvement.RETOUR), REAL_VIRTUAL_DELIVER(false, TypeStockMouvement.REEL_THEORIQUE);
 
         private final boolean entry;
         private final TypeStockMouvement type;
@@ -260,7 +261,7 @@ public class StockItemsUpdater {
                             }
                         }
                     }
-                    if ((!r.getTable().contains("NIVEAU") || r.getInt("NIVEAU") == level) && !r.isForeignEmpty("ID_ARTICLE")) {
+                    if ((!r.getTable().contains("NIVEAU") || r.getInt("NIVEAU") == level) && !r.isForeignEmpty("ID_ARTICLE") && r.getForeign("ID_ARTICLE") != null) {
                         productComponents.add(ProductComponent.createFrom(r, qte));
                     }
                 }
@@ -306,7 +307,7 @@ public class StockItemsUpdater {
 
         for (ProductComponent productComp : boms) {
 
-            if (productComp.getProduct().getBoolean("GESTION_STOCK")) {
+            if (productComp.getProduct().getBoolean("GESTION_STOCK") && productComp.getQty().signum() != 0) {
                 StockItem stockItem = new StockItem(productComp.getProduct());
                 double qteFinal = productComp.getQty().doubleValue();
 
@@ -326,7 +327,7 @@ public class StockItemsUpdater {
                 if (this.createMouvementStock) {
                     final Date time = this.rowSource.getDate("DATE").getTime();
                     BigDecimal prc = productComp.getPRC(time);
-                    if (this.type.getType() == TypeStockMouvement.REEL || this.type.getType() == TypeStockMouvement.REEL_THEORIQUE) {
+                    if (this.type.getType() == TypeStockMouvement.REEL || this.type.getType() == TypeStockMouvement.REEL_THEORIQUE || this.type.getType() == TypeStockMouvement.RETOUR) {
                         String mvtStockQuery = "INSERT INTO " + mvtStockTableQuoted + " (\"QTE\",\"DATE\",\"ID_ARTICLE\",\"SOURCE\",\"IDSOURCE\",\"NOM\",\"REEL\",\"ORDRE\"";
 
                         if (prc != null) {
@@ -342,7 +343,7 @@ public class StockItemsUpdater {
                         mvtStockQuery += ")";
                         this.requests.add(mvtStockQuery);
                     }
-                    if (this.type.getType() == TypeStockMouvement.THEORIQUE || this.type.getType() == TypeStockMouvement.REEL_THEORIQUE) {
+                    if (this.type.getType() == TypeStockMouvement.THEORIQUE || this.type.getType() == TypeStockMouvement.REEL_THEORIQUE || this.type.getType() == TypeStockMouvement.RETOUR) {
                         String mvtStockQuery = "INSERT INTO " + mvtStockTableQuoted + " (\"QTE\",\"DATE\",\"ID_ARTICLE\",\"SOURCE\",\"IDSOURCE\",\"NOM\",\"REEL\",\"ORDRE\"";
                         if (prc != null) {
                             mvtStockQuery += ",\"PRICE\"";

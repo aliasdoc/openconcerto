@@ -76,7 +76,10 @@ public class SQLFieldsSet {
     }
 
     static public final Set<String> getNames(final Collection<SQLField> fields) {
-        final Set<String> res = new HashSet<String>(fields.size());
+        return getNames(fields, new HashSet<String>(fields.size()));
+    }
+
+    static public final <C extends Collection<String>> C getNames(final Collection<SQLField> fields, final C res) {
         for (final SQLField f : fields)
             res.add(f.getName());
         return res;

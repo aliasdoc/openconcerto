@@ -17,7 +17,6 @@
 package org.openconcerto.odtemplate;
 
 import org.openconcerto.odtemplate.engine.OGNLDataModel;
-import org.openconcerto.openoffice.XMLVersion;
 import org.openconcerto.openoffice.ODPackage;
 import org.openconcerto.openoffice.ODSingleXMLDocument;
 import org.openconcerto.openoffice.generation.DocumentGenerator;
@@ -41,12 +40,25 @@ import java.util.Map;
 public class TemplateGenerator<R extends ReportGeneration<?>> extends DocumentGenerator<R> {
 
     private final File file;
+    private final ODPackage pkg;
 
     public TemplateGenerator(final R rg, final File f) {
-        super(rg);
-        this.file = f;
+        this(rg, f, null);
     }
 
+    public TemplateGenerator(final R rg, final ODPackage pkg) {
+        this(rg, null, pkg);
+    }
+
+    private TemplateGenerator(final R rg, final File f, final ODPackage pkg) {
+        super(rg);
+        if ((f == null) == (pkg == null))
+            throw new IllegalArgumentException();
+        this.file = f;
+        this.pkg = pkg;
+    }
+
+    @Override
     public final ODSingleXMLDocument generate() throws IOException, InterruptedException {
         return this.substitute(this.getAllData());
     }
@@ -63,11 +75,8 @@ public class TemplateGenerator<R extends ReportGeneration<?>> extends DocumentGe
         return new HashMap<String, Object>();
     }
 
-    private final ODSingleXMLDocument substitute(Map data) throws FileNotFoundException, IOException {
-        final XMLVersion reportVersion = this.getRg().getCommon().getOOVersion();
-        final ODPackage pkg = new ODPackage(this.file);
-        if (pkg.getVersion() != reportVersion)
-            throw new IllegalArgumentException("version mismatch");
+    private final ODSingleXMLDocument substitute(Map<String, Object> data) throws FileNotFoundException, IOException {
+        final ODPackage pkg = this.pkg == null ? new ODPackage(this.file) : this.pkg;
         try {
             this.transform(pkg.toSingle());
             // MAYBE fireStatusChange with the number of tag done out of the total
@@ -80,8 +89,9 @@ public class TemplateGenerator<R extends ReportGeneration<?>> extends DocumentGe
     protected void transform(ODSingleXMLDocument single) throws Exception {
     }
 
+    @Override
     public String toString() {
-        return this.getClass() + " with file " + this.file;
+        return this.getClass() + (this.file != null ? (" with file " + this.file) : (" with package " + this.pkg));
     }
 
 }

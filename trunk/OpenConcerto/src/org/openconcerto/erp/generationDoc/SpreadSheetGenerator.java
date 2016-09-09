@@ -32,6 +32,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -300,7 +301,7 @@ public abstract class SpreadSheetGenerator implements Runnable {
                     if (this.impression) {
                         // Print !
                         DefaultNXDocumentPrinter printer = new DefaultNXDocumentPrinter();
-                        printer.print(doc);
+                        printer.print(Arrays.asList(doc));
                     }
 
                 }

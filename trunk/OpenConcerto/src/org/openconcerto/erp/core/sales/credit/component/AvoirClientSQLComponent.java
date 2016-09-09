@@ -15,30 +15,6 @@
 
 import static org.openconcerto.utils.CollectionUtils.createSet;
 
-import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.sql.SQLException;
-import java.util.Date;
-import java.util.List;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
-
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.common.component.SocieteCommonSQLElement;
 import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
@@ -47,6 +23,7 @@ import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.AbstractArticleItemTable;
 import org.openconcerto.erp.core.common.ui.DeviseField;
+import org.openconcerto.erp.core.common.ui.PanelFrame;
 import org.openconcerto.erp.core.common.ui.TotalPanel;
 import org.openconcerto.erp.core.customerrelationship.customer.ui.AddressChoiceUI;
 import org.openconcerto.erp.core.customerrelationship.customer.ui.AdresseType;
@@ -54,8 +31,12 @@ import org.openconcerto.erp.core.finance.accounting.element.ComptePCESQLElement;
 import org.openconcerto.erp.core.finance.accounting.element.EcritureSQLElement;
 import org.openconcerto.erp.core.finance.payment.component.ModeDeReglementSQLComponent;
 import org.openconcerto.erp.core.sales.credit.ui.AvoirItemTable;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater;
+import org.openconcerto.erp.core.supplychain.stock.element.StockItemsUpdater.TypeStockUpdate;
+import org.openconcerto.erp.core.supplychain.stock.element.StockLabel;
 import org.openconcerto.erp.generationDoc.gestcomm.AvoirClientXmlSheet;
 import org.openconcerto.erp.generationEcritures.GenerationMvtAvoirClient;
+import org.openconcerto.erp.generationEcritures.GenerationMvtSaisieVenteFacture;
 import org.openconcerto.erp.model.ISQLCompteSelector;
 import org.openconcerto.erp.panel.PanelOOSQLComponent;
 import org.openconcerto.erp.preferences.DefaultNXProps;
@@ -72,16 +53,45 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.preferences.SQLPreferences;
+import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.sql.sqlobject.JUniqueTextField;
+import org.openconcerto.sql.sqlobject.SQLRequestComboBox;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FormLayouter;
+import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.ExceptionHandler;
 import org.openconcerto.utils.checks.ValidState;
+
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
+import org.apache.commons.dbutils.handlers.ArrayListHandler;
 
 public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implements ActionListener {
 
@@ -387,18 +397,10 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                         System.err.println("SET WHERE ID_CLIENT = " + wantedID);
                         if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
-                            addressUI
-                                    .getComboAdrF()
-                                    .getRequest()
-                                    .setWhere(
-                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice
-                                                    .getId())));
-                            addressUI
-                                    .getComboAdrL()
-                                    .getRequest()
-                                    .setWhere(
-                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery
-                                                    .getId())));
+                            addressUI.getComboAdrF().getRequest().setWhere(
+                                    new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                            addressUI.getComboAdrL().getRequest().setWhere(
+                                    new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
                         } else {
                             addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
                             addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
@@ -767,12 +769,26 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                 rowVals2.update();
 
                 // updateStock(id);
+                final int idFinal = id;
+                ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        try {
+                            updateStock(idFinal);
+                        } catch (Exception e) {
+                            ExceptionHandler.handle("Update error", e);
+                        }
+                    }
+                });
 
                 GenerationMvtAvoirClient gen = new GenerationMvtAvoirClient(row);
                 gen.genereMouvement();
 
                 // generation du document
                 createAvoirClient(row);
+
+                useAvoir(row);
             } catch (Exception e) {
                 ExceptionHandler.handle("Erreur lors de la création de l'avoir", e);
             }
@@ -799,6 +815,119 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
 
     }
 
+    public void useAvoir(final SQLRowAccessor r) {
+        if (r.getBoolean("A_DEDUIRE") && r.getReferentRows(getTable().getTable("SAISIE_VENTE_FACTURE")).size() == 0) {
+            JPanel p = new JPanel(new GridBagLayout());
+            GridBagConstraints c = new DefaultGridBagConstraints();
+            c.gridwidth = GridBagConstraints.REMAINDER;
+            p.add(new JLabel("Voulez appliquer cet avoir sur une facture existante?"), c);
+            c.gridy++;
+            c.gridwidth = 1;
+            p.add(new JLabel("Appliquer l'avoir sur la facture : "), c);
+            c.gridx++;
+            final SQLRequestComboBox box = new SQLRequestComboBox();
+            final ComboSQLRequest comboRequest = getElement().getDirectory().getElement("SAISIE_VENTE_FACTURE").getComboRequest(true);
+            Where w = new Where(comboRequest.getPrimaryTable().getField("ID_AVOIR_CLIENT"), "=", getTable().getUndefinedID());
+            w = w.and(new Where(comboRequest.getPrimaryTable().getField("ID_CLIENT"), "=", r.getForeignID("ID_CLIENT")));
+            comboRequest.setWhere(w);
+            box.uiInit(comboRequest);
+            p.add(box, c);
+            c.gridy++;
+            c.gridx = 0;
+            final JButton buttonApply = new JButton("Appliquer");
+            JButton buttonAnnuler = new JButton("Fermer");
+            p.add(buttonApply, c);
+            buttonApply.setEnabled(false);
+            box.addValueListener(new PropertyChangeListener() {
+
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    buttonApply.setEnabled(box.getSelectedRow() != null);
+
+                }
+            });
+            c.gridx++;
+            p.add(buttonAnnuler, c);
+            final PanelFrame f = new PanelFrame(p, "Affection d'un avoir client");
+
+            buttonAnnuler.addActionListener(new ActionListener() {
+
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    f.dispose();
+                }
+            });
+
+            buttonApply.addActionListener(new ActionListener() {
+
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    SQLRow rowFacture = box.getSelectedRow();
+                    long ttc = rowFacture.getLong("T_TTC");
+                    long totalAvoirTTC = r.getLong("MONTANT_TTC");
+                    final long totalSolde = r.getLong("MONTANT_SOLDE");
+                    long totalAvoir = totalAvoirTTC - totalSolde;
+
+                    long totalAvoirApplique = 0;
+                    long netAPayer = ttc - totalAvoir;
+                    if (netAPayer < 0) {
+                        netAPayer = 0;
+                        totalAvoirApplique = ttc;
+                    } else {
+                        totalAvoirApplique = totalAvoir;
+                    }
+
+                    final SQLRowValues createEmptyUpdateRow = rowFacture.createEmptyUpdateRow();
+                    createEmptyUpdateRow.put("ID_AVOIR_CLIENT", r.getID());
+                    createEmptyUpdateRow.put("NET_A_PAYER", netAPayer);
+                    createEmptyUpdateRow.put("T_AVOIR_TTC", totalAvoirApplique);
+                    try {
+                        rowFacture = createEmptyUpdateRow.commit();
+
+                        long restant = totalAvoirTTC - totalAvoirApplique;
+
+                        SQLRowValues rowVals = r.createEmptyUpdateRow();
+                        final long l2 = ttc - restant;
+                        // Soldé
+                        if (l2 >= 0) {
+                            rowVals.put("SOLDE", Boolean.TRUE);
+                            rowVals.put("MONTANT_SOLDE", totalAvoirTTC);
+                            rowVals.put("MONTANT_RESTANT", 0);
+                        } else {
+                            // Il reste encore de l'argent pour l'avoir
+                            final long m = totalSolde + ttc;
+                            rowVals.put("MONTANT_SOLDE", m);
+                            rowVals.put("MONTANT_RESTANT", totalAvoirTTC - m);
+                        }
+
+                        rowVals.update();
+                        EcritureSQLElement eltEcr = (EcritureSQLElement) Configuration.getInstance().getDirectory().getElement("ECRITURE");
+                        final int foreignIDmvt = rowFacture.getForeignID("ID_MOUVEMENT");
+                        eltEcr.archiveMouvementProfondeur(foreignIDmvt, false);
+
+                        System.err.println("Regeneration des ecritures");
+                        new GenerationMvtSaisieVenteFacture(rowFacture.getID(), foreignIDmvt);
+                        System.err.println("Fin regeneration");
+                    } catch (SQLException e1) {
+                        ExceptionHandler.handle("Erreur lors de l'affection de l'avoir sur la facture!", e1);
+                    } finally {
+                        f.dispose();
+                    }
+
+                }
+            });
+            SwingUtilities.invokeLater(new Runnable() {
+
+                @Override
+                public void run() {
+
+                    FrameUtil.showPacked(f);
+                }
+
+            });
+        }
+    }
+
     @Override
     public void select(SQLRowAccessor r) {
         if (r != null) {
@@ -806,7 +935,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
             // Les contacts sont filtrés en fonction du client (ID_AFFAIRE.ID_CLIENT), donc si
             // l'ID_CONTACT est changé avant ID_AFFAIRE le contact ne sera pas présent dans la combo
             // => charge en deux fois les valeurs
-            final SQLRowValues rVals = r.asRowValues();
+            final SQLRowValues rVals = r.asRowValues().deepCopy();
             final SQLRowValues vals = new SQLRowValues(r.getTable());
 
             vals.load(rVals, createSet("ID_CLIENT"));
@@ -856,6 +985,19 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
 
                 // On met à jour le stock
                 // updateStock(getSelectedID());
+                final int idFinal = getSelectedID();
+                ComptaPropsConfiguration.getInstanceCompta().getNonInteractiveSQLExecutor().execute(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        try {
+                            // Mise à jour du stock
+                            updateStock(idFinal);
+                        } catch (Exception e) {
+                            ExceptionHandler.handle("Update error", e);
+                        }
+                    }
+                });
 
                 int idMvt = row.getInt("ID_MOUVEMENT");
 
@@ -868,6 +1010,8 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
                 gen.genereMouvement();
 
                 createAvoirClient(row);
+
+                useAvoir(row);
             } catch (Exception e) {
                 ExceptionHandler.handle("Erreur de mise à jour de l'avoir", e);
             }
@@ -882,7 +1026,7 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
         }
     }
 
-    // Su^prression de la methode, retour de marchandise à gérer avec les Mouvements de stocks
+    // // Su^prression de la methode, retour de marchandise à gérer avec les Mouvements de stocks
     // protected String getLibelleStock(SQLRowAccessor row, SQLRowAccessor rowElt) {
     // return "Avoir client N°" + row.getString("NUMERO");
     // }
@@ -905,6 +1049,39 @@ public class AvoirClientSQLComponent extends TransfertBaseSQLComponent implement
     // }, true, true);
     //
     // }
+    protected String getLibelleStock(SQLRowAccessor row, SQLRowAccessor rowElt) {
+        return "Avoir client N°" + row.getString("NUMERO");
+    }
+
+    /**
+     * Mise à jour des stocks pour chaque article composant du bon
+     * 
+     * @throws SQLException
+     */
+    private void updateStock(int id) throws SQLException {
+
+        SQLRow row = getTable().getRow(id);
+        final List<SQLRow> referentRows = row.getReferentRows(getTable().getTable("AVOIR_CLIENT_ELEMENT"));
+        final List<SQLRow> effectiveRows = new ArrayList<SQLRow>();
+        for (SQLRow sqlRow : referentRows) {
+            if (sqlRow.getBoolean("RETOUR_STOCK")) {
+                effectiveRows.add(sqlRow);
+            }
+        }
+        if (effectiveRows.size() > 0) {
+            StockItemsUpdater stockUpdater = new StockItemsUpdater(new StockLabel() {
+
+                @Override
+                public String getLabel(SQLRowAccessor rowOrigin, SQLRowAccessor rowElt) {
+
+                    return getLibelleStock(rowOrigin, rowElt);
+                }
+            }, row, effectiveRows, TypeStockUpdate.RETOUR_AVOIR_CLIENT);
+
+            stockUpdater.update();
+        }
+
+    }
 
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == this.boxAdeduire) {

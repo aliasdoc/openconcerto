@@ -23,6 +23,7 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 
+import java.math.BigDecimal;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -158,34 +159,34 @@ public class EtatChargesPayeSheet extends SheetInterface {
                 // on cumule les données
                 if (rowFicheElt.getObject("NB_BASE") != null) {
                     Object o = rowVals.getObject("NB_BASE");
-                    float base = (o == null) ? 0.0F : ((Float) o).floatValue();
-                    base += rowFicheElt.getFloat("NB_BASE");
-                    rowVals.put("NB_BASE", new Float(base));
+                    BigDecimal base = (o == null) ? BigDecimal.ZERO : ((BigDecimal) o);
+                    base = base.add(rowFicheElt.getBigDecimal("NB_BASE"));
+                    rowVals.put("NB_BASE", base);
                 }
                 if (rowFicheElt.getObject("MONTANT_PAT") != null) {
                     Object o = rowVals.getObject("MONTANT_PAT");
-                    float montant = (o == null) ? 0.0F : ((Float) o).floatValue();
-                    montant += rowFicheElt.getFloat("MONTANT_PAT");
-                    rowVals.put("MONTANT_PAT", new Float(montant));
+                    BigDecimal montant = (o == null) ? BigDecimal.ZERO : ((BigDecimal) o);
+                    montant = montant.add(rowFicheElt.getBigDecimal("MONTANT_PAT"));
+                    rowVals.put("MONTANT_PAT", montant);
                 }
                 if (rowFicheElt.getObject("MONTANT_SAL_DED") != null) {
                     Object o = rowVals.getObject("MONTANT_SAL_DED");
-                    float montant = (o == null) ? 0.0F : ((Float) o).floatValue();
-                    montant += rowFicheElt.getFloat("MONTANT_SAL_DED");
-                    rowVals.put("MONTANT_SAL_DED", new Float(montant));
+                    BigDecimal montant = (o == null) ? BigDecimal.ZERO : ((BigDecimal) o);
+                    montant = montant.add(rowFicheElt.getBigDecimal("MONTANT_SAL_DED"));
+                    rowVals.put("MONTANT_SAL_DED", montant);
                 }
             } else {
                 rowVals = new SQLRowValues(tableFichePayeElement);
                 Configuration.getInstance().getDirectory().getElement(tableFichePayeElement).loadAllSafe(rowVals, rowFicheElt);
-                float montantPat, montantSal;
+                BigDecimal montantPat, montantSal;
 
                 Object o = rowVals.getObject("MONTANT_PAT");
-                montantPat = (o == null) ? 0.0F : ((Float) o).floatValue();
+                montantPat = (o == null) ? BigDecimal.ZERO : ((BigDecimal) o);
 
                 o = rowVals.getObject("MONTANT_SAL_DED");
-                montantSal = (o == null) ? 0.0F : ((Float) o).floatValue();
+                montantSal = (o == null) ? BigDecimal.ZERO : ((BigDecimal) o);
 
-                if (montantPat != 0 || montantSal != 0) {
+                if (montantPat.signum() != 0 || montantSal.signum() != 0) {
                     mapValueRub.put(rowFicheElt.getObject("IDSOURCE"), rowVals);
                 }
             }
@@ -206,8 +207,8 @@ public class EtatChargesPayeSheet extends SheetInterface {
             posLine += (debutFill - 1);
 
             Map mapValue = (Map) mapCaisse.get(mapCaisse.keySet().toArray()[n]);
-            float totalMontantSal = 0.0F;
-            float totalMontantPat = 0.0F;
+            BigDecimal totalMontantSal = BigDecimal.ZERO;
+            BigDecimal totalMontantPat = BigDecimal.ZERO;
 
             SQLRow rowCaisse = tableCaisse.getRow(Integer.parseInt(mapCaisse.keySet().toArray()[n].toString()));
             this.mCell.put("A" + posLine, "Caisse " + rowCaisse.getObject("NOM"));
@@ -226,22 +227,22 @@ public class EtatChargesPayeSheet extends SheetInterface {
                 this.mCell.put("A" + posLine, rowVals.getObject("NOM"));
                 this.mCell.put("B" + posLine, rowVals.getObject("NB_BASE"));
 
-                Float oTxSal = (Float) rowVals.getObject("TAUX_SAL");
-                float txSal = (oTxSal == null) ? 0.0F : oTxSal.floatValue();
-                Float oTxPat = (Float) rowVals.getObject("TAUX_PAT");
-                float txPat = (oTxPat == null) ? 0.0F : oTxPat.floatValue();
-                this.mCell.put("C" + posLine, new Float(txSal + txPat));
+                BigDecimal txSal = rowVals.getBigDecimal("TAUX_SAL");
+                txSal = (txSal == null) ? BigDecimal.ZERO : txSal;
+                BigDecimal txPat = rowVals.getBigDecimal("TAUX_PAT");
+                txPat = (txPat == null) ? BigDecimal.ZERO : txPat;
+                this.mCell.put("C" + posLine, txSal.add(txPat));
 
-                System.err.println(rowVals.getObject("MONTANT_SAL_DED").getClass());
-                Float oMontantSal = (Float) rowVals.getObject("MONTANT_SAL_DED");
-                float montantSal = (oMontantSal == null) ? 0.0F : oMontantSal.floatValue();
-                Float oMontantPat = (Float) rowVals.getObject("MONTANT_PAT");
-                float montantPat = (oMontantPat == null) ? 0.0F : oMontantPat.floatValue();
-                this.mCell.put("D" + posLine, new Float(montantPat));
-                this.mCell.put("E" + posLine, new Float(montantSal));
-                this.mCell.put("F" + posLine, new Float(montantSal + montantPat));
-                totalMontantPat += montantPat;
-                totalMontantSal += montantSal;
+                // System.err.println(rowVals.getObject("MONTANT_SAL_DED").getClass());
+                BigDecimal montantSal = rowVals.getBigDecimal("MONTANT_SAL_DED");
+                montantSal = (montantSal == null) ? BigDecimal.ZERO : montantSal;
+                BigDecimal montantPat = rowVals.getBigDecimal("MONTANT_PAT");
+                montantPat = (montantPat == null) ? BigDecimal.ZERO : montantPat;
+                this.mCell.put("D" + posLine, montantPat);
+                this.mCell.put("E" + posLine, montantSal);
+                this.mCell.put("F" + posLine, montantSal.add(montantPat));
+                totalMontantPat = totalMontantPat.add(montantPat);
+                totalMontantSal = totalMontantSal.add(montantSal);
 
                 this.mapStyleRow.put(new Integer(posLine), "Normal");
                 posLine++;
@@ -250,9 +251,9 @@ public class EtatChargesPayeSheet extends SheetInterface {
             this.mCell.put("A" + posLine, "Total");
             this.mCell.put("B" + posLine, "");
             this.mCell.put("C" + posLine, "");
-            this.mCell.put("D" + posLine, new Float(totalMontantPat));
-            this.mCell.put("E" + posLine, new Float(totalMontantSal));
-            this.mCell.put("F" + posLine, new Float(totalMontantPat + totalMontantSal));
+            this.mCell.put("D" + posLine, totalMontantPat);
+            this.mCell.put("E" + posLine, totalMontantSal);
+            this.mCell.put("F" + posLine, totalMontantPat.add(totalMontantSal));
             this.mapStyleRow.put(new Integer(posLine), "Titre 1");
 
             // pied de page

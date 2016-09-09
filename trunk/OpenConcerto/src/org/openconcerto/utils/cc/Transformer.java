@@ -13,6 +13,8 @@
  
  package org.openconcerto.utils.cc;
 
+import java.util.Map;
+
 public abstract class Transformer<E, T> implements ITransformer<E, T>, IClosure<E>, org.apache.commons.collections.Transformer {
 
     private static final ITransformer<Object, Object> nopTransf = new ITransformer<Object, Object>() {
@@ -25,6 +27,15 @@ public abstract class Transformer<E, T> implements ITransformer<E, T>, IClosure<
     @SuppressWarnings("unchecked")
     public static final <N> ITransformer<N, N> nopTransformer() {
         return (ITransformer<N, N>) nopTransf;
+    }
+
+    public static final <K, V> ITransformer<K, V> fromMap(final Map<K, V> map) {
+        return new Transformer<K, V>() {
+            @Override
+            public V transformChecked(K input) {
+                return map.get(input);
+            }
+        };
     }
 
     @SuppressWarnings("unchecked")

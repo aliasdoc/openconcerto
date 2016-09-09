@@ -47,6 +47,11 @@ public class CumulsPayeSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     /*
      * (non-Javadoc)
      * 
@@ -108,11 +113,21 @@ public class CumulsPayeSQLElement extends ComptaSQLConfElement {
                 cPanel.gridx++;
                 this.add(textNetAPayer, cPanel);
 
+                // net imposable
+                cPanel.gridx = 0;
+                cPanel.gridy++;
+                JLabel labelH = new JLabel(getLabelFor("HEURE_TRAV"));
+                this.add(labelH, cPanel);
+                JTextField textH = new JTextField(10);
+                cPanel.gridx++;
+                this.add(textH, cPanel);
+
                 this.addSQLObject(textCSG, "CSG_C");
                 this.addSQLObject(textCotPat, "COT_PAT_C");
                 this.addSQLObject(textCotSal, "COT_SAL_C");
                 this.addSQLObject(textNetAPayer, "NET_A_PAYER_C");
                 this.addSQLObject(textNetImp, "NET_IMP_C");
+                this.addSQLObject(textH, "HEURE_TRAV");
                 this.addSQLObject(textSalBrut, "SAL_BRUT_C");
             }
         };

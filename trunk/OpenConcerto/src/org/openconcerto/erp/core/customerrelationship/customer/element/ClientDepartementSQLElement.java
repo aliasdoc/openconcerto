@@ -42,11 +42,6 @@ public class ClientDepartementSQLElement extends ComptaSQLConfElement {
         return list;
     }
 
-    @Override
-    protected List<String> getPrivateFields() {
-        return Arrays.asList("ID_ADRESSE");
-    }
-
     public SQLComponent createComponent() {
         return new UISQLComponent(this, 1) {
             public void addViews() {

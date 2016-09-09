@@ -28,12 +28,21 @@ public class DevisCommandeSQLInjector extends SQLInjector {
         final SQLTable tableDevis = getSource();
         final SQLTable tableCommande = getDestination();
         map(tableDevis.getField("ID_CLIENT"), tableCommande.getField("ID_CLIENT"));
+        if (tableDevis.contains("REMISE_HT") && tableCommande.contains("REMISE_HT")) {
+            map(tableDevis.getField("REMISE_HT"), tableCommande.getField("REMISE_HT"));
+        }
+        if (tableDevis.contains("PORT_HT") && tableCommande.contains("PORT_HT")) {
+            map(tableDevis.getField("PORT_HT"), tableCommande.getField("PORT_HT"));
+        }
         mapDefaultValues(tableCommande.getField("SOURCE"), tableDevis.getName());
         map(tableDevis.getField("ID_DEVIS"), tableCommande.getField("IDSOURCE"));
         map(tableDevis.getField("ID_DEVIS"), tableCommande.getField("ID_DEVIS"));
         map(tableDevis.getField("ID_COMMERCIAL"), tableCommande.getField("ID_COMMERCIAL"));
         if (tableDevis.getTable().contains("ID_POLE_PRODUIT")) {
             map(tableDevis.getField("ID_POLE_PRODUIT"), tableCommande.getField("ID_POLE_PRODUIT"));
+        }
+        if (tableDevis.getTable().contains("ID_TARIF") && tableCommande.getTable().contains("ID_TARIF")) {
+            map(tableDevis.getField("ID_TARIF"), tableCommande.getField("ID_TARIF"));
         }
         if (getSource().getTable().contains("ID_CONTACT")) {
             map(tableDevis.getField("ID_CONTACT"), tableCommande.getField("ID_CONTACT"));

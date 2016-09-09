@@ -23,6 +23,7 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -76,10 +77,9 @@ public class RubriqueBrutSQLElement extends ConfSQLElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_PERIODE_VALIDITE");
-        return l;
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     /*
@@ -326,6 +326,23 @@ public class RubriqueBrutSQLElement extends ConfSQLElement {
                 cPanel.gridwidth = GridBagConstraints.REMAINDER;
                 JCheckBox checkCP = new JCheckBox(getLabelFor("PART_CP"));
                 panelProp.add(checkCP, cPanel);
+
+                // Type
+                JLabel labelSelCodeRubrique = new JLabel("Code DSN");
+                labelSelCodeRubrique.setHorizontalAlignment(SwingConstants.RIGHT);
+                cPanel.gridy++;
+                cPanel.gridx = 1;
+                cPanel.gridheight = 1;
+                cPanel.gridwidth = 1;
+                cPanel.weightx = 0;
+                cPanel.anchor = GridBagConstraints.WEST;
+                panelProp.add(labelSelCodeRubrique, cPanel);
+
+                ElementComboBox comboSelCodeRubrique = new ElementComboBox(false);
+                cPanel.gridx++;
+                cPanel.weightx = 1;
+                panelProp.add(comboSelCodeRubrique, cPanel);
+                this.addView(comboSelCodeRubrique, "ID_CODE_TYPE_RUBRIQUE_BRUT");
 
                 // Tabbed Pane
                 JTabbedPane tab = new JTabbedPane();

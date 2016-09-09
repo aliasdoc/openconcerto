@@ -13,16 +13,24 @@
  
  package org.openconcerto.erp.generationDoc;
 
+import org.openconcerto.erp.core.common.element.StyleSQLElement;
+import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
+import org.openconcerto.sql.Configuration;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowListRSH;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.utils.CompareUtils;
+import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.cc.ITransformer;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -42,7 +50,7 @@ public class OOXMLCache {
             return null;
         }
 
-        int i = row.getInt(field.getName());
+        int i = row.getForeignID(field.getName());
 
         if (c != null && c.get(i) != null) {
             return c.get(i);
@@ -64,10 +72,11 @@ public class OOXMLCache {
     }
 
     protected List<? extends SQLRowAccessor> getReferentRows(List<? extends SQLRowAccessor> row, SQLTable tableForeign) {
-        return getReferentRows(row, tableForeign, null, null);
+        return getReferentRows(row, tableForeign, null, null, false, null, false);
     }
 
-    protected List<? extends SQLRowAccessor> getReferentRows(List<? extends SQLRowAccessor> row, final SQLTable tableForeign, String groupBy, final String orderBy) {
+    protected List<? extends SQLRowAccessor> getReferentRows(List<? extends SQLRowAccessor> row, final SQLTable tableForeign, String groupBy, final String orderBy, boolean expandNomenclature,
+            String foreignField, boolean excludeQteZero) {
         Map<SQLTable, List<SQLRowAccessor>> c = cacheReferent.get(row.get(0));
 
         if (c != null && c.get(tableForeign) != null) {
@@ -84,14 +93,30 @@ public class OOXMLCache {
                 sel.addSelectStar(tableForeign);
 
                 Where w = null;
-                for (SQLRowAccessor rowAccess : row) {
-                    if (rowAccess != null && !rowAccess.isUndefined()) {
-                        if (w == null) {
-                            w = new Where((SQLField) tableForeign.getForeignKeys(rowAccess.getTable()).toArray()[0], "=", rowAccess.getID());
-                        } else {
-                            w = w.or(new Where((SQLField) tableForeign.getForeignKeys(rowAccess.getTable()).toArray()[0], "=", rowAccess.getID()));
+                if (foreignField != null && foreignField.trim().length() > 0) {
+                    for (SQLRowAccessor rowAccess : row) {
+                        if (rowAccess != null && !rowAccess.isUndefined()) {
+                            if (w == null) {
+                                w = new Where((SQLField) tableForeign.getField(foreignField), "=", rowAccess.getID());
+                            } else {
+                                w = w.or(new Where((SQLField) tableForeign.getField(foreignField), "=", rowAccess.getID()));
+                            }
                         }
                     }
+                } else {
+                    for (SQLRowAccessor rowAccess : row) {
+                        if (rowAccess != null && !rowAccess.isUndefined()) {
+                            if (w == null) {
+                                w = new Where((SQLField) tableForeign.getForeignKeys(rowAccess.getTable()).toArray()[0], "=", rowAccess.getID());
+                            } else {
+                                w = w.or(new Where((SQLField) tableForeign.getForeignKeys(rowAccess.getTable()).toArray()[0], "=", rowAccess.getID()));
+                            }
+                        }
+                    }
+                }
+
+                if (excludeQteZero) {
+                    w = w.and(new Where(tableForeign.getField("QTE"), "!=", 0));
                 }
                 sel.setWhere(w);
                 addSelectOrder(tableForeign, orderBy, sel);
@@ -139,6 +164,10 @@ public class OOXMLCache {
                 }
             }
 
+            if (expandNomenclature) {
+                list = expandNomenclature(list);
+            }
+
             if (c == null) {
                 Map<SQLTable, List<SQLRowAccessor>> map = new HashMap<SQLTable, List<SQLRowAccessor>>();
                 map.put(tableForeign, list);
@@ -160,6 +189,88 @@ public class OOXMLCache {
             return list;
         }
         // return row.getReferentRows(tableForeign);
+    }
+
+    private List<SQLRowAccessor> expandNomenclature(List<SQLRowAccessor> list) {
+        final List<Integer> idsArt = new ArrayList<Integer>(list.size());
+        DBRoot root = null;
+        SQLTable table = null;
+        for (SQLRowAccessor r : list) {
+            root = r.getTable().getDBRoot();
+            table = r.getTable();
+            if (!r.isForeignEmpty("ID_ARTICLE")) {
+                idsArt.add(r.getForeignID("ID_ARTICLE"));
+            }
+        }
+        List<SQLRowAccessor> result = new ArrayList<SQLRowAccessor>();
+        if (root != null) {
+
+            Map<String, Integer> style = Configuration.getInstance().getDirectory().getElement(StyleSQLElement.class).getAllStyleByName();
+
+            final SQLTable tableArtElt = root.getTable("ARTICLE_ELEMENT");
+            SQLRowValues rowVals = new SQLRowValues(tableArtElt);
+            rowVals.putNulls("QTE", "QTE_UNITAIRE", "ID_UNITE_VENTE", "ID_ARTICLE_PARENT");
+            rowVals.putRowValues("ID_ARTICLE").putNulls("CODE", "NOM");
+            SQLRowValuesListFetcher fetch = SQLRowValuesListFetcher.create(rowVals);
+            fetch.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+
+                @Override
+                public SQLSelect transformChecked(SQLSelect input) {
+                    input.setWhere(new Where(input.getAlias(tableArtElt.getField("ID_ARTICLE_PARENT")), idsArt));
+                    return input;
+                }
+            });
+            List<SQLRowValues> l = fetch.fetch();
+            ListMap<Integer, SQLRowValues> map = new ListMap<Integer, SQLRowValues>();
+            for (SQLRowValues sqlRowValues : l) {
+                SQLRowValues rowInj = new SQLRowValues(table);
+                final SQLRowAccessor foreignArt = sqlRowValues.getForeign("ID_ARTICLE");
+                rowInj.put("ID_ARTICLE", foreignArt.asRowValues());
+                rowInj.put("QTE", sqlRowValues.getInt("QTE"));
+                rowInj.put("NOM", foreignArt.getObject("NOM"));
+                rowInj.put("CODE", foreignArt.getObject("CODE"));
+                rowInj.put("QTE_UNITAIRE", sqlRowValues.getObject("QTE_UNITAIRE"));
+                rowInj.put("ID_UNITE_VENTE", sqlRowValues.getObject("ID_UNITE_VENTE"));
+                rowInj.put("PV_HT", BigDecimal.ZERO);
+                rowInj.put("T_PV_HT", BigDecimal.ZERO);
+
+                rowInj.put("ID_TAXE", TaxeCache.getCache().getFirstTaxe().getID());
+                rowInj.put("NIVEAU", 1);
+                rowInj.put("ID_STYLE", style.get("Composant"));
+                map.add(sqlRowValues.getForeignID("ID_ARTICLE_PARENT"), rowInj);
+            }
+
+            int size = list.size();
+
+            for (int i = 0; i < size; i++) {
+
+                SQLRowAccessor sqlRowAccessor = list.get(i);
+                result.add(sqlRowAccessor);
+
+                if (!sqlRowAccessor.isForeignEmpty("ID_ARTICLE") && sqlRowAccessor.getInt("NIVEAU") == 1) {
+                    final List<SQLRowValues> c = map.get(sqlRowAccessor.getForeignID("ID_ARTICLE"));
+                    if (c != null) {
+                        if (i + 1 < size) {
+                            SQLRowAccessor rowAccessorNext = list.get(i + 1);
+                            if (rowAccessorNext.getInt("NIVEAU") == 1) {
+                                for (SQLRowValues sqlRowValues : c) {
+                                    sqlRowValues.put("QTE", sqlRowValues.getInt("QTE") * sqlRowAccessor.getInt("QTE"));
+                                    result.add(sqlRowValues);
+                                }
+                            }
+                        } else {
+                            for (SQLRowValues sqlRowValues : c) {
+                                sqlRowValues.put("QTE", sqlRowValues.getInt("QTE") * sqlRowAccessor.getInt("QTE"));
+                                result.add(sqlRowValues);
+                            }
+                        }
+                    }
+                }
+
+            }
+
+        }
+        return result;
     }
 
     private void addSelectOrder(final SQLTable tableForeign, final String orderBy, SQLSelect sel) {

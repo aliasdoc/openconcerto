@@ -28,6 +28,6 @@ final class SQLTableListenerData<R extends SQLRowAccessor> implements SQLTableMo
         final int id = evt.getId();
         // if the row id was cached as non-existent and evt mode is ADDED, now it is
         if (id < SQLRow.MIN_VALID_ID || this.row.getID() == id)
-            this.l.dataChanged();
+            this.l.dataChanged(evt);
     }
 }

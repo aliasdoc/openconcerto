@@ -13,28 +13,6 @@
  
  package org.openconcerto.erp.core.common.ui;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Vector;
-
-import javax.swing.AbstractAction;
-import javax.swing.JOptionPane;
-import javax.swing.JPopupMenu;
-import javax.swing.JTable;
-import javax.swing.ToolTipManager;
-import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
-import javax.swing.table.TableCellRenderer;
-
 import org.openconcerto.erp.config.ComptaPropsConfiguration;
 import org.openconcerto.erp.core.finance.accounting.model.CurrencyConverter;
 import org.openconcerto.erp.core.finance.tax.model.TaxeCache;
@@ -65,6 +43,32 @@ import org.openconcerto.sql.view.list.SQLTableElement;
 import org.openconcerto.sql.view.list.ValidStateChecker;
 import org.openconcerto.utils.DecimalUtils;
 import org.openconcerto.utils.i18n.TranslationManager;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Vector;
+
+import javax.swing.AbstractAction;
+import javax.swing.JOptionPane;
+import javax.swing.JPopupMenu;
+import javax.swing.JTable;
+import javax.swing.SwingUtilities;
+import javax.swing.ToolTipManager;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
+import javax.swing.table.TableCellRenderer;
 
 public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemTable {
 
@@ -97,7 +101,7 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
 
         final SQLElement e = getSQLElement();
 
-        SQLPreferences prefs = SQLPreferences.getMemCached(getSQLElement().getTable().getDBRoot());
+        final SQLPreferences prefs = SQLPreferences.getMemCached(getSQLElement().getTable().getDBRoot());
         final boolean selectArticle = prefs.getBoolean(GestionArticleGlobalPreferencePanel.USE_CREATED_ARTICLE, false);
         final boolean createAuto = prefs.getBoolean(GestionArticleGlobalPreferencePanel.CREATE_ARTICLE_AUTO, true);
         this.supplierCode = prefs.getBoolean(GestionArticleGlobalPreferencePanel.SUPPLIER_PRODUCT_CODE, false);
@@ -191,13 +195,13 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
 
         SQLTableElement qteU = new SQLTableElement(e.getTable().getField("QTE_UNITAIRE"), BigDecimal.class) {
             @Override
-            public boolean isCellEditable(SQLRowValues vals) {
+            public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
 
                 SQLRowAccessor row = vals.getForeign("ID_UNITE_VENTE");
                 if (row != null && !row.isUndefined() && row.getBoolean("A_LA_PIECE")) {
                     return false;
                 } else {
-                    return super.isCellEditable(vals);
+                    return super.isCellEditable(vals, rowIndex, columnIndex);
                 }
             }
 
@@ -286,33 +290,43 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseReleased(MouseEvent e) {
+                handlePopup(e);
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                handlePopup(e);
+            }
+
+            public void handlePopup(MouseEvent e) {
                 final int rowindex = table.getSelectedRow();
                 if (rowindex < 0)
                     return;
                 if (e.isPopupTrigger() && e.getComponent() instanceof JTable) {
                     JPopupMenu popup = new JPopupMenu();
-                    popup.add(new AbstractAction(TranslationManager.getInstance().getTranslationForItem("product.bom.expand")) {
+                    if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.CAN_EXPAND_NOMENCLATURE_HA, true)) {
+                        popup.add(new AbstractAction(TranslationManager.getInstance().getTranslationForItem("product.bom.expand")) {
 
-                        @Override
-                        public void actionPerformed(ActionEvent arg0) {
-                            expandNomenclature(rowindex, m, EXPAND_TYPE.EXPAND);
-                        }
-                    });
-                    popup.add(new AbstractAction(TranslationManager.getInstance().getTranslationForItem("product.bom.expose")) {
+                            @Override
+                            public void actionPerformed(ActionEvent arg0) {
+                                expandNomenclature(rowindex, m, EXPAND_TYPE.EXPAND);
+                            }
+                        });
+                        popup.add(new AbstractAction(TranslationManager.getInstance().getTranslationForItem("product.bom.expose")) {
 
-                        @Override
-                        public void actionPerformed(ActionEvent arg0) {
-                            expandNomenclature(rowindex, m, EXPAND_TYPE.VIEW_ONLY);
-                        }
-                    });
-                    popup.add(new AbstractAction(TranslationManager.getInstance().getTranslationForItem("product.bom.flat")) {
+                            @Override
+                            public void actionPerformed(ActionEvent arg0) {
+                                expandNomenclature(rowindex, m, EXPAND_TYPE.VIEW_ONLY);
+                            }
+                        });
+                        popup.add(new AbstractAction(TranslationManager.getInstance().getTranslationForItem("product.bom.flat")) {
 
-                        @Override
-                        public void actionPerformed(ActionEvent arg0) {
-                            expandNomenclature(rowindex, m, EXPAND_TYPE.FLAT);
-                        }
-                    });
-
+                            @Override
+                            public void actionPerformed(ActionEvent arg0) {
+                                expandNomenclature(rowindex, m, EXPAND_TYPE.FLAT);
+                            }
+                        });
+                    }
                     for (AbstractAction action : getAdditionnalMouseAction(rowindex)) {
                         popup.add(action);
                     }
@@ -324,6 +338,9 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
 
         // Autocompletion
         List<String> completionFields = new ArrayList<String>();
+        if (e.getTable().getFieldsName().contains("INCOTERM")) {
+            completionFields.add("INCOTERM");
+        }
         completionFields.add("ID_UNITE_VENTE");
         completionFields.add("PA_HT");
         completionFields.add("PV_HT");
@@ -345,9 +362,7 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
         if (e.getTable().getFieldsName().contains("COLORIS")) {
             completionFields.add("COLORIS");
         }
-        if (e.getTable().getFieldsName().contains("INCOTERM")) {
-            completionFields.add("INCOTERM");
-        }
+
         if (e.getTable().getFieldsName().contains("DESCRIPTIF")) {
             completionFields.add("DESCRIPTIF");
         }
@@ -670,7 +685,9 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
             }
 
         });
-
+        // La devise est renseignée globalement dans la commande et est reportée automatiquement sur
+        // les lignes
+        setColumnVisible(model.getColumnIndexForElement(tableElement_Devise), false);
         for (String string : visibilityMap.keySet()) {
             setColumnVisible(model.getColumnForField(string), visibilityMap.get(string));
         }
@@ -689,8 +706,19 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
         return Collections.emptyList();
     }
 
-    public void setFournisseur(SQLRow rowFournisseur) {
+    private String incoterm = "";
 
+    public void setIncoterms(String incoterm) {
+        if (incoterm == null) {
+            incoterm = "";
+        }
+        this.incoterm = incoterm;
+    }
+
+    private SQLRow rowFournisseur = null;
+
+    public void setFournisseur(SQLRow rowFournisseur) {
+        this.rowFournisseur = rowFournisseur;
         if (getSQLElement().getTable().contains("ID_CODE_FOURNISSEUR") && this.supplierCode) {
 
             if (rowFournisseur != null && !rowFournisseur.isUndefined()) {
@@ -715,70 +743,125 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
     }
 
     private Object tarifCompletion(SQLRow row, String field) {
-        final SQLTable tTarifFournisseur = row.getTable().getDBRoot().getTable("ARTICLE_TARIF_FOURNISSEUR");
+        final SQLTable tTarifFournisseur = this.getSQLElement().getTable().getDBRoot().getTable("ARTICLE_TARIF_FOURNISSEUR");
 
-        if (field.equalsIgnoreCase("PRIX_METRIQUE_HA_1") && tTarifFournisseur != null) {
+        if (row != null && !row.isUndefined() && field.equalsIgnoreCase("PRIX_METRIQUE_HA_1") && tTarifFournisseur != null) {
+            List<String> incoTerms;
+
+            if (this.incoterm != null && this.incoterm.equalsIgnoreCase("CPT")) {
+                incoTerms = Arrays.asList("PRIX_ACHAT", "COEF_TRANSPORT_PORT");
+            } else if (this.incoterm != null && this.incoterm.equalsIgnoreCase("DDP")) {
+                incoTerms = Arrays.asList("PRIX_ACHAT", "COEF_TRANSPORT_PORT", "COEF_TAXE_D");
+            } else {
+                incoTerms = Arrays.asList("PRIX_ACHAT");
+            }
             List<SQLRow> rows = row.getReferentRows(tTarifFournisseur);
-            if (!rows.isEmpty()) {
-                final SQLRow sqlRow0 = rows.get(0);
+            if (row.getBoolean("AUTO_PRIX_ACHAT_NOMENCLATURE")) {
 
-                List<String> incoTerms;
-                final String conditionsInco = sqlRow0.getString("CONDITIONS");
+                List<SQLRow> rowsElt = row.getReferentRows(row.getTable().getTable("ARTICLE_ELEMENT").getField("ID_ARTICLE_PARENT"));
+                BigDecimal price = BigDecimal.ZERO;
+                final Set<String> tarifNotFound = new HashSet<String>();
+                for (SQLRow sqlRow : rowsElt) {
+                    List<SQLRow> rowsT = sqlRow.getForeign("ID_ARTICLE").getReferentRows(tTarifFournisseur);
 
-                if (conditionsInco != null && conditionsInco.equalsIgnoreCase("CPT")) {
-                    incoTerms = Arrays.asList("PRIX_ACHAT", "COEF_TRANSPORT_PORT");
-                } else if (conditionsInco != null && conditionsInco.equalsIgnoreCase("DDP")) {
-                    incoTerms = Arrays.asList("PRIX_ACHAT", "COEF_TRANSPORT_PORT", "COEF_TAXE_D");
-                } else {
-                    incoTerms = Arrays.asList("PRIX_ACHAT");
+                    boolean priceFound = false;
+                    boolean tarifFound = false;
+                    if (rowsT.size() > 0) {
+                        BigDecimal min = BigDecimal.ZERO;
+
+                        BigDecimal defaultPrice = BigDecimal.ZERO;
+                        Calendar c = null;
+                        for (SQLRow sqlRowT : rowsT) {
+                            if (this.rowFournisseur != null && this.rowFournisseur.getID() == sqlRowT.getForeignID("ID_FOURNISSEUR")) {
+                                BigDecimal priceT = getPrice(sqlRowT, incoTerms);
+                                defaultPrice = priceT;
+                                final Calendar datePrice = sqlRowT.getDate("DATE_PRIX");
+                                if (datePrice == null || (this.getDateDevise() != null && !this.getDateDevise().before(datePrice.getTime()))) {
+                                    if (c == null || c.before(datePrice)) {
+
+                                        min = priceT;
+                                        c = datePrice;
+                                        priceFound = true;
+                                    } else if (c != null) {
+                                        defaultPrice = priceT;
+                                    }
+                                }
+                                tarifFound = true;
+                            }
+                        }
+
+                        if (priceFound) {
+                            price = price.add(min.multiply(sqlRow.getBigDecimal("QTE_UNITAIRE").multiply(new BigDecimal(sqlRow.getInt("QTE"), DecimalUtils.HIGH_PRECISION))));
+                        } else {
+                            price = price.add(defaultPrice.multiply(sqlRow.getBigDecimal("QTE_UNITAIRE").multiply(new BigDecimal(sqlRow.getInt("QTE"), DecimalUtils.HIGH_PRECISION))));
+                        }
+                    }
+                    if (!tarifFound) {
+                        tarifNotFound.add(sqlRow.getForeign("ID_ARTICLE").getString("CODE"));
+                    }
                 }
+                if (!tarifNotFound.isEmpty()) {
+                    SwingUtilities.invokeLater(new Runnable() {
 
-                BigDecimal min = getPrice(sqlRow0, incoTerms);
-
+                        @Override
+                        public void run() {
+                            JOptionPane.showMessageDialog(AbstractAchatArticleItemTable.this.table,
+                                    "Attention, impossible de calculer le tarif.\nLes articles suivants n'ont pas de tarif associé :\n" + tarifNotFound);
+                        }
+                    });
+                }
+                return price;
+            } else if (!rows.isEmpty()) {
+                BigDecimal min = BigDecimal.ZERO;
+                Calendar c = null;
                 for (SQLRow sqlRow : rows) {
-                    BigDecimal price = getPrice(sqlRow, incoTerms);
-                    if (price.compareTo(min) < 0) {
-                        min = price;
+                    if (this.rowFournisseur != null && this.rowFournisseur.getID() == sqlRow.getForeignID("ID_FOURNISSEUR")) {
+                        BigDecimal price = getPrice(sqlRow, incoTerms);
+                        final Calendar datePrice = sqlRow.getDate("DATE_PRIX");
+                        if (datePrice == null || (this.getDateDevise() != null && !this.getDateDevise().before(datePrice.getTime()))) {
+                            if (c == null || c.before(datePrice)) {
+                                min = price;
+                                c = datePrice;
+                            }
+                        }
                     }
                 }
                 return min.setScale(2, RoundingMode.HALF_UP);
             }
         }
         if (field.equalsIgnoreCase("INCOTERM")) {
-            if (tTarifFournisseur != null) {
-                List<SQLRow> rows = row.getReferentRows(tTarifFournisseur);
-                if (!rows.isEmpty()) {
-                    final SQLRow sqlRow0 = rows.get(0);
-                    return sqlRow0.getString("CONDITIONS");
-                }
-            }
-            return "";
+            // if (tTarifFournisseur != null) {
+            // List<SQLRow> rows = row.getReferentRows(tTarifFournisseur);
+            // if (!rows.isEmpty()) {
+            // final SQLRow sqlRow0 = rows.get(0);
+            // return sqlRow0.getString("CONDITIONS");
+            // }
+            // }
+            return this.incoterm;
         }
 
         if (getDevise() != null && !getDevise().isUndefined()) {
             if ((field.equalsIgnoreCase("ID_DEVISE") || field.equalsIgnoreCase("ID_DEVISE_HA"))) {
                 return getDevise().getID();
             } else if ((field.equalsIgnoreCase("PA_DEVISE"))) {
-                if (row.getBigDecimal("PA_DEVISE") != null && row.getBigDecimal("PA_DEVISE").signum() != 0) {
+                if (row.getBigDecimal("PA_DEVISE") != null && row.getBigDecimal("PA_DEVISE").signum() != 0 && this.incoterm.length() == 0) {
                     return row.getBigDecimal("PA_DEVISE");
                 } else {
-                    if (row.getBigDecimal("PA_DEVISE") != null && row.getBigDecimal("PA_DEVISE").signum() != 0) {
-                        return row.getBigDecimal("PA_DEVISE");
-                    } else {
-                        String devCode = getDevise().getString("CODE");
+                    String devCode = getDevise().getString("CODE");
 
-                        CurrencyConverter c = new CurrencyConverter();
-                        BigDecimal tarifCompletion = (BigDecimal) tarifCompletion(row, "PRIX_METRIQUE_HA_1");
-                        if (tarifCompletion == null) {
-                            tarifCompletion = row.getBigDecimal("PRIX_METRIQUE_HA_1");
-                        }
-                        if (tarifCompletion == null) {
-                            return null;
-                        } else {
-                            return convert(tarifCompletion, devCode, true).setScale(2, RoundingMode.HALF_UP);
-                        }
+                    BigDecimal tarifCompletion = (BigDecimal) tarifCompletion(row, "PRIX_METRIQUE_HA_1");
+                    if (tarifCompletion == null) {
+                        tarifCompletion = row.getBigDecimal("PRIX_METRIQUE_HA_1");
+                    }
+                    if (tarifCompletion == null) {
+                        return null;
+                    } else {
+                        // Remove set scale 2 --> if scale ex : PA = 95.74MAD --> 0.76592€
+                        // with Scale 0.77€ so put 96.25MAD in PA
+                        return convert(tarifCompletion, devCode, true);
                     }
                 }
+
             }
         } else {
             if ((field.equalsIgnoreCase("ID_DEVISE") || field.equalsIgnoreCase("ID_DEVISE_HA"))) {
@@ -789,6 +872,7 @@ public abstract class AbstractAchatArticleItemTable extends AbstractArticleItemT
             }
         }
         return null;
+
     }
 
     @Override

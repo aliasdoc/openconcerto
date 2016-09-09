@@ -13,25 +13,35 @@
  
  package org.openconcerto.utils.cache;
 
-import java.util.HashSet;
-import java.util.Iterator;
+import org.openconcerto.utils.ListMap;
+import org.openconcerto.utils.cache.CacheItem.RemovalType;
+import org.openconcerto.utils.cc.IdentityHashSet;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Set;
+
+import net.jcip.annotations.GuardedBy;
 
 /**
  * A watcher invalidates cache results when its data is modified.
  * 
- * @param <K> cache key type.
  * @param <D> source data type, eg SQLTable.
  */
-abstract public class CacheWatcher<K, D> {
+abstract public class CacheWatcher<D> {
 
-    private final ICache<K, ?, D> c;
-    private final Set<K> keys;
+    @GuardedBy("this")
+    private final Set<CacheItem<?, ?, ? extends D>> values;
+    @GuardedBy("this")
+    private final ListMap<Object, CacheItem<?, ?, ? extends D>> additionalToNotify;
     private final D data;
 
-    protected CacheWatcher(ICache<K, ?, D> c, D data) {
-        this.c = c;
-        this.keys = new HashSet<K>();
+    protected CacheWatcher(D data) {
+        this.values = new IdentityHashSet<CacheItem<?, ?, ? extends D>>();
+        this.additionalToNotify = ListMap.decorate(new IdentityHashMap<Object, List<CacheItem<?, ?, ? extends D>>>());
         this.data = data;
     }
 
@@ -39,44 +49,85 @@ abstract public class CacheWatcher<K, D> {
         return this.data;
     }
 
-    synchronized boolean isEmpty() {
-        return this.keys.isEmpty();
+    final synchronized boolean isEmpty() {
+        return this.values.isEmpty();
     }
 
-    synchronized final void add(K key) {
-        this.keys.add(key);
+    final synchronized boolean add(CacheItem<?, ?, ? extends D> key) {
+        assert Thread.holdsLock(key) && key.getRemovalType() == null;
+        final boolean wasEmpty = this.isEmpty();
+        final boolean added = this.values.add(key);
+        if (added) {
+            for (final List<CacheItem<?, ?, ? extends D>> l : this.additionalToNotify.values())
+                l.add(key);
+            if (wasEmpty)
+                this.startWatching();
+        } else {
+            assert !wasEmpty;
+        }
+        assert !this.isEmpty();
+        return added;
     }
 
-    synchronized final void remove(K key) {
-        this.keys.remove(key);
+    final synchronized boolean remove(CacheItem<?, ?, ? extends D> key) {
+        if (!this.isEmpty()) {
+            for (final List<CacheItem<?, ?, ? extends D>> l : this.additionalToNotify.values())
+                l.remove(key);
+            final boolean res = this.values.remove(key);
+            if (this.isEmpty())
+                this.stopWatching();
+            return res;
+        } else {
+            return false;
+        }
     }
 
-    public final synchronized void die() {
-        this.dying();
-        this.clearCache();
+    protected void startWatching() {
     }
 
-    protected void dying() {
+    protected void stopWatching() {
     }
 
-    protected final void clearCache() {
-        // synch on the cache since otherwise we take and release its lock on each iteration
-        // but keep ours all the time. Thus if another thread call a synchronized method of the
-        // cache inbetween an iteration and tries to access us, a deadlock occurs.
-        synchronized (this.c) {
+    protected final void dataChanged(final Object event) {
+        List<CacheItem<?, ?, ? extends D>> vals;
+        synchronized (this) {
+            final List<CacheItem<?, ?, ? extends D>> prev = this.additionalToNotify.putCollection(event, new ArrayList<CacheItem<?, ?, ? extends D>>());
+            assert prev == null : "Duplicate event : " + event;
+            vals = new ArrayList<CacheItem<?, ?, ? extends D>>(this.values);
+        }
+
+        try {
+            fire(event, vals);
+        } finally {
+            // finally block to always remove from additionalToNotify
             synchronized (this) {
-                final Iterator<K> iter = this.keys.iterator();
-                while (iter.hasNext()) {
-                    final K key = iter.next();
-                    iter.remove();
-                    this.c.clear(key);
-                }
+                final List<CacheItem<?, ?, ? extends D>> remove = this.additionalToNotify.remove(event);
+                // can be null if we just died
+                vals = remove == null ? Collections.<CacheItem<?, ?, ? extends D>> emptyList() : new ArrayList<CacheItem<?, ?, ? extends D>>(remove);
+            }
+            fire(event, vals);
+        }
+    }
+
+    private void fire(final Object event, final Collection<CacheItem<?, ?, ? extends D>> vals) {
+        assert !Thread.holdsLock(this);
+        for (final CacheItem<?, ?, ? extends D> val : vals) {
+            if (this.changedBy(val, event)) {
+                val.setRemovalType(RemovalType.DATA_CHANGE);
             }
         }
     }
 
+    protected boolean changedBy(CacheItem<?, ?, ? extends D> val, Object event) {
+        return true;
+    }
+
     @Override
     public String toString() {
-        return this.getClass().getSimpleName() + " on " + getData();
+        final String vals;
+        synchronized (this) {
+            vals = String.valueOf(this.values);
+        }
+        return this.getClass().getSimpleName() + " on " + getData() + " : " + vals;
     }
 }

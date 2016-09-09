@@ -23,6 +23,7 @@ import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ListMap;
 import org.openconcerto.utils.NoneSelectedButtonGroup;
 
 import java.awt.GridBagConstraints;
@@ -65,6 +66,8 @@ public class RubriqueCotisationSQLElement extends ConfSQLElement {
         l.add("TX_PAT");
         l.add("TX_SAL");
         l.add("BRUT");
+        l.add("ID_CODE_CAISSE_TYPE_RUBRIQUE");
+        l.add("ID_CODE_BASE_ASSUJETTIE");
         l.add("PART_CSG");
         l.add("PART_CSG_SANS_ABATTEMENT");
         l.add("IMPOSABLE");
@@ -79,10 +82,9 @@ public class RubriqueCotisationSQLElement extends ConfSQLElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_PERIODE_VALIDITE");
-        return l;
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     /*
@@ -233,8 +235,33 @@ public class RubriqueCotisationSQLElement extends ConfSQLElement {
                 JCheckBox checkImpo = new JCheckBox(getLabelFor("IMPOSABLE"));
                 panelProp.add(checkImpo, cPanel);
 
+                JLabel labelSelTypePersonnel = new JLabel("Code Type Personnel");
+                cPanel.gridy++;
+                cPanel.gridx = 1;
+                cPanel.weightx = 0;
+                panelProp.add(labelSelTypePersonnel, cPanel);
+
+                ElementComboBox comboSelTypePersonnel = new ElementComboBox(false);
+                cPanel.gridx++;
+                cPanel.weightx = 1;
+                panelProp.add(comboSelTypePersonnel, cPanel);
+                this.addView(comboSelTypePersonnel, "ID_CODE_CAISSE_TYPE_RUBRIQUE");
+
+                JLabel labelSelTypeBase = new JLabel("Code Base assujettie");
+                cPanel.gridy++;
+                cPanel.gridx = 1;
+                cPanel.weightx = 0;
+                panelProp.add(labelSelTypeBase, cPanel);
+
+                ElementComboBox comboSelTypeBase = new ElementComboBox(false);
+                cPanel.gridx++;
+                cPanel.weightx = 1;
+                panelProp.add(comboSelTypeBase, cPanel);
+                this.addView(comboSelTypeBase, "ID_CODE_BASE_ASSUJETTIE");
+
                 // Patronale imposable
                 cPanel.gridy++;
+                c.gridx--;
                 JCheckBox checkPartPatrImposable = new JCheckBox(getLabelFor("PART_PAT_IMPOSABLE"));
                 panelProp.add(checkPartPatrImposable, cPanel);
 

@@ -50,6 +50,7 @@ public class PanelOOSQLComponent extends JPanel {
 
         final SQLTable tableComp = comp.getElement().getTable();
         if (tableComp.getName().equals("SAISIE_VENTE_FACTURE") && tableComp.getDBRoot().contains("ABONNEMENT")) {
+            this.checkAbo.setOpaque(false);
             this.add(this.checkAbo, c);
         }
 
@@ -84,6 +85,8 @@ public class PanelOOSQLComponent extends JPanel {
                 Thread.dumpStack();
             }
         }
+        this.checkImpression.setOpaque(false);
+        this.checkVisu.setOpaque(false);
         this.add(this.checkImpression, c);
         this.add(this.checkVisu, c);
     }

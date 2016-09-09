@@ -14,17 +14,16 @@
  package org.openconcerto.sql.model.graph;
 
 import org.openconcerto.sql.model.SQLField;
+import org.openconcerto.utils.cc.IPredicate;
 
 import java.util.List;
-
-import org.apache.commons.collections.Predicate;
 
 /**
  * Evaluate to <tt>true</tt> if the label of the passed Link is equals to its field.
  * 
  * @author ILM Informatique 21 juil. 2004
  */
-public class LabelPredicate implements Predicate {
+public class LabelPredicate extends IPredicate<Link> {
 
     private List<SQLField> f;
 
@@ -32,13 +31,8 @@ public class LabelPredicate implements Predicate {
         this.f = f;
     }
 
-    /*
-     * (non-Javadoc)
-     * 
-     * @see org.apache.commons.collections.Predicate#evaluate(java.lang.Object)
-     */
-    public boolean evaluate(Object object) {
-        final Link l = (Link) object;
+    @Override
+    public boolean evaluateChecked(Link l) {
         return l.getFields().equals(this.f);
     }
 

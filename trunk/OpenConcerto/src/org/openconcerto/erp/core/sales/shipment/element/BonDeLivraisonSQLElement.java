@@ -20,7 +20,9 @@ import org.openconcerto.erp.preferences.GestionArticleGlobalPreferencePanel;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
 import org.openconcerto.sql.element.TreesOfSQLRows;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
@@ -48,6 +50,17 @@ public class BonDeLivraisonSQLElement extends ComptaSQLConfElement {
         this("un bon de livraison", "Bons de livraison");
     }
 
+    @Override
+    protected void setupLinks(SQLElementLinksSetup links) {
+        super.setupLinks(links);
+        if (getTable().contains("ID_ADRESSE")) {
+            links.get("ID_ADRESSE").setType(LinkType.ASSOCIATION);
+        }
+        if (getTable().contains("ID_ADRESSE_LIVRAISON")) {
+            links.get("ID_ADRESSE_LIVRAISON").setType(LinkType.ASSOCIATION);
+        }
+    }
+
     protected List<String> getListFields() {
         final List<String> l = new ArrayList<String>();
         l.add("NUMERO");
@@ -69,13 +82,6 @@ public class BonDeLivraisonSQLElement extends ComptaSQLConfElement {
         l.add("NUMERO");
         l.add("DATE");
         return l;
-    }
-
-    @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("BON_DE_LIVRAISON_ELEMENT");
-        return set;
     }
 
     /*

@@ -21,7 +21,6 @@ import org.openconcerto.ql.LabelCreator;
 import org.openconcerto.ql.QLPrinter;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
-import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.request.ListSQLRequest;
@@ -34,8 +33,8 @@ import org.openconcerto.utils.ExceptionHandler;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 import javax.swing.AbstractAction;
 
@@ -74,6 +73,17 @@ public class ClientNormalSQLElement extends ComptaSQLConfElement {
                 getRowActions().add(actionPrintLabel);
             }
 
+            PredicateRowAction actionFicheClient = new PredicateRowAction(new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    final SQLRowAccessor row = IListe.get(e).fetchSelectedRow();
+                    FicheClientXmlSheet sheet = new FicheClientXmlSheet(row.asRow());
+                    sheet.createDocumentAsynchronous();
+                    sheet.showPrintAndExportAsynchronous(true, false, true);
+                }
+            }, false, "customerrelationship.customer.info.create");
+            actionFicheClient.setPredicate(IListeEvent.getSingleSelectionPredicate());
+            getRowActions().add(actionFicheClient);
 
 
         PredicateRowAction action = new PredicateRowAction(new AbstractAction() {
@@ -131,15 +141,9 @@ public class ClientNormalSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return new ListSQLRequest(getTable(), getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.grow("ID_MODE_REGLEMENT").put("AJOURS", null).put("LENJOUR", null);
-            }
-        };
-
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addForeignToGraphToFetch("ID_MODE_REGLEMENT", Arrays.asList("AJOURS", "LENJOUR"));
     }
 
     protected List<String> getComboFields() {
@@ -151,22 +155,6 @@ public class ClientNormalSQLElement extends ComptaSQLConfElement {
         } else {
             l.add("CODE");
         }
-        return l;
-    }
-
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_ADRESSE");
-        Set<SQLField> fields = getTable().getForeignKeys("ADRESSE");
-        for (SQLField sqlField : fields) {
-            if (sqlField.getName().startsWith("ID_ADRESSE_L")) {
-
-                l.add(sqlField.getName());
-            }
-        }
-        l.add("ID_ADRESSE_F");
-        l.add("ID_MODE_REGLEMENT");
-
         return l;
     }
 

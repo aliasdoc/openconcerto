@@ -23,7 +23,8 @@ import org.openconcerto.utils.GestionDevise;
 import org.openconcerto.utils.Nombre;
 
 import java.math.BigDecimal;
-import java.text.DecimalFormat;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -31,8 +32,8 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
-import org.jdom.Attribute;
-import org.jdom.Element;
+import org.jdom2.Attribute;
+import org.jdom2.Element;
 
 public class OOXMLTableField extends OOXMLField {
 
@@ -114,8 +115,8 @@ public class OOXMLTableField extends OOXMLField {
     }
 
     public boolean isNeeding2Lines() {
-        return (this.type.equalsIgnoreCase("DescriptifArticle") || this.type.equalsIgnoreCase("propositionFacture") || this.type.equalsIgnoreCase("DateEcheance") || this.type
-                .equalsIgnoreCase("MontantRevise"));
+        return (this.type.equalsIgnoreCase("DescriptifArticle") || this.type.equalsIgnoreCase("propositionFacture") || this.type.equalsIgnoreCase("DateEcheance")
+                || this.type.equalsIgnoreCase("MontantRevise"));
     }
 
     public int getLine() {
@@ -164,6 +165,7 @@ public class OOXMLTableField extends OOXMLField {
         Object date = row.getObject("DATE");
         Object dateFin = row.getObject("DATE_FIN");
         if (date != null) {
+            DateFormat format = new SimpleDateFormat("dd/MM/yyyy");
             String stringDate = format.format((Date) date);
             if (dateFin != null) {
                 String stringDateFin = format.format((Date) dateFin);
@@ -200,7 +202,7 @@ public class OOXMLTableField extends OOXMLField {
             if (rowFact != null) {
                 SQLRowAccessor rowClient = cache.getForeignRow(rowFact, rowFact.getTable().getField("ID_CLIENT"));
                 if (rowClient != null) {
-                    clientPrive = rowClient.getBoolean("MARCHE_PRIVE");
+                    clientPrive = rowClient.getForeign("ID_CLIENT").getBoolean("MARCHE_PRIVE");
                 }
             }
         } catch (IllegalArgumentException e) {

@@ -45,7 +45,8 @@ public class QuoteEditGroup extends Group {
         bottom.add(gElements);
 
         final Group gInfos = new Group("sales.quote.info");
-        gInfos.addItem("sales.quote.info.general", new LayoutHints(false, false, true, false, true, false, false, true));
+        final LayoutHints hint = new LayoutHints(false, true, true, false, true, true, true, true);
+        gInfos.addItem("sales.quote.info.general", hint);
         bottom.add(gInfos);
 
         final Group gTotal = new Group("sales.quote.total");
@@ -53,7 +54,8 @@ public class QuoteEditGroup extends Group {
         bottom.add(gTotal);
 
         final Group gOO = new Group("sales.quote.oo");
-        gOO.addItem("panel.oo", LayoutHints.DEFAULT_LARGE_FIELD_HINTS);
+        LayoutHints hintInfos = new LayoutHints(false, false, true, true, true, false);
+        gOO.addItem("panel.oo", hintInfos);
         bottom.add(gOO);
 
         add(bottom);

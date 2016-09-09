@@ -18,9 +18,9 @@ import org.openconcerto.utils.cc.IClosure;
 import java.io.File;
 import java.io.IOException;
 
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.JDOMException;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
 
 public class MySQL2Postgresql extends MySQLXML2 {
 

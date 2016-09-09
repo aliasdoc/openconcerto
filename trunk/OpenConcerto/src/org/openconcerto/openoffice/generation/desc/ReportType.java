@@ -67,7 +67,8 @@ public final class ReportType extends XMLItem {
     public ReportType(ReportTypes parent, Element elem) {
         super(elem);
         this.parent = parent;
-        this.template = this.getParent().resolve(elem.getAttributeValue("template"));
+        final String templateAttr = elem.getAttributeValue("template");
+        this.template = templateAttr == null ? null : this.getParent().resolve(templateAttr);
         this.children = new ArrayList<ReportPart>();
         this.forks = new HashMap<String, ForkReportPart>();
         this.addAll(this.createParts(this.elem));

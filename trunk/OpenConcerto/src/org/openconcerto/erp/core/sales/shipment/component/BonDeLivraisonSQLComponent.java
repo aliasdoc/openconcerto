@@ -54,6 +54,7 @@ import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.TitledSeparator;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.NumberUtils;
 
 import java.awt.Color;
 import java.awt.GridBagConstraints;
@@ -63,9 +64,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -716,7 +720,7 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             super.select(r);
         else {
             System.err.println(r);
-            final SQLRowValues rVals = r.asRowValues();
+            final SQLRowValues rVals = r.asRowValues().deepCopy();
             final SQLRowValues vals = new SQLRowValues(r.getTable());
             vals.load(rVals, createSet("ID_CLIENT"));
             vals.setID(rVals.getID());
@@ -750,24 +754,7 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
         SQLPreferences prefs = new SQLPreferences(getTable().getDBRoot());
         SQLElement eltMvtStock = Configuration.getInstance().getDirectory().getElement("MOUVEMENT_STOCK");
         if (!prefs.getBoolean(GestionArticleGlobalPreferencePanel.STOCK_FACT, true)) {
-            // On efface les anciens mouvements de stocks
-            SQLSelect sel = new SQLSelect(eltMvtStock.getTable().getBase());
-            sel.addSelect(eltMvtStock.getTable().getField("ID"));
-            Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", getSelectedID());
-            Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-            sel.setWhere(w.and(w2));
 
-            List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-            if (l != null) {
-                for (int i = 0; i < l.size(); i++) {
-                    Object[] tmp = (Object[]) l.get(i);
-                    try {
-                        eltMvtStock.archive(((Number) tmp[0]).intValue());
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
             try {
                 updateStock(getSelectedID());
             } catch (SQLException e) {
@@ -775,6 +762,53 @@ public class BonDeLivraisonSQLComponent extends TransfertBaseSQLComponent {
             }
         }
 
+    }
+
+    /**
+     * Chargement des qtés restantes à livrer
+     * 
+     * @param l
+     */
+    public void loadQuantity(List<SQLRowValues> l) {
+        Map<Integer, SQLRowValues> map = new HashMap<Integer, SQLRowValues>();
+        for (SQLRowValues sqlRowValues : l) {
+            if (!sqlRowValues.isForeignEmpty("ID_ARTICLE")) {
+                final int foreignID = sqlRowValues.getForeignID("ID_ARTICLE");
+                if (!map.containsKey(foreignID)) {
+                    map.put(foreignID, sqlRowValues);
+                } else {
+                    SQLRowValues vals = map.get(foreignID);
+                    if (sqlRowValues.getInt("QTE_LIVREE") > 0) {
+                        if (NumberUtils.areNumericallyEqual(sqlRowValues.getBigDecimal("QTE_UNITAIRE"), BigDecimal.ONE) || sqlRowValues.getInt("QTE_LIVREE") > 1) {
+                            vals.put("QTE_LIVREE", vals.getInt("QTE_LIVREE") + sqlRowValues.getInt("QTE_LIVREE"));
+                        } else {
+                            vals.put("QTE_UNITAIRE", vals.getBigDecimal("QTE_UNITAIRE").add(sqlRowValues.getBigDecimal("QTE_UNITAIRE")));
+                        }
+                    }
+                }
+            }
+        }
+        int count = this.tableBonItem.getModel().getRowCount();
+        for (int i = 0; i < count; i++) {
+            final SQLRowValues rowValuesAt = this.tableBonItem.getModel().getRowValuesAt(i);
+            rowValuesAt.put("QTE_LIVREE", rowValuesAt.getObject("QTE"));
+        }
+
+        for (int i = 0; i < count; i++) {
+            SQLRowValues r = this.tableBonItem.getModel().getRowValuesAt(i);
+            SQLRowValues rowTR = map.get(r.getForeignID("ID_ARTICLE"));
+            if (rowTR != null && !rowTR.isUndefined()) {
+                if (r.getInt("QTE_LIVREE") > 0 && rowTR.getInt("QTE_LIVREE") > 0) {
+                    if (NumberUtils.areNumericallyEqual(r.getBigDecimal("QTE_UNITAIRE"), BigDecimal.ONE) || r.getInt("QTE_LIVREE") > 1) {
+                        this.tableBonItem.getModel().putValue(r.getInt("QTE_LIVREE") - rowTR.getInt("QTE_LIVREE"), i, "QTE_LIVREE");
+                    } else {
+                        this.tableBonItem.getModel().putValue(r.getBigDecimal("QTE_UNITAIRE").subtract(rowTR.getBigDecimal("QTE_UNITAIRE")), i, "QTE_UNITAIRE");
+                    }
+                }
+            } else {
+                this.tableBonItem.getModel().putValue(r.getObject("QTE"), i, "QTE_LIVREE");
+            }
+        }
     }
 
     /***********************************************************************************************

@@ -38,7 +38,9 @@ public class CommandeBlSQLInjector extends SQLInjector {
         if (getSource().getTable().contains("ID_CLIENT_DEPARTEMENT")) {
             map(getSource().getField("ID_CLIENT_DEPARTEMENT"), getDestination().getField("ID_CLIENT_DEPARTEMENT"));
         }
-
+        if (getSource().getTable().contains("ID_TARIF") && getDestination().getTable().contains("ID_TARIF")) {
+            map(getSource().getField("ID_TARIF"), getDestination().getField("ID_TARIF"));
+        }
         if (tableBl.contains("CREATE_VIRTUAL_STOCK")) {
             mapDefaultValues(tableBl.getField("CREATE_VIRTUAL_STOCK"), Boolean.FALSE);
         }

@@ -13,38 +13,23 @@
  
  package org.openconcerto.ui.light;
 
-import java.util.LinkedHashMap;
-import java.util.Map.Entry;
-
-import org.openconcerto.utils.io.JSONConverter;
-import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
-public class LightUIDropDownButton extends LightUIElement {
-    String title = null;
-    LinkedHashMap<String, LightUIElement> tableActions = new LinkedHashMap<String, LightUIElement>();
-
-    public LightUIDropDownButton(final String id, final String title) {
-        super();
+public class LightUIDropDownButton extends LightUIContainer {
+    public LightUIDropDownButton(final String id, final String label) {
+        super(id);
         this.setType(TYPE_DROPDOWN_BUTTON);
-        this.setId(id);
-        this.title = title;
+        this.setLabel(label);
     }
 
     // Init from json constructor
     public LightUIDropDownButton(final JSONObject json) {
-        this.fromJSON(json);
+        super(json);
     }
 
     // Clone constructor
     public LightUIDropDownButton(final LightUIDropDownButton dropDownElement) {
         super(dropDownElement);
-        this.title = dropDownElement.title;
-        this.tableActions = dropDownElement.tableActions;
-    }
-
-    public void addAction(final String id, final LightUIElement button) {
-        this.tableActions.put(id, button);
     }
 
     @Override
@@ -53,37 +38,12 @@ public class LightUIDropDownButton extends LightUIElement {
     }
 
     @Override
-    public JSONObject toJSON() {
-        final JSONObject json = super.toJSON();
-        json.put("title", this.title);
-        final JSONArray jsonTableActions = new JSONArray();
-        for (Entry<String, LightUIElement> action : this.tableActions.entrySet()) {
-            final JSONObject jsonAction = new JSONObject();
-            jsonAction.put("id", action.getKey());
-            jsonAction.put("button", action.getValue().toJSON());
-            jsonTableActions.add(jsonAction);
-        }
-        json.put("table-actions", jsonTableActions);
-
-        return json;
-    }
-
-    @Override
-    public void fromJSON(final JSONObject json) {
-        super.fromJSON(json);
-        this.title = (String) JSONConverter.getParameterFromJSON(json, "title", String.class);
-        final JSONArray jsonTabs = (JSONArray) JSONConverter.getParameterFromJSON(json, "table-actions", JSONArray.class);
-        this.tableActions.clear();
-        if (jsonTabs != null) {
-            for (final Object o : jsonTabs) {
-                if (!(o instanceof JSONObject)) {
-                    throw new IllegalArgumentException("invalid value for 'table-actions', Map<String, LightUIElement> expected");
-                }
-                final JSONObject jsonTableAction = (JSONObject) o;
-                final String id = (String) JSONConverter.getParameterFromJSON(jsonTableAction, "id", String.class);
-                final LightUIElement button = new LightUIElement((JSONObject) JSONConverter.getParameterFromJSON(jsonTableAction, "button", JSONObject.class));
-                this.tableActions.put(id, button);
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIDropDownButton(json);
             }
-        }
+        };
     }
 }

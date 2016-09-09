@@ -19,7 +19,6 @@ import org.openconcerto.erp.core.finance.payment.component.ModeDeReglementSQLCom
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.model.SQLRowAccessor;
-import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.sql.request.ListSQLRequest;
 
 import java.util.ArrayList;
@@ -31,6 +30,11 @@ public class ModeDeReglementSQLElement extends ComptaSQLConfElement {
 
     public ModeDeReglementSQLElement() {
         super("MODE_REGLEMENT", "un mode de règlement", "modes de règlement");
+    }
+
+    @Override
+    public boolean isPrivate() {
+        return true;
     }
 
     protected List<String> getListFields() {
@@ -48,19 +52,9 @@ public class ModeDeReglementSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-
-        return new ListSQLRequest(this.getTable(), this.getListFields()) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.put("AJOURS", null);
-                graphToFetch.put("COMPTANT", null);
-                graphToFetch.put("DATE_FACTURE", null);
-                graphToFetch.put("LENJOUR", null);
-            }
-        };
-
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("AJOURS", "COMPTANT", "DATE_FACTURE", "LENJOUR");
     }
 
     /*

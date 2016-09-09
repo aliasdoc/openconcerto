@@ -22,7 +22,6 @@ import org.openconcerto.ui.JLabelBold;
 import org.openconcerto.utils.DecimalUtils;
 
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
@@ -38,7 +37,6 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 
-import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
@@ -86,16 +84,6 @@ public class GraphFamilleArticlePanel extends JPanel {
         this.add(p1, c);
     }
 
-    private Component createColorPanel(final Color color) {
-        final JPanel p = new JPanel();
-        p.setBorder(BorderFactory.createLineBorder(Color.WHITE));
-        p.setMinimumSize(new Dimension(40, 16));
-        p.setPreferredSize(new Dimension(40, 16));
-        p.setOpaque(true);
-        p.setBackground(color);
-        return p;
-    }
-
     protected BigDecimal updateDataset(List<String> labels, List<Number> values) {
 
         final SQLTable tableVFElement = Configuration.getInstance().getDirectory().getElement("SAISIE_VENTE_FACTURE_ELEMENT").getTable();
@@ -116,23 +104,15 @@ public class GraphFamilleArticlePanel extends JPanel {
         w = w.and(new Where(tableArticle.getKey(), "=", tableVFElement.getField("ID_ARTICLE")));
         sel.setWhere(w);
 
-        final List<Object[]> rowsArticle = (List<Object[]>) Configuration.getInstance().getBase().getDataSource()
-                .execute(sel.asString() + " GROUP BY \"ARTICLE\".\"" + field + "\"", new ArrayListHandler());
+        @SuppressWarnings("unchecked")
+        final List<Object[]> rowsArticle = (List<Object[]>) Configuration.getInstance().getBase().getDataSource().execute(sel.asString() + " GROUP BY \"ARTICLE\".\"" + field + "\"",
+                new ArrayListHandler());
 
         Collections.sort(rowsArticle, new Comparator<Object[]>() {
             @Override
             public int compare(Object[] o1, Object[] o2) {
-
-                BigDecimal pa1 = (BigDecimal) o1[1];
                 BigDecimal pv1 = (BigDecimal) o1[2];
-                BigDecimal qte1 = new BigDecimal(o1[3].toString());
-
-                BigDecimal pa2 = (BigDecimal) o2[1];
                 BigDecimal pv2 = (BigDecimal) o2[2];
-                BigDecimal qte2 = new BigDecimal(o2[3].toString());
-
-                BigDecimal marge1 = pv1.subtract(pa1).multiply(qte1, DecimalUtils.HIGH_PRECISION);
-                BigDecimal marge2 = pv2.subtract(pa2).multiply(qte2, DecimalUtils.HIGH_PRECISION);
                 return pv1.compareTo(pv2);
             }
         });
@@ -150,11 +130,7 @@ public class GraphFamilleArticlePanel extends JPanel {
 
             for (int i = 0; i < 12 && i < rowsArticle.size(); i++) {
                 Object[] o = rowsArticle.get(i);
-                BigDecimal pa2 = (BigDecimal) o[1];
                 BigDecimal pv2 = (BigDecimal) o[2];
-                BigDecimal qte2 = new BigDecimal(o[3].toString());
-                BigDecimal marge2 = pv2.subtract(pa2).multiply(qte2, DecimalUtils.HIGH_PRECISION);
-
                 String s = "Indéfini";
                 if (o[0] != null) {
                     int id = ((Number) o[0]).intValue();

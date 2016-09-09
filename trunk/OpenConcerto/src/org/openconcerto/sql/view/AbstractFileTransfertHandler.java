@@ -14,7 +14,6 @@
  package org.openconcerto.sql.view;
 
 import org.openconcerto.sql.Log;
-import org.openconcerto.sql.model.SQLTable;
 
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -48,6 +47,7 @@ public abstract class AbstractFileTransfertHandler extends TransferHandler {
 
     public abstract void handleFile(File f);
 
+    @SuppressWarnings("unchecked")
     @Override
     public boolean importData(final JComponent c, final Transferable t) {
         if (!canImport(c, t.getTransferDataFlavors())) {
@@ -98,7 +98,7 @@ public abstract class AbstractFileTransfertHandler extends TransferHandler {
 
     private boolean hasFileFlavor(DataFlavor[] flavors) {
         for (int i = 0; i < flavors.length; i++) {
-            if (DataFlavor.javaFileListFlavor.equals(flavors[i]) || DataFlavor.javaRemoteObjectMimeType.equals(flavors[i])) {
+            if (DataFlavor.javaFileListFlavor.equals(flavors[i]) || DataFlavor.javaRemoteObjectMimeType.equals(flavors[i].getMimeType())) {
                 return true;
             }
         }

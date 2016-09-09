@@ -98,13 +98,18 @@ public class FieldPath implements IFieldPath {
         if (obj instanceof FieldPath) {
             final FieldPath o = (FieldPath) obj;
             return this.p.equals(o.p) && this.fieldName.equals(o.fieldName);
-        } else
+        } else {
             return false;
+        }
     }
 
     @Override
     public int hashCode() {
-        return this.p.hashCode() + this.fieldName.hashCode();
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + this.fieldName.hashCode();
+        result = prime * result + this.p.hashCode();
+        return result;
     }
 
     @Override

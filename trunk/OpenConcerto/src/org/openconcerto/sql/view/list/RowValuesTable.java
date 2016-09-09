@@ -25,17 +25,22 @@ import org.openconcerto.ui.EnhancedTable;
 import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.state.JTableStateManager;
 import org.openconcerto.ui.table.AlternateTableCellRenderer;
+import org.openconcerto.ui.table.FocusAwareEditor;
 import org.openconcerto.ui.table.XTableColumnModel;
 import org.openconcerto.utils.checks.EmptyListener;
 import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
 
+import java.applet.Applet;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
@@ -48,6 +53,7 @@ import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 import javax.swing.event.TableModelEvent;
@@ -130,7 +136,6 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
         this.getTableHeader().setReorderingAllowed(false);
 
         this.addAncestorListener(this);
-        this.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
 
         // ALT ENTER pour ajouter une nouvelle ligne
         this.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.ALT_DOWN_MASK), "addLine");
@@ -140,6 +145,37 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
             }
         });
 
+        /**
+         * En remplacement de : this.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+         *
+         * Arret de l'edition si la table perd le focus La perte de focus est ignorée sur le
+         * CellEditor gère lui même la perte de focus (FocusAwareEditor)
+         *
+         */
+        final KeyboardFocusManager focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+        focusManager.addPropertyChangeListener("permanentFocusOwner", new PropertyChangeListener() {
+
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+
+                Component c = focusManager.getPermanentFocusOwner();
+                while (c != null) {
+                    if (c == RowValuesTable.this) {
+                        // focus remains inside the table
+                        return;
+                    } else if ((c instanceof Window) || (c instanceof Applet && c.getParent() == null)) {
+                        if (c == SwingUtilities.getRoot(RowValuesTable.this)) {
+                            if (getCellEditor() != null && !(getCellEditor() instanceof FocusAwareEditor))
+                                if (!getCellEditor().stopCellEditing()) {
+                                    getCellEditor().cancelCellEditing();
+                                }
+                        }
+                        break;
+                    }
+                    c = c.getParent();
+                }
+            }
+        });
     }
 
     @Override
@@ -288,8 +324,8 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
     @Override
     public void changeSelection(int rowIndex, int columnIndex, boolean toggle, boolean extend) {
         super.changeSelection(rowIndex, columnIndex, toggle, extend);
+        // permet d'edition en 1 clic
         if (editCellAt(rowIndex, columnIndex)) {
-            // System.out.println("editCellAt called");
             getEditorComponent().requestFocusInWindow();
             getEditorComponent().requestFocus();
         }
@@ -358,7 +394,7 @@ public class RowValuesTable extends EnhancedTable implements AncestorListener, M
     public void addValueListener(PropertyChangeListener l) {
 
     }
-    
+
     @Override
     public void removeValueListener(PropertyChangeListener l) {
     }

@@ -45,7 +45,6 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
-import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.UIManager;
 import javax.swing.event.ListSelectionEvent;
@@ -74,7 +73,7 @@ public class ModelCreator extends JFrame implements ListSelectionListener {
 
         ModelCreator m = new ModelCreator();
         m.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        m.setSize(800, 600);
+        m.setSize(1000, 800);
         m.setVisible(true);
 
     }
@@ -92,7 +91,7 @@ public class ModelCreator extends JFrame implements ListSelectionListener {
         c.gridwidth = 4;
         c.weightx = 1;
 
-        rootTF.setText(this.pref.get("url", "psql://maillard:guigui@192.168.1.16:5432/Controle/Preventec_2008"));
+        rootTF.setText(this.pref.get("url", "psql://login:password@192.168.1.10:5432/OpenConcerto/OpenConcerto42"));
         confPanel.add(rootTF, c);
 
         // Ligne 4
@@ -118,7 +117,7 @@ public class ModelCreator extends JFrame implements ListSelectionListener {
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         split.setLeftComponent(new JScrollPane(this.list));
         split.setRightComponent(this.pane);
-        split.setDividerLocation(300);
+        split.setDividerLocation(360);
         c.gridy++;
         c.gridx = 0;
         c.weightx = 1;
@@ -161,11 +160,12 @@ public class ModelCreator extends JFrame implements ListSelectionListener {
             String c = RowBackedCodeGenerator.getJavaName(table.getName());
             this.pane.add("Code RowBacked", createTA(RowBackedCodeGenerator.getCode(table, c, null)));
 
-            this.pane.add("Code BaseSQLElement", createTA(ClassGenerator.generateAutoLayoutedJComponent(table, c, null)));
+            this.pane.add("Code BaseSQLElement", createTA(ClassGenerator.generateAutoLayoutedJComponent(table, c + "SQLElement", null)));
+            this.pane.add("Code SQLConfElement", createTA(ClassGenerator.generateSQLConfElement(table, c + "SQLElement", null)));
+            this.pane.add("Code Group", createTA(ClassGenerator.generateGroup(table, c + "EditGroup", null)));
+            this.pane.add("Field Mapping", createTA(ClassGenerator.generateFieldMapping(table, c, null)));
+            this.pane.add("Mapping XML", createTA(ClassGenerator.generateMappingXML(table, c)));
 
-            final JTextArea textArea3 = new JTextArea();
-            this.pane.add("Mapping XML", new JScrollPane(textArea3));
-            textArea3.setText(ClassGenerator.generateMappingXML(table, c));
         }
     }
 
@@ -207,7 +207,9 @@ public class ModelCreator extends JFrame implements ListSelectionListener {
 
         try {
             final SQL_URL url = SQL_URL.create(textUrl);
-            final DBSystemRoot sysRoot = SQLServer.create(url);
+            List<String> roots = new ArrayList<String>();
+            roots.add("Common");
+            final DBSystemRoot sysRoot = SQLServer.create(url, roots, null);
             final List<SQLTable> tables = new ArrayList<SQLTable>(sysRoot.getRoot(url.getRootName()).getDescs(SQLTable.class));
             Collections.sort(tables, new Comparator<SQLTable>() {
 

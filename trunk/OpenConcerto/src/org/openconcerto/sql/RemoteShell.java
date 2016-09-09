@@ -14,7 +14,8 @@
  package org.openconcerto.sql;
 
 import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.model.SQLBase;
+import org.openconcerto.sql.element.SQLElementDirectory;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.ExceptionUtils;
 
@@ -47,9 +48,11 @@ public final class RemoteShell extends Thread {
     public static final int PORT = 1394;
     private static RemoteShell INSTANCE = null;
 
-    static synchronized public final boolean startDefaultInstance() {
-        if (INSTANCE == null && Boolean.getBoolean(START_DEFAULT_SERVER)) {
-            setDefaultInstance(new RemoteShell());
+    static synchronized public final boolean startDefaultInstance(final SQLElementDirectory dir, final DBRoot root) {
+        if (INSTANCE != null)
+            throw new IllegalStateException("default instance already set to : " + INSTANCE);
+        if (Boolean.getBoolean(START_DEFAULT_SERVER)) {
+            setDefaultInstance(new RemoteShell(dir, root));
             return true;
         } else {
             return false;
@@ -74,24 +77,35 @@ public final class RemoteShell extends Thread {
 
     private Thread thread;
 
+    private final SQLElementDirectory dir;
+    private final DBRoot root;
     private final ScriptEngine engine;
     private final Bindings ognlCtxt;
 
     /**
      * Create a new server which will listen on the first available port from {@value #PORT} when
      * {@link #start() started}.
+     * 
+     * @param dir the directory, can be <code>null</code>.
+     * @param root the default root, can be <code>null</code>.
      */
-    public RemoteShell() {
+    public RemoteShell(final SQLElementDirectory dir, final DBRoot root) {
         super(RemoteShell.class.getSimpleName() + " (not started)");
         this.setDaemon(true);
 
+        this.dir = dir;
+        this.root = root;
         this.engine = new ScriptEngineManager().getEngineByName("javascript");
         this.ognlCtxt = new SimpleBindings();
     }
 
+    public final SQLElementDirectory getDirectory() {
+        return this.dir;
+    }
+
     private Bindings getContext() {
-        this.ognlCtxt.put("base", this.getBase());
-        this.ognlCtxt.put("dir", Configuration.getInstance().getDirectory());
+        this.ognlCtxt.put("root", this.getRoot());
+        this.ognlCtxt.put("dir", this.getDirectory());
         return this.ognlCtxt;
     }
 
@@ -259,14 +273,15 @@ public final class RemoteShell extends Thread {
         final String tableName = args[1];
         final int id = Integer.parseInt(args[2]);
         final String s;
+        final SQLElement element = this.getElement(tableName);
         if (arch) {
-            this.getElement(tableName).archive(id);
+            element.archive(id);
             s = "archived";
         } else {
-            this.getElement(tableName).unarchive(id);
+            element.unarchive(id);
             s = "unarchived";
         }
-        return s + " " + this.getBase().getTable(tableName).getRow(id);
+        return s + " " + element.getTable().getRow(id);
     }
 
     public final Object eval(String s) throws ScriptException {
@@ -277,12 +292,12 @@ public final class RemoteShell extends Thread {
         return res == null ? "<no result>" : res.toString();
     }
 
-    private final SQLBase getBase() {
-        return Configuration.getInstance().getBase();
+    public final DBRoot getRoot() {
+        return this.root;
     }
 
     private final SQLElement getElement(String tableName) {
-        return Configuration.getInstance().getDirectory().getElement(tableName);
+        return this.getDirectory().getElement(tableName);
     }
 
     /**

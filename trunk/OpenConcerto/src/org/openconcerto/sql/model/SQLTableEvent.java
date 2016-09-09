@@ -65,6 +65,7 @@ public class SQLTableEvent {
     private final Mode mode;
     private final List<String> fieldNames;
     private final List<SQLField> fields;
+    private final TransactionPoint txPoint;
     private SQLRowValues vals;
 
     public SQLTableEvent(final SQLTable table, final int id, final Mode mode) {
@@ -96,6 +97,10 @@ public class SQLTableEvent {
      * @param fields what part of <code>row</code> has changed, <code>null</code> meaning all of it.
      */
     private SQLTableEvent(final SQLTable table, final SQLRow row, final Mode mode, final Collection<String> fields) {
+        this(table, row, mode, fields, table.getDBSystemRoot().getDataSource().getTransactionPoint());
+    }
+
+    private SQLTableEvent(final SQLTable table, final SQLRow row, final Mode mode, final Collection<String> fields, final TransactionPoint txPoint) {
         super();
         this.table = table;
         this.row = row;
@@ -111,10 +116,15 @@ public class SQLTableEvent {
                 this.fields.add(this.getTable().getField(fieldName));
             }
         }
+        this.txPoint = txPoint;
+    }
+
+    public final TransactionPoint getTransactionPoint() {
+        return this.txPoint;
     }
 
     final SQLTableEvent opposite() {
-        return new SQLTableEvent(this.table, this.row == null ? null : new SQLRow(this.table, this.row.getID()), this.mode.opposite(), this.fieldNames);
+        return new SQLTableEvent(this.table, this.row == null ? null : new SQLRow(this.table, this.row.getID()), this.mode.opposite(), this.fieldNames, this.txPoint);
     }
 
     public final List<SQLField> getFields() {

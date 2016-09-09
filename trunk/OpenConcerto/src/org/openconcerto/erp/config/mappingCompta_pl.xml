@@ -437,6 +437,7 @@
 		<FIELD name="MAX_FACTURE" label="Ograniczenia fakturowania" titlelabel="Ograniczenia fakturowania" />
 		<FIELD name="COMPTANT" label="Obowiązkowe rozliczenie gotówkowe" titlelabel="Obowiązkowe rozliczenie gotówkowe" />
 		<FIELD name="ID_TARIF" label="Lista produktów" titlelabel="Lista produktów" />
+		<FIELD name="OBSOLETE" label="Przestarzałe" />
 	</TABLE>
 
 	<TABLE name="CODE_REGIME">

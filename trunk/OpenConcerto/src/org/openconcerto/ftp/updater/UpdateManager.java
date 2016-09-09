@@ -37,6 +37,7 @@ public class UpdateManager implements Runnable {
     private String login;
     private String pass;
     private String server;
+    private String port;
     private String file;
     private static boolean stop = false;
 
@@ -57,6 +58,7 @@ public class UpdateManager implements Runnable {
                 this.pass = props.getProperty("pass");
                 this.server = props.getProperty("ftpserver");
                 this.file = props.getProperty("file");
+                this.port = props.getProperty("port");
                 this.enabled = Boolean.parseBoolean(props.getProperty("enabled"));
                 if (!this.enabled) {
                     System.out.println("Mise à jour désactivées");
@@ -115,7 +117,11 @@ public class UpdateManager implements Runnable {
                 final IFtp ftp = new IFtp();
                 BufferedReader bReaderRemote = null;
                 try {
-                    ftp.connect(this.server);
+                    if (this.port != null && this.port.trim().length() > 0) {
+                        ftp.connect(this.server, Integer.parseInt(this.port));
+                    } else {
+                        ftp.connect(this.server);
+                    }
                     System.err.println("UpdateManager connected to '" + this.server + "'");
                     boolean logged = ftp.login(this.login, this.pass);
 
@@ -232,7 +238,11 @@ public class UpdateManager implements Runnable {
         final IFtp ftp = new IFtp();
         try {
             displayMessage("Connexion au serveur");
-            ftp.connect(this.server);
+            if (this.port != null && this.port.trim().length() > 0) {
+                ftp.connect(this.server, Integer.parseInt(this.port));
+            } else {
+                ftp.connect(this.server);
+            }
             boolean logged = ftp.login(this.login, this.pass);
             if (!logged) {
                 JOptionPane.showMessageDialog(null, "Impossible d'accéder au serveur FTP pour récupérer les fichiers");

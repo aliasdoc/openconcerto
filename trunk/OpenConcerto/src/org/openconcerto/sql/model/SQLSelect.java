@@ -39,6 +39,10 @@ public final class SQLSelect {
         UNARCHIVED, ARCHIVED, BOTH
     }
 
+    public static enum LockStrength {
+        NONE, SHARE, UPDATE
+    }
+
     public static final ArchiveMode UNARCHIVED = ArchiveMode.UNARCHIVED;
     public static final ArchiveMode ARCHIVED = ArchiveMode.ARCHIVED;
     public static final ArchiveMode BOTH = ArchiveMode.BOTH;
@@ -82,8 +86,8 @@ public final class SQLSelect {
     private final Map<SQLTable, ArchiveMode> archivedPolicy;
     // DISTINCT
     private boolean distinct;
-    // whether to wait for an UPDATE or DELETE transaction to complete
-    private boolean waitTrx;
+    // how to lock returned rows
+    private LockStrength lockStrength;
     // which tables to wait (avoid SELECT FOR UPDATE/SHARE cannot be applied to the nullable side of
     // an outer join)
     private final List<String> waitTrxTables;
@@ -148,8 +152,8 @@ public final class SQLSelect {
         this.distinct = false;
         this.excludeUndefined = new HashMap<SQLTable, Boolean>();
         this.archivedPolicy = new HashMap<SQLTable, ArchiveMode>();
-        // false by default cause it is quite incompatible (and maybe slow too)
-        this.waitTrx = false;
+        // none by default since it requires access rights
+        this.lockStrength = LockStrength.NONE;
         this.waitTrxTables = new ArrayList<String>();
         this.limit = null;
         this.offset = 0;
@@ -187,7 +191,7 @@ public final class SQLSelect {
         this.archivedPolicy = new HashMap<SQLTable, ArchiveMode>(orig.archivedPolicy);
         this.distinct = orig.distinct;
 
-        this.waitTrx = orig.waitTrx;
+        this.lockStrength = orig.lockStrength;
         this.waitTrxTables = new ArrayList<String>(orig.waitTrxTables);
         this.limit = orig.limit;
         this.offset = orig.offset;
@@ -278,13 +282,18 @@ public final class SQLSelect {
             }
         }
         // wait for other update trx to finish before selecting
-        if (this.waitTrx) {
+        if (this.lockStrength != LockStrength.NONE) {
             if (sys.equals(SQLSystem.POSTGRESQL)) {
-                result.append(" FOR SHARE");
+                result.append(this.lockStrength == LockStrength.SHARE ? " FOR SHARE" : " FOR UPDATE");
                 if (this.waitTrxTables.size() > 0)
                     result.append(" OF " + CollectionUtils.join(this.waitTrxTables, ", "));
-            } else if (sys.equals(SQLSystem.MYSQL))
-                result.append(" LOCK IN SHARE MODE");
+            } else if (sys.equals(SQLSystem.MYSQL)) {
+                result.append(this.lockStrength == LockStrength.SHARE ? " LOCK IN SHARE MODE" : " FOR UPDATE");
+            } else if (sys.equals(SQLSystem.H2)) {
+                result.append(" FOR UPDATE");
+            } else {
+                throw new IllegalStateException("Unsupported system : " + sys);
+            }
         }
 
         return result.toString();
@@ -295,7 +304,9 @@ public final class SQLSelect {
         // null key is the default
         final ArchiveMode m = this.archivedPolicy.containsKey(table) ? this.archivedPolicy.get(table) : this.archivedPolicy.get(null);
         assert m != null : "no default policy";
-        if (table.isArchivable() && m != BOTH) {
+        if (m == BOTH) {
+            res = null;
+        } else if (table.isArchivable()) {
             final Object archiveValue;
             if (table.getArchiveField().getType().getJavaType().equals(Boolean.class)) {
                 archiveValue = m == ARCHIVED;
@@ -303,8 +314,10 @@ public final class SQLSelect {
                 archiveValue = m == ARCHIVED ? 1 : 0;
             }
             res = new Where(this.createRef(alias, table.getArchiveField()), "=", archiveValue);
-        } else
-            res = null;
+        } else {
+            // for tables that aren't archivable, either all rows or no rows
+            res = m == ARCHIVED ? Where.FALSE : null;
+        }
         return res;
     }
 
@@ -871,7 +884,7 @@ public final class SQLSelect {
      *         <pre>
      *         LEFT JOIN "test"."SITE" s1 on "BATIMENT"."ID_SITE" = s1."ID" and s1."FOO"
      *         LEFT JOIN "test"."SITE" s2 on "BATIMENT"."ID_SITE" = s2."ID" and s2."BAR"
-     * </pre>
+     *         </pre>
      */
     public final SQLSelectJoin getJoin(final FieldRef ff) {
         return this.getJoin(ff, null);
@@ -989,18 +1002,38 @@ public final class SQLSelect {
     }
 
     /**
-     * Whether this SELECT should wait until all committed transaction are complete. This prevent a
+     * Whether this SELECT should wait until all current transactions are complete. This prevent a
      * SELECT following an UPDATE from seeing rows as they were before. NOTE that this may conflict
      * with other clauses (GROUP BY, DISTINCT, etc.).
      * 
      * @param waitTrx <code>true</code> if this select should wait.
+     * @deprecated use {@link #setLockStrength(LockStrength)}
      */
     public void setWaitPreviousWriteTX(final boolean waitTrx) {
-        this.waitTrx = waitTrx;
+        this.setLockStrength(waitTrx ? LockStrength.SHARE : LockStrength.NONE);
     }
 
-    public void addWaitPreviousWriteTXTable(final String table) {
-        this.setWaitPreviousWriteTX(true);
+    /**
+     * Set the lock strength for the returned rows. NOTE : this is a minimum, e.g. H2 only supports
+     * {@link LockStrength#UPDATE}.
+     * 
+     * @param l the new lock strength.
+     * @throws IllegalArgumentException if the {@link #getSQLSystem() system} doesn't support locks.
+     */
+    public final void setLockStrength(final LockStrength l) throws IllegalArgumentException {
+        final SQLSystem sys = getSQLSystem();
+        if (l != LockStrength.NONE && sys != SQLSystem.POSTGRESQL && sys != SQLSystem.MYSQL && sys != SQLSystem.H2)
+            throw new IllegalArgumentException("This system doesn't support locks : " + sys);
+        this.lockStrength = l;
+    }
+
+    public final LockStrength getLockStrength() {
+        return this.lockStrength;
+    }
+
+    public void addLockedTable(final String table) {
+        if (this.getLockStrength() == LockStrength.NONE)
+            this.setLockStrength(LockStrength.SHARE);
         this.waitTrxTables.add(SQLBase.quoteIdentifier(table));
     }
 
@@ -1053,14 +1086,41 @@ public final class SQLSelect {
     }
 
     /**
+     * This method will return a query for counting rows of this SELECT.
+     * 
+     * @return a query returning a single number, never <code>null</code>.
+     */
+    public final String getForRowCount() {
+        if (this.getLimit() != null && this.getLimit().intValue() == 0)
+            return "SELECT 0";
+
+        final SQLSelect res = new SQLSelect(this);
+        if (res.clearForRowCount(true)) {
+            return "select count(*) from (" + res.asString() + ") subq";
+        } else {
+            return res.asString();
+        }
+    }
+
+    /**
      * This method will replace the expressions in the {@link #getSelect()} by <code>count(*)</code>
      * , further it will remove any items not useful for counting rows. This includes
      * {@link #getOrder()} and left joins.
+     * 
+     * @throws IllegalStateException if this has GROUP BY, HAVING, OFFSET or LIMIT
+     * @see #getForRowCount()
      */
-    public final void clearForRowCount() {
-        // MAYBE support it by not removing joins declaring the referenced fields
-        if (!this.groupBy.isEmpty() || this.having != null)
+    public final void clearForRowCount() throws IllegalStateException {
+        this.clearForRowCount(false);
+    }
+
+    private final boolean clearForRowCount(final boolean allowSubquery) throws IllegalStateException {
+        final boolean hasGroupByOrHaving = !this.groupBy.isEmpty() || this.having != null;
+        if (!allowSubquery && hasGroupByOrHaving)
             throw new IllegalStateException("Group by present");
+        final boolean hasOffsetOrLimit = this.getOffset() > 0 || this.getLimit() != null;
+        if (!allowSubquery && hasOffsetOrLimit)
+            throw new IllegalStateException("Offset or limit present");
 
         this.clearSelect();
         // not needed and some systems require the used fields to be in the select
@@ -1082,7 +1142,14 @@ public final class SQLSelect {
                 this.removeJoin(j);
         }
 
-        this.addSelectFunctionStar("count");
+        if (hasGroupByOrHaving || hasOffsetOrLimit) {
+            assert allowSubquery;
+            this.addRawSelect("1", null);
+            return true;
+        } else {
+            this.addSelectFunctionStar("count");
+            return false;
+        }
     }
 
     public final Map<String, TableRef> getTableRefs() {

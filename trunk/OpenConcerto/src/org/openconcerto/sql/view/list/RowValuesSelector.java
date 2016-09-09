@@ -84,7 +84,7 @@ public class RowValuesSelector extends EnhancedTable {
             }
 
             @Override
-            public boolean isCellEditable(SQLRowValues vals) {
+            public boolean isCellEditable(SQLRowValues vals, int rowIndex, int columnIndex) {
 
                 return true;
             }

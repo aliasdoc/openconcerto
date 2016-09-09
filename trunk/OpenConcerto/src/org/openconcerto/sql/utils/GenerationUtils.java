@@ -26,7 +26,7 @@ import ognl.OgnlException;
 import ognl.OgnlRuntime;
 import ognl.PropertyAccessor;
 
-import org.jdom.Element;
+import org.jdom2.Element;
 
 public abstract class GenerationUtils {
 

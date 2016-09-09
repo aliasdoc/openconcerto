@@ -17,6 +17,7 @@ import org.openconcerto.sql.element.RIVPanel;
 import org.openconcerto.sql.element.SQLComponentItem;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.request.SQLForeignRowItemView;
 import org.openconcerto.sql.request.SQLRowItemView;
 import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.ui.valuewrapper.ValueWrapper;
@@ -110,13 +111,24 @@ public abstract class VWRowItemView<T> extends BaseRowItemView implements SQLCom
     // not final to allow subclass without exactly one field
     @Override
     public void show(SQLRowAccessor r) {
-        if (r.getFields().contains(this.getField().getName())) {
-            @SuppressWarnings("unchecked")
-            final T object = (T) r.getObject(this.getField().getName());
-            try {
-                this.getWrapper().setValue(object);
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Cannot set value of  " + this.getWrapper() + " to " + object + " (from " + this.getField() + ")", e);
+        if (r instanceof SQLRowValues && ((SQLRowValues) r).isDefault(this.getField().getName())) {
+            // in update(), DEFAULT means empty, MAYBE add clear() to MutableValueObject
+            this.getWrapper().setValue(null);
+        } else if (r.getFields().contains(this.getField().getName())) {
+            Object object = r.getObject(this.getField().getName());
+            // typically views that display foreign rows are ValueWrapper<ID>, so if r contains a
+            // row, the call to ValueWrapper.setValue() will fail. So check if the ValueWrapper also
+            // implements SQLForeignRowItemView.
+            if (object instanceof SQLRowAccessor && this.getWrapper() instanceof SQLForeignRowItemView) {
+                ((SQLForeignRowItemView) this.getWrapper()).setValue((SQLRowAccessor) object);
+            } else {
+                try {
+                    @SuppressWarnings("unchecked")
+                    final T casted = (T) object;
+                    this.getWrapper().setValue(casted);
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Cannot set value of  " + this.getWrapper() + " to " + object + " (from " + this.getField() + ")", e);
+                }
             }
         }
     }

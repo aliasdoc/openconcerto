@@ -11,11 +11,8 @@
  * When distributing the software, include this License Header Notice in each file.
  */
  
- package org.openconcerto.ui.light;
+ package org.openconcerto.utils.io;
 
-public class LightUIScrollablePanel extends LightUIPanel {
-    public LightUIScrollablePanel(String id) {
-        super(id);
-        this.setType(LightUIElement.TYPE_SCROLLABLE);
-    }
+public interface HTMLable {
+    public String getHTML();
 }

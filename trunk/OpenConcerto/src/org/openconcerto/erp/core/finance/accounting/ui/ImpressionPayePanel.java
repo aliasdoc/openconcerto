@@ -151,7 +151,7 @@ public abstract class ImpressionPayePanel extends JPanel implements ActionListen
 
     private void checkValidity() {
         if (this.selMoisDeb.getSelectedId() > 1 && this.selMoisEnd.getSelectedId() > 1 && this.textAnnee.getText().trim().length() > 0) {
-            if (this.selMoisDeb.getSelectedId() < this.selMoisEnd.getSelectedId()) {
+            if (this.selMoisDeb.getSelectedId() <= this.selMoisEnd.getSelectedId()) {
                 this.valid.setEnabled(this.checkImpr.isSelected() || this.checkVisu.isSelected());
                 return;
             }

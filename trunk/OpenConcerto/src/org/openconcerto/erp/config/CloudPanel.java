@@ -115,6 +115,8 @@ public class CloudPanel extends JPanel {
                         repaint();
                     } else if (result != null && result.contains("not paid")) {
                         JOptionPane.showMessageDialog(CloudPanel.this, "Compte non crédité");
+                    } else if (result == null || result.isEmpty()) {
+                        JOptionPane.showMessageDialog(CloudPanel.this, "Pas de réponse du serveur d'authentification.");
                     } else {
                         JOptionPane.showMessageDialog(CloudPanel.this, "Email ou identifiant incorrect");
                     }

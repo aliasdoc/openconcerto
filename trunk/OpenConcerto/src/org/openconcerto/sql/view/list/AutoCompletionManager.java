@@ -18,6 +18,7 @@ import org.openconcerto.sql.model.SQLField;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.request.ComboSQLRequest;
 import org.openconcerto.sql.sqlobject.ITextArticleWithCompletionCellEditor;
@@ -25,6 +26,7 @@ import org.openconcerto.sql.sqlobject.ITextWithCompletion;
 import org.openconcerto.sql.sqlobject.SelectionListener;
 import org.openconcerto.sql.sqlobject.SelectionRowListener;
 import org.openconcerto.ui.TextAreaRenderer;
+import org.openconcerto.utils.cc.ITransformer;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -194,6 +196,7 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
             if (this.table.getCellEditor() != null && !this.foreign) {
                 this.table.getCellEditor().stopCellEditing();
             }
+
             fillWithSelection(null, id, rowE);
         }
     }
@@ -246,7 +249,12 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
                                 if (AutoCompletionManager.this.table.getRowValuesTableModel().getValueAt(rowE, column) == null
                                         || !AutoCompletionManager.this.table.getRowValuesTableModel().getValueAt(rowE, column).equals(fromV)) {
                                     AutoCompletionManager.this.table.getRowValuesTableModel().setValueAt(fromV, rowE, column);
-                                    if (AutoCompletionManager.this.table.getEditingColumn() == column && AutoCompletionManager.this.table.getEditingRow() == rowE) {
+                                    // Test Only if not foreign --> Bug avec le
+                                    // sqltextcombocelleditor, si test edit cellAt -> fire idSelected
+                                    // -1 sur la combo ce qui entraine une déselection (Bug Remonté
+                                    // par SA Poulignier)
+                                    if (!AutoCompletionManager.this.foreign && AutoCompletionManager.this.table.getEditingColumn() == column
+                                            && AutoCompletionManager.this.table.getEditingRow() == rowE) {
                                         AutoCompletionManager.this.table.editingCanceled(null);
                                         AutoCompletionManager.this.table.setColumnSelectionInterval(column, column);
                                         AutoCompletionManager.this.table.setRowSelectionInterval(rowE, rowE);
@@ -281,6 +289,16 @@ public class AutoCompletionManager implements SelectionRowListener, SelectionLis
 
     protected Object getValueFrom(SQLRow row, String field, SQLRowAccessor rowDest) {
         return row.getObject(field);
+    }
+
+    public void setSelectTransformer(ITransformer<SQLSelect, SQLSelect> selTrans) {
+        if (this.t != null) {
+            this.t.setSelectTransformer(selTrans);
+        } else if (this.textComboCellEdit != null) {
+            this.textComboCellEdit.setSelectTransformer(selTrans);
+        } else if (this.articleCombo != null) {
+            this.articleCombo.setSelectTransformer(selTrans);
+        }
     }
 
     public void setWhere(Where w) {

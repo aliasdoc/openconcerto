@@ -17,6 +17,7 @@ import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.sql.model.Where;
 import org.openconcerto.utils.StringUtils;
 
 import java.io.IOException;
@@ -56,8 +57,11 @@ public class ExportFEC extends AbstractExport {
     private final char recordSep = '\n';
     private final char replacement = ' ';
 
-    public ExportFEC(DBRoot rootSociete) {
+    private final boolean cloture;
+
+    public ExportFEC(DBRoot rootSociete, boolean cloture) {
         super(rootSociete, "FEC", ".csv");
+        this.cloture = cloture;
     }
 
     @Override
@@ -86,6 +90,7 @@ public class ExportFEC extends AbstractExport {
 
         sel.addFieldOrder(tableEcriture.getField("DATE"));
         sel.addFieldOrder(tableMouvement.getField("NUMERO"));
+        sel.setWhere(sel.getWhere().and(new Where(tableEcriture.getField("DEBIT"), "!=", tableEcriture.getField("CREDIT"))));
 
         @SuppressWarnings("unchecked")
         final List<Object[]> l = (List<Object[]>) this.getRootSociete().getDBSystemRoot().getDataSource().execute(sel.asString(), new ArrayListHandler());
@@ -146,7 +151,11 @@ public class ExportFEC extends AbstractExport {
             // PieceDate TODO ID_MOUVEMENT_PERE* ; SOURCE.DATE
             line.add(ecritureDate);
             // EcritureLib
-            addField(line, (String) array[7]);
+            String s = (String) array[7];
+            if (s == null || s.trim().length() == 0) {
+                s = "Sans libellé";
+            }
+            addField(line, s);
             // Debit
             addAmountField(line, (Number) array[8]);
             // Credit
@@ -167,9 +176,11 @@ public class ExportFEC extends AbstractExport {
                 line.add(ecritureDateValid);
             } else {
                 line.add("");
-                bufOut.close();
-                JOptionPane.showMessageDialog(new JFrame(), "Une écriture n'est pas validée (pas de date):\n" + line, "Erreur FEC", JOptionPane.ERROR_MESSAGE);
-                return;
+                if (cloture) {
+                    bufOut.close();
+                    JOptionPane.showMessageDialog(new JFrame(), "Une écriture n'est pas validée (pas de date):\n" + line, "Erreur FEC", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
             }
             // Montantdevise
             addAmountField(line, ((Number) array[8]).longValue() + ((Number) array[9]).longValue());

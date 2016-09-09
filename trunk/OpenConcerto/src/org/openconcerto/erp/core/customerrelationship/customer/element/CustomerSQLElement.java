@@ -17,6 +17,8 @@ import org.openconcerto.sql.element.GlobalMapper;
 import org.openconcerto.sql.element.GroupSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 
+import java.util.List;
+
 public class CustomerSQLElement extends ClientNormalSQLElement {
 
     public CustomerSQLElement() {
@@ -31,5 +33,12 @@ public class CustomerSQLElement extends ClientNormalSQLElement {
         final GroupSQLComponent c = new CustomerSQLComponent(this);
         c.startTabGroupAfter("customerrelationship.customer.identifier");
         return c;
+    }
+
+    @Override
+    protected List<String> getListFields() {
+        final List<String> fields = super.getListFields();
+        fields.add("OBSOLETE");
+        return fields;
     }
 }

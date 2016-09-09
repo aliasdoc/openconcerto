@@ -20,6 +20,8 @@ import org.openconcerto.erp.core.supplychain.order.component.SaisieAchatSQLCompo
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
 import org.openconcerto.sql.model.SQLInjector;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -62,11 +64,10 @@ public class SaisieAchatSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_MODE_REGLEMENT");
-        l.add("ID_MOUVEMENT");
-        return l;
+    @Override
+    protected void setupLinks(SQLElementLinksSetup links) {
+        super.setupLinks(links);
+        links.get("ID_MOUVEMENT").setType(LinkType.ASSOCIATION);
     }
 
     /*

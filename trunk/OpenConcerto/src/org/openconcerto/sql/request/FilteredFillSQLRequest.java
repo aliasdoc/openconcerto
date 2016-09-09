@@ -13,11 +13,6 @@
  
  package org.openconcerto.sql.request;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.model.SQLDataSource;
 import org.openconcerto.sql.model.SQLFilter;
@@ -33,6 +28,12 @@ import org.openconcerto.sql.model.graph.Path;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.CompareUtils;
 import org.openconcerto.utils.Tuple2;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import net.jcip.annotations.GuardedBy;
 import net.jcip.annotations.ThreadSafe;
 
@@ -61,19 +62,11 @@ public abstract class FilteredFillSQLRequest extends BaseFillSQLRequest {
 
     static protected final int getRowCount(final SQLRowValuesListFetcher fetcher) {
         final SQLTable primaryT = fetcher.getGraph().getTable();
-        return getRowCount(new SQLSelect(fetcher.getReq()), primaryT.getDBSystemRoot().getDataSource());
+        return getRowCount(fetcher.getReq(), primaryT.getDBSystemRoot().getDataSource());
     }
 
     static public final int getRowCount(final SQLSelect sel, final SQLDataSource ds) {
-        sel.clearForRowCount();
-        System.out.println("FilteredFillSQLRequest.getRowCount() " + sel.asString());
-        Number executeScalar = (Number) ds.executeScalar(sel.asString());
-        if(executeScalar == null) {
-            System.out.println("FilteredFillSQLRequest.getRowCount() select null");
-            return 0;
-        } else {
-            return executeScalar.intValue();
-        }
+        return ((Number) ds.executeScalar(sel.getForRowCount())).intValue();
     }
 
     // never null (but can be <null, null>)

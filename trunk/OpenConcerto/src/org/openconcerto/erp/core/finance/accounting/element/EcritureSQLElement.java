@@ -25,6 +25,7 @@ import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.FieldPath;
 import org.openconcerto.sql.model.SQLBase;
 import org.openconcerto.sql.model.SQLRow;
@@ -75,6 +76,11 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
         super("ECRITURE", "une écriture", "écritures");
     }
 
+    @Override
+    protected String getParentFFName() {
+        return "ID_MOUVEMENT";
+    }
+
     // Impossible de modifier si validée
     // FIXME impossible de saisir une écriture avant la date de debut d'exercice --> de saisir de
     // document de gest comm
@@ -114,18 +120,9 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    public synchronized ListSQLRequest createListRequest() {
-        return createListRequest(this.getListFields());
-    }
-
-    public ListSQLRequest createListRequest(List<String> fields) {
-        return new ListSQLRequest(this.getTable(), fields) {
-            @Override
-            protected void customizeToFetch(SQLRowValues graphToFetch) {
-                super.customizeToFetch(graphToFetch);
-                graphToFetch.put("VALIDE", null);
-            }
-        };
+    protected void _initListRequest(ListSQLRequest req) {
+        super._initListRequest(req);
+        req.addToGraphToFetch("VALIDE");
     }
 
     @Override
@@ -568,15 +565,18 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
     }
 
     @Override
-    protected void archive(SQLRow row, boolean cutLinks) throws SQLException {
-        // Si on supprime une ecriture on doit supprimer toutes les ecritures du mouvement associé
-        System.err.println("Archivage des écritures");
-        // archiveMouvement(row.getInt("ID_MOUVEMENT"));
-        JFrame frame = new PanelFrame(new SuppressionEcrituresPanel(row.getInt("ID_MOUVEMENT")), "Suppression d'ecritures");
-        frame.pack();
-        frame.setResizable(false);
-        frame.setLocationRelativeTo(null);
-        frame.setVisible(true);
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+        for (SQLRow row : trees.getRows()) {
+            // Si on supprime une ecriture on doit supprimer toutes les ecritures du mouvement
+            // associé
+            System.err.println("Archivage des écritures");
+            // archiveMouvement(row.getInt("ID_MOUVEMENT"));
+            JFrame frame = new PanelFrame(new SuppressionEcrituresPanel(row.getInt("ID_MOUVEMENT")), "Suppression d'ecritures");
+            frame.pack();
+            frame.setResizable(false);
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        }
     }
 
     /**
@@ -592,6 +592,7 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
 
             SQLRowValues rowVals = new SQLRowValues(this.getTable());
             rowVals.put("IDUSER_DELETE", UserManager.getInstance().getCurrentUser().getId());
+            rowVals.put("ARCHIVE", 1);
             rowVals.update(row.getID());
 
             // Annulation du lettrage si l'ecriture est lettrée pour ne pas avoir de lettrage
@@ -605,7 +606,7 @@ public class EcritureSQLElement extends ComptaSQLConfElement {
                 getTable().getDBSystemRoot().getDataSource().execute(builder.asString());
             }
 
-            super.archive(row, true);
+            // super.archive(row, true);
         } else {
             System.err.println("Impossible de supprimer une ecriture validée");
             JOptionPane.showMessageDialog(null, "Impossible de supprimer une ecriture validée. \n" + row);

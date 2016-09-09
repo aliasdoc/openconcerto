@@ -13,10 +13,65 @@
  
  package org.openconcerto.ui.light;
 
-public class LightUIDate extends LightUIElement {
-    public LightUIDate(String id) {
-        this.setId(id);
+import org.openconcerto.utils.io.JSONConverter;
+
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+import net.minidev.json.JSONObject;
+
+public class LightUIDate extends LightUIElement implements IUserControl {
+
+    public LightUIDate(final JSONObject json) {
+        super(json);
+    }
+
+    public LightUIDate(final String id) {
+        super(id);
         this.setType(TYPE_DATE);
         this.setValueType(LightUIElement.VALUE_TYPE_DATE);
+    }
+
+    public LightUIDate(final LightUIDate date) {
+        super(date);
+    }
+
+    public Timestamp getValueAsDate() {
+        if (this.getValue() != null && this.getValue() != "") {
+            SimpleDateFormat df2 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.S");
+            try {
+                return new Timestamp(df2.parse(this.getValue()).getTime());
+            } catch (final ParseException ex) {
+                throw new IllegalArgumentException(ex.getMessage(), ex);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public JSONToLightUIConvertor getConvertor() {
+        return new JSONToLightUIConvertor() {
+            @Override
+            public LightUIElement convert(final JSONObject json) {
+                return new LightUIDate(json);
+            }
+        };
+    }
+
+    @Override
+    public Object getValueFromContext() {
+        return this.getValueAsDate();
+    }
+
+    @Override
+    public void setValueFromContext(Object value) {
+        final String strValue = (String) JSONConverter.getObjectFromJSON(value, String.class);
+        this.setValue(strValue);
+    }
+
+    @Override
+    public LightUIElement clone() {
+        return new LightUIDate(this);
     }
 }

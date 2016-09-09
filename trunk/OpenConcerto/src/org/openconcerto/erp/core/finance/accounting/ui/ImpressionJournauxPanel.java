@@ -69,6 +69,7 @@ public class ImpressionJournauxPanel extends JPanel implements SpreadSheetGenera
     private JButton valid;
     private JButton annul;
     private JCheckBox checkCentralMois;
+    private JCheckBox checkAncienModele;
     private JTextField compteDeb, compteEnd;
     private int mode = GrandLivreSheet.MODEALL;
     private JProgressBar bar = new JProgressBar(0, 3);
@@ -176,7 +177,7 @@ public class ImpressionJournauxPanel extends JPanel implements SpreadSheetGenera
         JRadioButton radioNonLettree = new JRadioButton(new AbstractAction("Non lettrées") {
             public void actionPerformed(ActionEvent e) {
                 // TODO Auto-generated method stub
-                mode = GrandLivreSheet.MODENONLETTREE;
+                mode = GrandLivreSheet.MODENONLETTREE_PERIODE;
             }
         });
         JPanel panelMode = new JPanel();
@@ -203,6 +204,13 @@ public class ImpressionJournauxPanel extends JPanel implements SpreadSheetGenera
         c.gridx += 2;
         c.gridwidth = GridBagConstraints.REMAINDER;
         this.add(this.checkCentralMois, c);
+
+        // Ancien modele
+        this.checkAncienModele = new JCheckBox("Ancien modèle");
+        // c.gridy++;
+        // c.gridx += 2;
+        // c.gridwidth = GridBagConstraints.REMAINDER;
+        // this.add(this.checkAncienModele, c);
 
         // Progress bar
         c.gridwidth = GridBagConstraints.REMAINDER;
@@ -234,7 +242,17 @@ public class ImpressionJournauxPanel extends JPanel implements SpreadSheetGenera
                 new Thread(new Runnable() {
                     public void run() {
                         int[] idS = ((SelectJournauxModel) tableJrnl.getModel()).getSelectedIds(tableJrnl.getSelectedRows());
-                        if (checkCentralMois.isSelected()) {
+                        if (checkAncienModele.isSelected()) {
+                            JournauxSheet bSheet;
+                            bSheet = new JournauxSheet(idS, dateDeb.getDate(), dateEnd.getDate(), mode, compteDeb.getText().trim(), compteEnd.getText().trim());
+                            final SpreadSheetGeneratorCompta generator = new SpreadSheetGeneratorCompta(bSheet, "Journal_" + Calendar.getInstance().getTimeInMillis(), false, true);
+                            SwingUtilities.invokeLater(new Runnable() {
+                                public void run() {
+                                    bar.setValue(2);
+                                    generator.addGenerateListener(ImpressionJournauxPanel.this);
+                                }
+                            });
+                        } else if (checkCentralMois.isSelected()) {
                             JournauxSheet bSheet;
                             bSheet = new JournauxMoisSheet(idS, dateDeb.getDate(), dateEnd.getDate(), mode);
                             final SpreadSheetGeneratorCompta generator = new SpreadSheetGeneratorCompta(bSheet, "Journal_" + Calendar.getInstance().getTimeInMillis(), false, true);

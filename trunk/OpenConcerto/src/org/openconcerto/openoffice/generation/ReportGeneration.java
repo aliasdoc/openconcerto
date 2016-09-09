@@ -14,6 +14,7 @@
  package org.openconcerto.openoffice.generation;
 
 import org.openconcerto.openoffice.ODSingleXMLDocument;
+import org.openconcerto.openoffice.XMLFormatVersion;
 import org.openconcerto.openoffice.generation.desc.ReportPart;
 import org.openconcerto.openoffice.generation.desc.ReportType;
 import org.openconcerto.openoffice.generation.desc.part.CaseReportPart;
@@ -41,14 +42,14 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
+import org.jdom.Element;
+import org.jdom.JDOMException;
+import org.jdom.filter.Filter;
+
 import ognl.Ognl;
 import ognl.OgnlException;
 import ognl.OgnlRuntime;
 import ognl.PropertyAccessor;
-
-import org.jdom.Element;
-import org.jdom.JDOMException;
-import org.jdom.filter.Filter;
 
 /**
  * Représente la génération d'un rapport.
@@ -82,6 +83,7 @@ public class ReportGeneration<C extends GenerationCommon> {
 
     private final ReportType type;
     private C common;
+    private XMLFormatVersion formatVersion;
     // Inheritable to allow generators to spawn threads
     private final InheritableThreadLocal<ReportPart> currentParts;
     private final InheritableThreadLocal<DocumentGenerator> currentGenerator;
@@ -248,8 +250,13 @@ public class ReportGeneration<C extends GenerationCommon> {
         this.commonData = null;
         this.beginGeneration();
 
+        final ODSingleXMLDocument emptyDocument = this.createEmptyDocument();
+        synchronized (this) {
+            this.formatVersion = emptyDocument.getFormatVersion();
+        }
+
         final Map<String, ODSingleXMLDocument> res = new HashMap<String, ODSingleXMLDocument>();
-        res.put(null, this.createEmptyDocument());
+        res.put(null, emptyDocument);
 
         // les threads
         final Map<String, GenThread> forked = new HashMap<String, GenThread>();
@@ -311,6 +318,11 @@ public class ReportGeneration<C extends GenerationCommon> {
                 this.currentParts.set(null);
             }
         }
+
+        synchronized (this) {
+            this.formatVersion = null;
+        }
+
         return res;
     }
 
@@ -453,6 +465,11 @@ public class ReportGeneration<C extends GenerationCommon> {
         }
     }
 
+    public synchronized final XMLFormatVersion getFormatVersion() {
+        return this.formatVersion;
+    }
+
+    @Override
     public String toString() {
         return "generation of '" + this.getReportType() + "'";
     }

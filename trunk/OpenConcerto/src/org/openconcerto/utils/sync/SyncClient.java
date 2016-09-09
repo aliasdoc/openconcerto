@@ -362,10 +362,27 @@ public class SyncClient {
         try {
             sendDelta(localFile, remotePath, remoteName, moves, rangesOk.getUnusedRanges(), localFileHash, token);
         } catch (Exception e) {
-            System.err.println("Unable to send delta: " + localFile.getAbsolutePath() + " to " + remoteName + " " + moves);
+            // Sending by delta failed, fallback to sendind the complete file
+            System.err.println("SyncClient.sendFile() Unable to send delta: " + localFile.getAbsolutePath() + " to " + remoteName + " " + moves);
             rangesOk.dump();
-            throw e;
+            try {
+                System.err.println("SyncClient.sendFile() sending complete file");
+                sendCompleteFile(localFile, remotePath, remoteName, token);
+            } catch (Exception e2) {
+                System.err.println("SyncClient.sendFile() Unable to send complete file");
+                throw e2;
+            }
+
         }
+    }
+
+    private void sendCompleteFile(File localFile, String remotePath, String remoteName, String token) throws Exception {
+        byte[] localFileHash = HashWriter.getHash(localFile);
+        MoveOperationList noMoves = new MoveOperationList();
+        List<Range> rangesToSend = new ArrayList<Range>(1);
+        rangesToSend.add(new Range(0, (int) localFile.length()));
+        sendDelta(localFile, remotePath, remoteName, noMoves, rangesToSend, localFileHash, token);
+
     }
 
     private void sendDelta(File localFile, String remotePath, String remoteName, MoveOperationList moves, List<Range> rangesToSend, byte[] localFileHash, String token) throws IOException {
@@ -671,14 +688,11 @@ public class SyncClient {
         final int read = fb.read(buffer);
         checksum.check(buffer, 0, read);
         int v = 0;
-        int start = 0;
-        int end = read;
+
         MessageDigest md5Digest = MessageDigest.getInstance("MD5");
         RangeList rangesOk = new RangeList(fileSize);
         do {
-
             int r32 = checksum.getValue();
-
             byte[] md5 = map.get(r32);
             if (md5 != null) {
                 // local block maybe exists in the remote file
@@ -687,7 +701,6 @@ public class SyncClient {
                 md5Digest.update(buffer);
                 byte[] localMd5 = md5Digest.digest();
                 if (HashWriter.compareHash(md5, localMd5)) {
-
                     // Block found!!!
                     // Copy block to: mapBlock.get(r32)*blockSize;
                     int offset = mapBlock.get(r32) * HashWriter.BLOCK_SIZE;
@@ -697,22 +710,18 @@ public class SyncClient {
                     //
                     rangesOk.add(new Range(offset, offset + HashWriter.BLOCK_SIZE));
                 }
-
             }
-
             // read
             v = fb.read();
-            start++;
             // Update
             System.arraycopy(buffer, 1, buffer, 0, buffer.length - 1);
             buffer[buffer.length - 1] = (byte) v;
             checksum.roll((byte) v);
-            end++;
         } while (v >= 0);
         fb.close();
         rangesOk.dump();
 
-        // DOwnload missing parts
+        // Download missing parts
         final List<Range> unusedRanges = rangesOk.getUnusedRanges();
         DataInputStream zIn = getContent(remotePath, remoteName, unusedRanges, token);
 

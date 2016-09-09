@@ -410,4 +410,8 @@ public final class JDate extends JComponent implements ValueWrapper<Date>, TextC
     public void removeActionListener(ActionListener actionListener) {
         this.picker.removeActionListener(actionListener);
     }
+
+    public void setButtonVisible(boolean b) {
+        this.picker.setButtonVisible(b);
+    }
 }

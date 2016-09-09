@@ -54,20 +54,6 @@ public class FactureFournisseurSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("FACTURE_FOURNISSEUR_ELEMENT");
-        return set;
-    }
-
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.addAll(super.getPrivateFields());
-        l.add("ID_MODE_REGLEMENT");
-        return l;
-    }
-
     /*
      * (non-Javadoc)
      * 

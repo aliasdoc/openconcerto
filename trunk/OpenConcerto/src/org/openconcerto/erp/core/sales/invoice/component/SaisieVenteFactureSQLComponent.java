@@ -446,16 +446,10 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                     System.err.println("SET WHERE ID_CLIENT = " + wantedID);
                     if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
-                        addressUI
-                                .getComboAdrF()
-                                .getRequest()
-                                .setWhere(
-                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
-                        addressUI
-                                .getComboAdrL()
-                                .getRequest()
-                                .setWhere(
-                                        new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
+                        addressUI.getComboAdrF().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                        addressUI.getComboAdrL().getRequest().setWhere(
+                                new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
                     } else {
                         addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
                         addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
@@ -714,8 +708,8 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
         this.allowEditable("T_SERVICE", false);
         this.allowEditable("T_POIDS", false);
 
-        totalTTC = new TotalPanel(this.tableFacture, fieldHT, fieldTVA, this.fieldTTC, this.textPortHT, this.textRemiseHT, fieldService, fieldTHA, fieldDevise, poids, null, (getTable().contains(
-                "ID_TAXE_PORT") ? boxTaxePort : null));
+        totalTTC = new TotalPanel(this.tableFacture, fieldHT, fieldTVA, this.fieldTTC, this.textPortHT, this.textRemiseHT, fieldService, fieldTHA, fieldDevise, poids, null,
+                (getTable().contains("ID_TAXE_PORT") ? boxTaxePort : null));
         DefaultGridBagConstraints.lockMinimumSize(totalTTC);
         cBottom.gridx++;
         cBottom.weightx = 1;
@@ -1239,8 +1233,8 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                     rowFacture = getTable().getRow(idSaisieVF);
                     // incrémentation du numéro auto
                     final SQLRow rowNum = comboNumAuto == null ? this.tableNum.getRow(2) : comboNumAuto.getSelectedRow();
-                    if (NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, rowFacture.getDate("DATE").getTime(), rowNum).equalsIgnoreCase(
-                            this.textNumeroUnique.getText().trim())) {
+                    if (NumerotationAutoSQLElement.getNextNumero(SaisieVenteFactureSQLElement.class, rowFacture.getDate("DATE").getTime(), rowNum)
+                            .equalsIgnoreCase(this.textNumeroUnique.getText().trim())) {
                         SQLRowValues rowVals = rowNum.createEmptyUpdateRow();
 
                         String labelNumberFor = NumerotationAutoSQLElement.getLabelNumberFor(SaisieVenteFactureSQLElement.class);
@@ -1252,27 +1246,6 @@ public class SaisieVenteFactureSQLComponent extends TransfertBaseSQLComponent {
                 } else {
                     if (JOptionPane.showConfirmDialog(this, "Attention en modifiant cette facture, vous supprimerez les chéques et les échéances associés. Continuer?", "Modification de facture",
                             JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-                        SQLPreferences prefs = SQLPreferences.getMemCached(getTable().getDBRoot());
-                        if (prefs.getBoolean(GestionArticleGlobalPreferencePanel.STOCK_FACT, true)) {
-                            // On efface les anciens mouvements de stocks
-                            SQLSelect sel = new SQLSelect();
-                            sel.addSelect(eltMvtStock.getTable().getField("ID"));
-                            Where w = new Where(eltMvtStock.getTable().getField("IDSOURCE"), "=", getSelectedID());
-                            Where w2 = new Where(eltMvtStock.getTable().getField("SOURCE"), "=", getTable().getName());
-                            sel.setWhere(w.and(w2));
-
-                            List l = (List) eltMvtStock.getTable().getBase().getDataSource().execute(sel.asString(), new ArrayListHandler());
-                            if (l != null) {
-                                for (int i = 0; i < l.size(); i++) {
-                                    Object[] tmp = (Object[]) l.get(i);
-                                    try {
-                                        eltMvtStock.archive(((Number) tmp[0]).intValue());
-                                    } catch (SQLException e) {
-                                        e.printStackTrace();
-                                    }
-                                }
-                            }
-                        }
                         // On recupere l'ancien total HT
                         rowFactureOld = this.getTable().getRow(getSelectedID());
                         lFactureOld = ((Number) rowFactureOld.getObject("T_HT")).longValue();

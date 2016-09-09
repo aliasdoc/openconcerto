@@ -21,6 +21,7 @@ import java.sql.Savepoint;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.jcip.annotations.GuardedBy;
 import net.jcip.annotations.ThreadSafe;
 
 /**
@@ -32,7 +33,30 @@ import net.jcip.annotations.ThreadSafe;
 @ThreadSafe
 public class TransactionPoint {
 
-    private Boolean committed;
+    static public enum State {
+        ACTIVE(null), COMMITTED(true), ABORTED(false);
+
+        private final Boolean committed;
+
+        private State(final Boolean b) {
+            this.committed = b;
+        }
+
+        public final Boolean getCommitted() {
+            return this.committed;
+        }
+
+        public final boolean isActive() {
+            return this.committed == null;
+        }
+    }
+
+    @GuardedBy("this")
+    private State state;
+    @GuardedBy("this")
+    private TransactionPoint previous;
+    @GuardedBy("this")
+    private TransactionPoint transaction;
     private final Connection conn;
     private final Savepoint savepoint;
     private final boolean namedSavePoint;
@@ -46,7 +70,9 @@ public class TransactionPoint {
 
     public TransactionPoint(Connection conn, Savepoint savepoint, boolean namedSavePoint) throws SQLException {
         super();
-        this.committed = null;
+        this.state = State.ACTIVE;
+        this.previous = null;
+        this.transaction = null;
         if (conn == null)
             throw new NullPointerException("Null connection");
         this.conn = conn;
@@ -66,9 +92,61 @@ public class TransactionPoint {
      * 
      * @return <code>null</code> if it's ongoing, <code>true</code> if it was committed,
      *         <code>false</code> if aborted.
+     * @deprecated use {@link #getState()}
      */
-    public synchronized final Boolean getCommitted() {
-        return this.committed;
+    public final Boolean getCommitted() {
+        return this.getState().getCommitted();
+    }
+
+    /**
+     * How this transaction point ended.
+     * 
+     * @return <code>true</code> if it was committed, <code>false</code> if aborted.
+     * @throws IllegalStateException if still {@link State#ACTIVE}.
+     * @see #getState()
+     */
+    public final boolean wasCommitted() throws IllegalStateException {
+        final State state = this.getState();
+        if (state.isActive())
+            throw new IllegalStateException("Still active");
+        return state.getCommitted();
+    }
+
+    public synchronized final State getState() {
+        return this.state;
+    }
+
+    synchronized void setCommitted(boolean committed) {
+        checkActive();
+        this.state = committed ? State.COMMITTED : State.ABORTED;
+        assert !this.isActive();
+    }
+
+    public boolean isActive() {
+        return this.getState().isActive();
+    }
+
+    synchronized void setPrevious(TransactionPoint previous) {
+        assert (previous == null) == (this.getSavePoint() == null);
+        final TransactionPoint newTx = previous == null ? this : previous.getTransaction();
+        if (this.transaction != null && newTx != this.transaction)
+            throw new IllegalArgumentException("Previous is in a different transaction");
+        this.previous = previous;
+        this.transaction = newTx;
+    }
+
+    public final synchronized TransactionPoint getPrevious() {
+        return this.previous;
+    }
+
+    /**
+     * The transaction containing this point.
+     * 
+     * @return the transaction, i.e. <code>this</code> if {@link #getSavePoint()} is
+     *         <code>null</code>.
+     */
+    public synchronized final TransactionPoint getTransaction() {
+        return this.transaction;
     }
 
     final Connection getConn() {
@@ -108,8 +186,8 @@ public class TransactionPoint {
         this.listeners.add(l);
     }
 
-    private synchronized void checkActive() {
-        if (this.committed != null)
+    private void checkActive() {
+        if (!this.isActive())
             throw new IllegalStateException("Transaction point inactive");
     }
 
@@ -124,11 +202,12 @@ public class TransactionPoint {
         this.listeners.remove(l);
     }
 
-    final void fire(boolean committed) {
+    final void fire() {
         final List<TransactionListener> ls;
         synchronized (this) {
-            this.committed = Boolean.valueOf(committed);
-            ls = this.listeners;
+            assert !isActive() : "Fire while still active";
+            ls = new ArrayList<TransactionListener>(this.listeners);
+            this.listeners.clear();
         }
         for (final TransactionListener l : ls) {
             l.transactionEnded(this);
@@ -155,5 +234,12 @@ public class TransactionPoint {
             return false;
         final TransactionPoint other = (TransactionPoint) obj;
         return this.conn == other.conn && this.namedSavePoint == other.namedSavePoint && CompareUtils.equals(this.savePointID, other.savePointID);
+    }
+
+    @Override
+    public String toString() {
+        final String id = this.getSavePointID();
+        final String sp = id != null ? " / savepoint " + id : "";
+        return this.getClass().getSimpleName() + " " + this.getState() + " for transaction " + System.identityHashCode(this.getTransaction()) + sp;
     }
 }

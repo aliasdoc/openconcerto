@@ -65,6 +65,7 @@ public class Currency {
         mapSymbol.put("SVC", "$");
         mapSymbol.put("EEK", "kr");
         mapSymbol.put("EUR", "€");
+        mapSymbol.put("FCFA", "F CFA");
         mapSymbol.put("FKP", "£");
         mapSymbol.put("FJD", "$");
         mapSymbol.put("GHC", "¢");
@@ -142,6 +143,7 @@ public class Currency {
         mapSymbol.put("GBP", "£");
         mapSymbol.put("USD", "$");
         mapSymbol.put("UYU", "$U");
+        mapSymbol.put("XAF", "F CFA");
         mapSymbol.put("UZS", "лв");
         mapSymbol.put("VEF", "Bs");
         mapSymbol.put("VND", "₫");

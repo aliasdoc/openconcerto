@@ -75,6 +75,12 @@ class SQLSyntaxMS extends SQLSyntax {
     }
 
     @Override
+    public int getMaximumIdentifierLength() {
+        // https://msdn.microsoft.com/en-us/library/ms143432.aspx
+        return 128;
+    }
+
+    @Override
     SQLBase createBase(SQLServer server, String name, final IClosure<? super DBSystemRoot> systemRootInit, String login, String pass, IClosure<? super SQLDataSource> dsInit) {
         return new MSSQLBase(server, name, systemRootInit, login, pass, dsInit);
     }
@@ -211,6 +217,11 @@ class SQLSyntaxMS extends SQLSyntax {
     @Override
     public boolean isUniqueException(SQLException exn) {
         return SQLUtils.findWithSQLState(exn).getErrorCode() == 2601;
+    }
+    
+    @Override
+    public boolean isDeadLockException(SQLException exn) {
+        return SQLUtils.findWithSQLState(exn).getErrorCode() == 1205;
     }
 
     @Override

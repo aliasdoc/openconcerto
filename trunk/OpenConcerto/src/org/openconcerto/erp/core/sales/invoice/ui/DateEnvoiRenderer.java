@@ -26,28 +26,25 @@ import javax.swing.table.DefaultTableCellRenderer;
 
 public class DateEnvoiRenderer extends DefaultTableCellRenderer {
 
-    private static final Color orange = new Color(249, 215, 176);
-    private static final Color orangeDark = orange.darker();
-    private static final DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.FRENCH);
+    private static final Color ORANGE = new Color(249, 215, 176);
+    private static final Color ORANGE_DARK = ORANGE.darker();
+    private final DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.FRENCH);
 
     public DateEnvoiRenderer() {
         super();
     }
 
     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-
-        Component comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
+        final Component comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
         if (value == null) {
             if (isSelected) {
-                comp.setBackground(orangeDark);
+                comp.setBackground(ORANGE_DARK);
             } else {
-                comp.setBackground(orange);
+                comp.setBackground(ORANGE);
             }
         } else {
             TableCellRendererUtils.setBackgroundColor(comp, table, isSelected);
         }
-
         if (value instanceof Date) {
             this.setText(dateFormat.format((Date) value));
         }

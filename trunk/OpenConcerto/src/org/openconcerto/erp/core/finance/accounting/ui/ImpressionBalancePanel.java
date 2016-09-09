@@ -42,13 +42,14 @@ import javax.swing.SwingUtilities;
 
 public class ImpressionBalancePanel extends JPanel implements SpreadSheetGeneratorListener {
 
-    private final JDate dateEnd;
+    private final JDate dateEnd, dateStart;
     private JButton valid;
     private JButton annul;
     private JCheckBox checkImpr;
     private JCheckBox checkVisu;
     private JCheckBox checkClientCentral;
     private JCheckBox checkFournCentral;
+    private JCheckBox checkFournImmoCentral;
     private JProgressBar bar = new JProgressBar(0, 3);
     private JTextField compteDeb, compteEnd;
 
@@ -60,11 +61,16 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
         SQLRow rowExercice = Configuration.getInstance().getBase().getTable("EXERCICE_COMMON").getRow(rowSociete.getInt("ID_EXERCICE_COMMON"));
 
         this.dateEnd = new JDate();
+        this.dateStart = new JDate();
 
         // Période
         this.add(new JLabel("Balance au"), c);
         c.gridx++;
         c.weightx = 1;
+        this.add(this.dateStart, c);
+        c.gridx++;
+        c.weightx = 1;
+        c.gridwidth = 2;
         this.add(this.dateEnd, c);
         // Chargement des valeurs par défaut
         String valueDateEnd = DefaultNXProps.getInstance().getStringProperty("BalanceDateEnd");
@@ -80,6 +86,7 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
         this.compteEnd = new JTextField();
         c.gridy++;
         c.gridx = 0;
+        c.gridwidth = 1;
         this.add(new JLabel("Du compte "), c);
         c.gridx++;
         c.weightx = 1;
@@ -107,6 +114,13 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
         c.gridx = 0;
         this.checkFournCentral = new JCheckBox("Centralisation des comptes fournisseurs");
         this.add(this.checkFournCentral, c);
+
+        // Centralisation Fournisseurs
+        c.gridy++;
+        c.gridwidth = GridBagConstraints.REMAINDER;
+        c.gridx = 0;
+        this.checkFournImmoCentral = new JCheckBox("Centralisation des comptes fournisseurs d'immobilisations");
+        this.add(this.checkFournImmoCentral, c);
 
         // Progress bar
         c.gridwidth = GridBagConstraints.REMAINDER;
@@ -148,7 +162,8 @@ public class ImpressionBalancePanel extends JPanel implements SpreadSheetGenerat
                 bar.setValue(1);
                 new Thread(new Runnable() {
                     public void run() {
-                        BalanceSheet bSheet = new BalanceSheet(dateEnd.getDate(), compteDeb.getText(), compteEnd.getText(), checkClientCentral.isSelected(), checkFournCentral.isSelected());
+                        BalanceSheet bSheet = new BalanceSheet(dateStart.getDate(), dateEnd.getDate(), compteDeb.getText(), compteEnd.getText(), checkClientCentral.isSelected(),
+                                checkFournCentral.isSelected(), checkFournImmoCentral.isSelected());
                         final SpreadSheetGeneratorCompta generator = new SpreadSheetGeneratorCompta(bSheet, "Balance" + new Date().getTime(), checkImpr.isSelected(), checkVisu.isSelected());
 
                         SwingUtilities.invokeLater(new Runnable() {

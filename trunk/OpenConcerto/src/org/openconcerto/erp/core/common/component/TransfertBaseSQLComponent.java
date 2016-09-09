@@ -127,8 +127,7 @@ public abstract class TransfertBaseSQLComponent extends BaseSQLComponent {
             return;
         }
         // remove foreign and replace rowvalues by id
-        final SQLRowValues singleRowValues = new SQLRowValues(r.asRowValues(), ForeignCopyMode.COPY_ID_OR_RM);
-        super.select(singleRowValues);
+        super.select(r);
         final RowValuesTable table = this.getRowValuesTable();
         if (table != null) {
             table.clear();

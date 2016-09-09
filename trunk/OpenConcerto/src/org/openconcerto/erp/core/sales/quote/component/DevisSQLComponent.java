@@ -358,18 +358,10 @@ public class DevisSQLComponent extends BaseSQLComponent {
                         System.err.println("SET WHERE ID_CLIENT = " + wantedID);
                         if (wantedID != SQLRow.NONEXISTANT_ID && wantedID >= SQLRow.MIN_VALID_ID) {
 
-                            addressUI
-                                    .getComboAdrF()
-                                    .getRequest()
-                                    .setWhere(
-                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice
-                                                    .getId())));
-                            addressUI
-                                    .getComboAdrL()
-                                    .getRequest()
-                                    .setWhere(
-                                            new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery
-                                                    .getId())));
+                            addressUI.getComboAdrF().getRequest().setWhere(
+                                    new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Invoice.getId())));
+                            addressUI.getComboAdrL().getRequest().setWhere(
+                                    new Where(adrElement.getTable().getField("ID_CLIENT"), "=", wantedID).and(new Where(adrElement.getTable().getField("TYPE"), "=", AdresseType.Delivery.getId())));
                         } else {
                             addressUI.getComboAdrF().getRequest().setWhere(Where.FALSE);
                             addressUI.getComboAdrL().getRequest().setWhere(Where.FALSE);
@@ -562,8 +554,8 @@ public class DevisSQLComponent extends BaseSQLComponent {
         cRemise.insets = new Insets(0, 0, 1, 0);
         final JLabel labelRemise = new JLabel(getLabelFor("REMISE_HT"));
         panelRemise.add(labelRemise, cRemise);
-        cRemise.gridx++;
-        panelRemise.add(radioEuros, cRemise);
+        // cRemise.gridx++;
+        // panelRemise.add(radioEuros, cRemise);
 
         cRemise.gridx++;
         cRemise.weightx = 0;
@@ -572,15 +564,15 @@ public class DevisSQLComponent extends BaseSQLComponent {
         this.textRemiseHT.setMinimumSize(new Dimension(150, 20));
         this.textRemiseHT.setPreferredSize(new Dimension(150, 20));
 
-        cRemise.gridx = 1;
-        cRemise.gridy++;
-        cRemise.weightx = 0;
-        panelRemise.add(radioPourCent, cRemise);
-
+        // cRemise.gridx = 1;
+        // cRemise.gridy++;
+        // cRemise.weightx = 0;
+        // panelRemise.add(radioPourCent, cRemise);
+        //
         this.textPourcentRemise = new JTextField(5);
-        DefaultGridBagConstraints.lockMinimumSize(this.textPourcentRemise);
-        cRemise.gridx++;
-        panelRemise.add(this.textPourcentRemise, cRemise);
+        // DefaultGridBagConstraints.lockMinimumSize(this.textPourcentRemise);
+        // cRemise.gridx++;
+        // panelRemise.add(this.textPourcentRemise, cRemise);
 
         cPanel.gridx = 0;
         cPanel.gridy++;
@@ -595,7 +587,7 @@ public class DevisSQLComponent extends BaseSQLComponent {
         cBottom.fill = GridBagConstraints.HORIZONTAL;
         cBottom.anchor = GridBagConstraints.NORTHEAST;
         DefaultGridBagConstraints.lockMinimumSize(panel);
-        // bottomPanel.add(panel, cBottom);
+        bottomPanel.add(panel, cBottom);
 
         addSQLObject(this.textRemiseHT, "REMISE_HT");
         addSQLObject(textPortHT, "PORT_HT");
@@ -763,6 +755,82 @@ public class DevisSQLComponent extends BaseSQLComponent {
     public synchronized ValidState getValidState() {
         assert SwingUtilities.isEventDispatchThread();
         return super.getValidState().and(this.validStateContact);
+    }
+
+    private JPanel createGestionSaisieRapport() {
+        GridBagConstraints cTabSite = new DefaultGridBagConstraints();
+        JPanel tabSite = new JPanel(new GridBagLayout());
+
+        if (getTable().contains("RAPPORT_A_SAISIR")) {
+            cTabSite.gridx = 0;
+            cTabSite.gridy++;
+            cTabSite.gridheight = 1;
+            cTabSite.fill = GridBagConstraints.HORIZONTAL;
+            cTabSite.weightx = 0;
+
+            // Type Rapport
+            JLabel labelRapport = new JLabel(getLabelFor("TYPE_RAPPORT"));
+            tabSite.add(labelRapport, cTabSite);
+            SQLTextCombo comboType = new SQLTextCombo();
+            cTabSite.gridwidth = GridBagConstraints.REMAINDER;
+            cTabSite.gridx++;
+            tabSite.add(comboType, cTabSite);
+            cTabSite.gridwidth = 1;
+
+            // Date
+            cTabSite.gridx = 0;
+            cTabSite.gridy++;
+            tabSite.add(new JLabel(getLabelFor("DATE_DEMANDE_SAISIE")), cTabSite);
+            cTabSite.gridx++;
+            JDate dateDmdSaisie = new JDate();
+            tabSite.add(dateDmdSaisie, cTabSite);
+
+            cTabSite.gridx++;
+            tabSite.add(new JLabel(getLabelFor("DATE_SAISIE")), cTabSite);
+            cTabSite.gridx++;
+            JDate dateSaisie = new JDate();
+            tabSite.add(dateSaisie, cTabSite);
+
+            // Coche
+            cTabSite.gridx = 0;
+            cTabSite.gridy++;
+            cTabSite.gridwidth = 2;
+            JCheckBox boxAsaisir = new JCheckBox("Rapport à saisir");
+            tabSite.add(boxAsaisir, cTabSite);
+
+            cTabSite.gridx += 2;
+            JCheckBox boxAcceptSaisie = new JCheckBox("Accepté en saisie");
+            tabSite.add(boxAcceptSaisie, cTabSite);
+            cTabSite.gridwidth = 1;
+
+            // Nb Rapport
+            cTabSite.gridx = 0;
+            cTabSite.gridy++;
+            tabSite.add(new JLabel(getLabelFor("NB_RAPPORT_A_SAISIR")), cTabSite);
+            cTabSite.gridx++;
+            JTextField fieldNbRapportASaisir = new JTextField();
+            tabSite.add(fieldNbRapportASaisir, cTabSite);
+
+            cTabSite.gridx++;
+            tabSite.add(new JLabel(getLabelFor("NB_RAPPORT_SAISI")), cTabSite);
+            cTabSite.gridx++;
+            JTextField fieldNbRapportSaisi = new JTextField();
+            tabSite.add(fieldNbRapportSaisi, cTabSite);
+
+            // Date de demande
+            // Nb rapport a saisie
+            // Type
+            // Nb Rapport saisie
+            this.addView(fieldNbRapportASaisir, "NB_RAPPORT_A_SAISIR");
+            this.addView(fieldNbRapportSaisi, "NB_RAPPORT_SAISI");
+
+            this.addView(dateDmdSaisie, "DATE_DEMANDE_SAISIE");
+            this.addView(comboType, "TYPE_RAPPORT");
+            this.addView(dateSaisie, "DATE_SAISIE");
+            this.addView(boxAcceptSaisie, "ACCEPTE_EN_SAISIE");
+            this.addView(boxAsaisir, "RAPPORT_A_SAISIR");
+        }
+        return tabSite;
     }
 
     private JPanel createPanelDiff(final Type_Diff type) {
@@ -1004,8 +1072,8 @@ public class DevisSQLComponent extends BaseSQLComponent {
             rowVals.put("ID_ETAT_DEVIS", EtatDevisSQLElement.EN_ATTENTE);
         } else {
             SQLRowValues foreign = UndefinedRowValuesCache.getInstance().getDefaultRowValues(getTable());
-            if (foreign != null && !foreign.isUndefined()) {
-                rowVals.put("ID_ETAT_DEVIS", foreign.getObject("ID_ETAT_DEVIS"));
+            if (foreign != null && !foreign.isUndefined() && !foreign.isForeignEmpty("ID_ETAT_DEVIS")) {
+                rowVals.put("ID_ETAT_DEVIS", foreign.getForeignID("ID_ETAT_DEVIS"));
             } else {
                 rowVals.put("ID_ETAT_DEVIS", EtatDevisSQLElement.EN_ATTENTE);
             }
@@ -1097,7 +1165,7 @@ public class DevisSQLComponent extends BaseSQLComponent {
             super.select(r);
         else {
             System.err.println(r);
-            final SQLRowValues rVals = r.asRowValues();
+            final SQLRowValues rVals = r.asRowValues().deepCopy();
             final SQLRowValues vals = new SQLRowValues(r.getTable());
             vals.load(rVals, createSet("ID_CLIENT"));
             vals.setID(rVals.getID());

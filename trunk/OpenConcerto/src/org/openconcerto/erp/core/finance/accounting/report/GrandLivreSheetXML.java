@@ -42,9 +42,7 @@ import org.apache.commons.dbutils.handlers.ArrayListHandler;
 public class GrandLivreSheetXML extends AbstractListeSheetXml {
 
     private static int debutFill, endFill;
-    public static int MODEALL = 1;
-    public static int MODELETTREE = 2;
-    public static int MODENONLETTREE = 3;
+
     private final static SQLTable tableEcriture = base.getTable("ECRITURE");
     private final static SQLTable tableJournal = base.getTable("JOURNAL");
     private final static SQLTable tableMvt = base.getTable("MOUVEMENT");
@@ -86,7 +84,8 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
         return "Grand Livre";
     }
 
-    public GrandLivreSheetXML(Date du, Date au, String compteDep, String compteEnd, int lettrage, boolean cumul, boolean excludeCptSolde, boolean centralClient, boolean centralFourn, int idJrnlExclude) {
+    public GrandLivreSheetXML(Date du, Date au, String compteDep, String compteEnd, int lettrage, boolean cumul, boolean excludeCptSolde, boolean centralClient, boolean centralFourn,
+            int idJrnlExclude) {
         super();
         Calendar cal = Calendar.getInstance();
         cal.setTime(au);
@@ -179,16 +178,23 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
                 w = w.and(new Where(tableEcriture.getField("ID_JOURNAL"), "!=", idJrnlExclude));
                 w = w.and(new Where(tableEcriture.getField("ID_MOUVEMENT"), "=", tableMvt.getField("ID")));
 
-                if (GrandLivreSheetXML.this.lettrage == MODELETTREE) {
+                if (GrandLivreSheetXML.this.lettrage == GrandLivreSheet.MODELETTREE) {
                     Object o = null;
                     w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "<>", o));
                     w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "!=", ""));
-                } else {
-                    if (GrandLivreSheetXML.this.lettrage == MODENONLETTREE) {
-                        Object o = null;
-                        Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
-                        w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
-                    }
+                    w = w.and(new Where(tableEcriture.getField("DATE_LETTRAGE"), "<=", GrandLivreSheetXML.this.dateAu));
+                } else if (GrandLivreSheetXML.this.lettrage == GrandLivreSheet.MODENONLETTREE_PERIODE) {
+                    Object o = null;
+                    Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
+                    Where wSTTC = new Where(tableEcriture.getField("DATE_LETTRAGE"), "<>", o);
+                    wSTTC = wSTTC.and(new Where(tableEcriture.getField("DATE_LETTRAGE"), ">", GrandLivreSheetXML.this.dateAu));
+
+                    w2 = w2.or(wSTTC);
+                    w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
+                } else if (GrandLivreSheetXML.this.lettrage == GrandLivreSheet.MODENONLETTREE_ALL) {
+                    Object o = null;
+                    Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
+                    w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
                 }
 
                 if (GrandLivreSheetXML.this.excludeCompteSolde) {
@@ -544,17 +550,19 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
             w = w.and(new Where(tableEcriture.getField("DATE"), this.dateDu, this.dateAu));
         }
         w = w.and(new Where(tableEcriture.getField("ID_JOURNAL"), "!=", idJrnlExclude));
-        if (this.lettrage == MODELETTREE) {
+        if (this.lettrage == GrandLivreSheet.MODELETTREE) {
             Object o = null;
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "<>", o));
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "!=", ""));
-        } else {
-            if (this.lettrage == MODENONLETTREE) {
-                Object o = null;
-                Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
-                w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
+        } else if (this.lettrage == GrandLivreSheet.MODENONLETTREE_ALL) {
+            Object o = null;
+            Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
+            w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
 
-            }
+        } else if (this.lettrage == GrandLivreSheet.MODENONLETTREE_PERIODE) {
+            Object o = null;
+            Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
+            w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));
         }
 
         sel.setWhere(w);
@@ -604,12 +612,12 @@ public class GrandLivreSheetXML extends AbstractListeSheetXml {
             w = w.and(new Where(tableEcriture.getField("COMPTE_NUMERO"), (Object) this.compteDeb, (Object) this.compteEnd));
         }
 
-        if (this.lettrage == MODELETTREE) {
+        if (this.lettrage == GrandLivreSheet.MODELETTREE) {
             Object o = null;
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "<>", o));
             w = w.and(new Where(tableEcriture.getField("LETTRAGE"), "!=", ""));
         } else {
-            if (this.lettrage == MODENONLETTREE) {
+            if (this.lettrage == GrandLivreSheet.MODENONLETTREE_ALL || this.lettrage == GrandLivreSheet.MODENONLETTREE_PERIODE) {
                 Object o = null;
                 Where w2 = new Where(tableEcriture.getField("LETTRAGE"), "=", o);
                 w = w.and(w2.or(new Where(tableEcriture.getField("LETTRAGE"), "=", "")));

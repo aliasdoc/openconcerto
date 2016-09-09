@@ -142,6 +142,7 @@ public class ArticleSelector extends JPanel implements ListSelectionListener, Ca
 
         final Article articleSelected = controller.getArticleSelected();
         if (articleSelected == null) {
+            list.clearSelection();
             return;
         }
 
@@ -200,7 +201,7 @@ public class ArticleSelector extends JPanel implements ListSelectionListener, Ca
             }
         }
 
-        final BigDecimal priceInCents = article.getPriceInCents();
+        final BigDecimal priceInCents = article.getPriceWithTax();
         String euro = getPrice(priceInCents);
 
         int wEuro = (int) g.getFontMetrics().getStringBounds(euro, g).getWidth();

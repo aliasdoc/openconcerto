@@ -46,7 +46,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -287,6 +286,7 @@ public class DataImporter {
         BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), cs));
         String l = r.readLine();
         if (l == null) {
+            r.close();
             return null;
         }
         char separator = ',';
@@ -524,7 +524,7 @@ public class DataImporter {
         } else if (name.endsWith(".xls")) {
             return createModelFromXLS(file, sheetNumber);
         }
-        throw new IllegalArgumentException("File format not supported");
+        throw new IllegalArgumentException("File format not supported. Please provide an ods, csv or xls file.");
 
     }
 }

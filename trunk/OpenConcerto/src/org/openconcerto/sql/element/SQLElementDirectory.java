@@ -14,10 +14,13 @@
  package org.openconcerto.sql.element;
 
 import org.openconcerto.sql.Log;
+import org.openconcerto.sql.ShowAs;
 import org.openconcerto.sql.TM;
+import org.openconcerto.sql.model.DBRoot;
 import org.openconcerto.sql.model.DBStructureItemNotFound;
 import org.openconcerto.sql.model.SQLName;
 import org.openconcerto.sql.model.SQLTable;
+import org.openconcerto.utils.CollectionMap2;
 import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.SetMap;
 import org.openconcerto.utils.cc.ITransformer;
@@ -35,9 +38,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
-import org.jdom.JDOMException;
+import org.jdom2.JDOMException;
 
 /**
  * Directory of SQLElement by table.
@@ -78,6 +82,8 @@ public final class SQLElementDirectory {
     private String phrasesPkgName;
     private final Map<String, SQLElementNames> elementNames;
 
+    private final ShowAs showAs;
+
     public SQLElementDirectory() {
         this.elements = new HashMap<SQLTable, SQLElement>();
         // to mimic elements behaviour, if we add twice the same table
@@ -90,6 +96,12 @@ public final class SQLElementDirectory {
 
         this.phrasesPkgName = null;
         this.elementNames = new HashMap<String, SQLElementNames>();
+
+        this.showAs = new ShowAs((DBRoot) null);
+    }
+
+    public final ShowAs getShowAs() {
+        return this.showAs;
     }
 
     private static <K> SQLTable getSoleTable(SetMap<K, SQLTable> m, K key) throws IllegalArgumentException {
@@ -143,6 +155,21 @@ public final class SQLElementDirectory {
         this.tableNames.add(elem.getTable().getName(), elem.getTable());
         this.byCode.add(elem.getCode(), elem.getTable());
         this.byClass.add(elem.getClass(), elem.getTable());
+
+        final CollectionMap2<String, ? extends List<String>, String> sa = elem.getShowAs();
+        if (sa != null) {
+            for (final Entry<String, ? extends List<String>> e : sa.entrySet()) {
+                try {
+                    if (e.getKey() == null)
+                        this.showAs.show(elem.getTable(), e.getValue());
+                    else
+                        this.showAs.show(elem.getTable().getField(e.getKey()), e.getValue());
+                } catch (RuntimeException exn) {
+                    throw new IllegalStateException("Couldn't add showAs for " + elem + " : " + e, exn);
+                }
+            }
+        }
+
         for (final DirectoryListener dl : this.listeners) {
             dl.elementAdded(elem);
         }
@@ -226,6 +253,7 @@ public final class SQLElementDirectory {
             for (final SQLElement otherElem : this.elements.values())
                 otherElem.resetRelationships();
             elem.setDirectory(null);
+            this.showAs.removeTable(elem.getTable());
             for (final DirectoryListener dl : this.listeners) {
                 dl.elementRemoved(elem);
             }

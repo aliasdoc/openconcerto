@@ -13,6 +13,16 @@
  
  package org.openconcerto.erp.core.humanresources.payroll.element;
 
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.ConfSQLElement;
@@ -24,16 +34,7 @@ import org.openconcerto.sql.model.SQLSelect;
 import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.TitledSeparator;
-
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.swing.BorderFactory;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
+import org.openconcerto.utils.ListMap;
 
 public class CaisseCotisationSQLElement extends ConfSQLElement {
 
@@ -45,6 +46,8 @@ public class CaisseCotisationSQLElement extends ConfSQLElement {
         final List<String> l = new ArrayList<String>();
         l.add("NOM");
         l.add("ID_ADRESSE_COMMON");
+        l.add("NUMERO_COMPTE_PCE");
+        l.add("NUMERO_COMPTE_PCE_CHARGES");
         return l;
     }
 
@@ -54,10 +57,9 @@ public class CaisseCotisationSQLElement extends ConfSQLElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_ADRESSE_COMMON");
-        return l;
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "NOM");
     }
 
     private final static SQLTable tableCaisse = Configuration.getInstance().getBase().getTable("CAISSE_COTISATION");
@@ -173,21 +175,47 @@ public class CaisseCotisationSQLElement extends ConfSQLElement {
                 /***********************************************************************************
                  * Comptabilité
                  **********************************************************************************/
-                /*
-                 * JPanel panelCompta = new JPanel();
-                 * panelCompta.setBorder(BorderFactory.createTitledBorder("Comptabilité"));
-                 * panelCompta.setLayout(new GridBagLayout()); // Compte tiers JLabel labelTiers =
-                 * new JLabel(getLabelFor("ID_COMPTE_PCE_TIERS")); ISQLCompteSelector selCompteTiers
-                 * = new ISQLCompteSelector("1"); panelCompta.add(labelTiers, c); c.gridx++;
-                 * c.weightx = 1; panelCompta.add(selCompteTiers, c); c.weightx = 0; // Compte
-                 * charge JLabel labelCharge = new JLabel(getLabelFor("ID_COMPTE_PCE_CHARGE"));
-                 * ISQLCompteSelector selCompteCharge = new ISQLCompteSelector("1"); c.gridy++;
-                 * c.gridx = 0; panelCompta.add(labelCharge, c); c.gridx++; c.weightx = 1;
-                 * panelCompta.add(selCompteCharge, c); c.weightx = 0;
-                 * 
-                 * c.gridx = 0; c.gridy = 1; c.fill = GridBagConstraints.BOTH; this.add(panelCompta,
-                 * c);
-                 */
+
+                JPanel panelCompta = new JPanel();
+                panelCompta.setBorder(BorderFactory.createTitledBorder("Comptabilité"));
+                panelCompta.setLayout(new GridBagLayout());
+                // Compte tiers
+                JLabel labelTiers = new JLabel(getLabelFor("NUMERO_COMPTE_PCE"));
+                // JFormattedTextField fieldCompte = new JFormattedTextField();
+                // fieldCompte.set
+                //
+                // MaskFormatter mask;
+                // try {
+                // mask = new MaskFormatter("AAAAAAAAAAAAAA");
+                // mask.setValidCharacters("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+                // mask.s
+                // mask.install(this);
+                // } catch (ParseException exn) {
+                // exn.printStackTrace();
+                // }
+                JTextField fieldCompte = new JTextField();
+                this.addView(fieldCompte, "NUMERO_COMPTE_PCE");
+                panelCompta.add(labelTiers, c);
+                c.gridx++;
+                c.weightx = 1;
+                panelCompta.add(fieldCompte, c);
+                c.weightx = 0;
+                // Compte charge
+                JLabel labelCharge = new JLabel(getLabelFor("NUMERO_COMPTE_PCE_CHARGES"));
+                c.gridy++;
+                c.gridx = 0;
+                panelCompta.add(labelCharge, c);
+                c.gridx++;
+                c.weightx = 1;
+                JTextField fieldCompteCharge = new JTextField();
+                panelCompta.add(fieldCompteCharge, c);
+                this.addView(fieldCompteCharge, "NUMERO_COMPTE_PCE_CHARGES");
+                c.weightx = 0;
+
+                c.gridx = 0;
+                c.gridy = 1;
+                c.fill = GridBagConstraints.BOTH;
+                this.add(panelCompta, c);
 
                 this.addSQLObject(textNom, "NOM");
                 this.addSQLObject(textTel, "TEL");
@@ -199,5 +227,4 @@ public class CaisseCotisationSQLElement extends ConfSQLElement {
             }
         };
     }
-
 }

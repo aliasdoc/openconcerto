@@ -31,7 +31,7 @@ import java.util.List;
 public class SQLCreateTable extends SQLCreateTableBase<SQLCreateTable> {
 
     private final DBRoot b;
-    private boolean plain;
+    private boolean createID, createOrder, createArchive;
 
     public SQLCreateTable(final DBRoot b, final String name) {
         super(b.getServer().getSQLSystem().getSyntax(), b.getName(), name);
@@ -42,7 +42,7 @@ public class SQLCreateTable extends SQLCreateTableBase<SQLCreateTable> {
     @Override
     public void reset() {
         super.reset();
-        this.plain = false;
+        this.setPlain(false);
     }
 
     public final DBRoot getRoot() {
@@ -55,7 +55,33 @@ public class SQLCreateTable extends SQLCreateTableBase<SQLCreateTable> {
      * @param b <code>true</code> if no clauses should automagically be added.
      */
     public final void setPlain(boolean b) {
-        this.plain = b;
+        this.setCreateID(!b);
+        this.setCreateOrder(!b);
+        this.setCreateArchive(!b);
+    }
+
+    public final boolean isCreateID() {
+        return this.createID;
+    }
+
+    public final void setCreateID(boolean createID) {
+        this.createID = createID;
+    }
+
+    public final boolean isCreateOrder() {
+        return this.createOrder;
+    }
+
+    public final void setCreateOrder(boolean createOrder) {
+        this.createOrder = createOrder;
+    }
+
+    public final boolean isCreateArchive() {
+        return this.createArchive;
+    }
+
+    public final void setCreateArchive(boolean createArchive) {
+        this.createArchive = createArchive;
     }
 
     public SQLCreateTable addForeignColumn(String foreignTable) {
@@ -72,19 +98,22 @@ public class SQLCreateTable extends SQLCreateTableBase<SQLCreateTable> {
 
     @Override
     public List<String> getPrimaryKey() {
-        return this.plain ? super.getPrimaryKey() : Collections.singletonList(SQLSyntax.ID_NAME);
+        return !this.isCreateID() ? super.getPrimaryKey() : Collections.singletonList(SQLSyntax.ID_NAME);
     }
 
+    @Override
     protected void checkPK() {
-        if (!this.plain)
+        if (this.isCreateID())
             throw new IllegalStateException("can only set primary key in plain mode, otherwise it is automatically added");
     }
 
     @Override
     protected void modifyClauses(List<String> genClauses) {
-        if (!this.plain) {
+        if (this.isCreateID())
             genClauses.add(0, SQLBase.quoteIdentifier(SQLSyntax.ID_NAME) + this.getSyntax().getPrimaryIDDefinition());
+        if (this.isCreateArchive())
             genClauses.add(SQLBase.quoteIdentifier(SQLSyntax.ARCHIVE_NAME) + this.getSyntax().getArchiveDefinition());
+        if (this.isCreateOrder()) {
             // MS unique constraint is not standard so add it in modifyOutClauses()
             if (getSyntax().getSystem() == SQLSystem.MSSQL) {
                 genClauses.add(SQLBase.quoteIdentifier(SQLSyntax.ORDER_NAME) + this.getSyntax().getOrderType() + " DEFAULT " + this.getSyntax().getOrderDefault());
@@ -97,7 +126,7 @@ public class SQLCreateTable extends SQLCreateTableBase<SQLCreateTable> {
     @Override
     protected void modifyOutClauses(List<DeferredClause> clauses) {
         super.modifyOutClauses(clauses);
-        if (!this.plain && getSyntax().getSystem() == SQLSystem.MSSQL) {
+        if (this.isCreateOrder() && getSyntax().getSystem() == SQLSystem.MSSQL) {
             clauses.add(this.createUniquePartialIndex("orderIdx", Collections.singletonList(SQLSyntax.ORDER_NAME), null));
         }
     }

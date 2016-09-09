@@ -83,6 +83,12 @@ class SQLSyntaxMySQL extends SQLSyntax {
         this.typeNames.addAll(String.class, "varchar", "char");
     }
 
+    @Override
+    public int getMaximumIdentifierLength() {
+        // http://dev.mysql.com/doc/refman/5.7/en/identifiers.html
+        return 64;
+    }
+
     public String getIDType() {
         return " int";
     }
@@ -138,9 +144,9 @@ class SQLSyntaxMySQL extends SQLSyntax {
             // see http://dev.mysql.com/doc/refman/5.0/en/data-type-defaults.html
             // (works the same way for 5.1 and 6.0)
             if (Boolean.FALSE.equals(f.isNullable()))
-                res = null;
+            res = null;
             else {
-                res = "NULL";
+            res = "NULL";
             }
         else if (javaType == String.class)
             // this will be given to other db system, so don't use base specific quoting
@@ -218,6 +224,11 @@ class SQLSyntaxMySQL extends SQLSyntax {
         // 1062 is the real "Duplicate entry" error, 1305 happens when we emulate partial unique
         // constraint
         return e.getErrorCode() == 1062 || (e.getErrorCode() == 1305 && e.getMessage().contains(ChangeTable.MYSQL_FAKE_PROCEDURE + " does not exist"));
+    }
+
+    @Override
+    public boolean isDeadLockException(SQLException exn) {
+        return SQLUtils.findWithSQLState(exn).getErrorCode() == 1213;
     }
 
     @Override

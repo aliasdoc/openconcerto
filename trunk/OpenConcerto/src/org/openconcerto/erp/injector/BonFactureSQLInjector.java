@@ -49,6 +49,9 @@ public class BonFactureSQLInjector extends SQLInjector {
         if (tableBon.contains("REMISE_HT")) {
             map(tableBon.getField("REMISE_HT"), tableFacture.getField("REMISE_HT"));
         }
+        if (getSource().getTable().contains("ID_TARIF") && getDestination().getTable().contains("ID_TARIF")) {
+            map(getSource().getField("ID_TARIF"), getDestination().getField("ID_TARIF"));
+        }
 
     }
 

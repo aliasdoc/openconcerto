@@ -41,7 +41,16 @@ public class ExportEBP_ComptaPro extends AbstractExport {
     static private final char SEP = 0x0E;
     static private final int[] WIDTHS = new int[] { 6, 8, 40, 8, 15, 60, 15, 60, 14 };
     static private final String SPACES = "                                                       ";
-
+    // Format : largeur fixe, separateur : 0x0E (Shift Out)
+    // l: 6 : espaces...
+    // l: 8 : code du journal, aligné à gauche
+    // l: 40 : nom du journal, aligné à gauche
+    // l: 8 : date de l'écriture, AAAAMMJJ
+    // l: 15 : numéro du compte, aligné à gauche
+    // l: 60 : nom du compte, aligné à gauche
+    // l: 15 : numéro de l'écriture, aligné à gauche
+    // l: 60 : nom de l'écriture, aligné à gauche
+    // l: 14 : montant, aligné à droite, premier caractère : le signe
     // needs . for decimal separator
     static private final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("##0.00", DecimalFormatSymbols.getInstance(Locale.UK));
 
@@ -68,13 +77,10 @@ public class ExportEBP_ComptaPro extends AbstractExport {
         sel.addSelect(tableEcriture.getField("DATE"));
         sel.addSelect(tableCompte.getField("NUMERO"));
         sel.addSelect(tableCompte.getField("NOM"));
-        // width wider than 15, so replace with MOUVEMENT
-        // sel.addSelect(tablePiece.getField("NOM"));
         sel.addSelect(tableMouvement.getField("NUMERO"));
         sel.addSelect(tableEcriture.getField("NOM"));
         sel.addSelect(tableEcriture.getField("DEBIT"));
         sel.addSelect(tableEcriture.getField("CREDIT"));
-
         sel.addFieldOrder(tableJrnl.getField("CODE"));
         sel.addFieldOrder(tableEcriture.getField("DATE"));
         sel.addFieldOrder(tableMouvement.getField("NUMERO"));
@@ -90,8 +96,12 @@ public class ExportEBP_ComptaPro extends AbstractExport {
     }
 
     private final String align(final Object o, final int widthIndex, final boolean allowTruncate) {
-        final String s = String.valueOf(o).trim();
-        return StringUtils.getFixedWidthString(s, WIDTHS[widthIndex], Side.LEFT);
+        String s = String.valueOf(o).trim();
+        final int width = WIDTHS[widthIndex];
+        if (s.length() > width) {
+            s = s.substring(0, width);
+        }
+        return StringUtils.getFixedWidthString(s, width, Side.LEFT, false);
     }
 
     @Override
@@ -101,28 +111,32 @@ public class ExportEBP_ComptaPro extends AbstractExport {
         final String firstField = SPACES.substring(0, WIDTHS[0]);
         for (final Object[] array : this.data) {
             int fieldIndex = 0;
+            // ESPACES...
             bufOut.write(align(firstField, fieldIndex++));
             bufOut.write(SEP);
+            // JOURNAL.CODE
             bufOut.write(align(array[0], fieldIndex++));
             bufOut.write(SEP);
             // JOURNAL.NOM
             bufOut.write(align(array[1], fieldIndex++, true));
             bufOut.write(SEP);
+            // ECRITURE.DATE
             bufOut.write(align(dateFormat.format(array[2]), fieldIndex++));
             bufOut.write(SEP);
+            // COMPTE_PCE.NUMERO
             bufOut.write(align(array[3], fieldIndex++));
             bufOut.write(SEP);
             // COMPTE_PCE.NOM
             bufOut.write(align(array[4], fieldIndex++, true));
             bufOut.write(SEP);
-            System.err.println("ExportEBP_Pro.export() " + array[5]);
+            // MOUVEMENT.NUMERO
             bufOut.write(align(array[5], fieldIndex++));
             bufOut.write(SEP);
             // ECRITURE.NOM
             bufOut.write(align(array[6], fieldIndex++, true));
             bufOut.write(SEP);
 
-            // Amount
+            // Montant
             final long debit = ((Number) array[7]).longValue();
             final long credit = ((Number) array[8]).longValue();
             if (debit > 0 && credit > 0)
@@ -138,8 +152,12 @@ public class ExportEBP_ComptaPro extends AbstractExport {
             }
             bufOut.write(sign);
             // -1 since we wrote the sign
-            bufOut.write(StringUtils.getFixedWidthString(formatCents(cents), WIDTHS[fieldIndex++] - 1, Side.RIGHT, false));
-
+            final int wAmount = WIDTHS[fieldIndex++] - 1;
+            String amount = formatCents(cents);
+            if (amount.length() > wAmount) {
+                amount = amount.substring(0, wAmount);
+            }
+            bufOut.write(StringUtils.getFixedWidthString(amount, wAmount, Side.RIGHT, false));
             bufOut.write("\r\n");
         }
     }

@@ -18,6 +18,7 @@ import org.openconcerto.sql.element.ConfSQLElement;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.model.SQLRowValues;
 import org.openconcerto.ui.DefaultGridBagConstraints;
+import org.openconcerto.utils.ListMap;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -51,11 +52,21 @@ public class PeriodeValiditeSQLElement extends ConfSQLElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     protected List<String> getComboFields() {
         final List<String> l = new ArrayList<String>();
         l.add("JANVIER");
         l.add("FEVRIER");
         return l;
+    }
+
+    @Override
+    public ListMap<String, String> getShowAs() {
+        return ListMap.singleton(null, "JANVIER");
     }
 
     public static final Map<Integer, String> mapTranslate() {

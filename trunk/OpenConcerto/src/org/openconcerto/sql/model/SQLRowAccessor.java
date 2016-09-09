@@ -18,6 +18,7 @@ import org.openconcerto.sql.element.SQLElement;
 import org.openconcerto.sql.model.graph.Link;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Step;
+import org.openconcerto.utils.cc.HashingStrategy;
 import org.openconcerto.utils.convertor.StringClobConvertor;
 
 import java.math.BigDecimal;
@@ -26,6 +27,8 @@ import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -104,12 +107,46 @@ import java.util.Set;
  * <th><code>else</code></th>
  * <td><code>ClassCastException</code></td>
  * <td><code>ClassCastException</code></td>
- * </tr> </tbody>
+ * </tr>
+ * </tbody>
  * </table>
  * 
  * @author Sylvain CUAZ
  */
 public abstract class SQLRowAccessor implements SQLData {
+
+    static private final HashingStrategy<SQLRowAccessor> ROW_STRATEGY = new HashingStrategy<SQLRowAccessor>() {
+        @Override
+        public int computeHashCode(SQLRowAccessor object) {
+            return object.hashCodeAsRow();
+        }
+
+        @Override
+        public boolean equals(SQLRowAccessor object1, SQLRowAccessor object2) {
+            return object1.equalsAsRow(object2);
+        }
+    };
+
+    /**
+     * A strategy to compare instances as {@link SQLRow}, i.e. only {@link #getTable() table} and
+     * {@link #getID() id}.
+     * 
+     * @return a strategy.
+     * @see #equalsAsRow(SQLRowAccessor)
+     */
+    public static final HashingStrategy<SQLRowAccessor> getRowStrategy() {
+        return ROW_STRATEGY;
+    }
+
+    static public final Set<Number> getIDs(final Collection<? extends SQLRowAccessor> rows) {
+        return getIDs(rows, new HashSet<Number>());
+    }
+
+    static public final <C extends Collection<? super Number>> C getIDs(final Collection<? extends SQLRowAccessor> rows, final C res) {
+        for (final SQLRowAccessor r : rows)
+            res.add(r.getIDNumber());
+        return res;
+    }
 
     private final SQLTable table;
 
@@ -165,15 +202,20 @@ public abstract class SQLRowAccessor implements SQLData {
      * 
      * @return <code>true</code> si la ligne était archivée lors de son instanciation.
      */
-    public boolean isArchived() {
+    public final boolean isArchived() {
+        return this.isArchived(true);
+    }
+
+    protected final boolean isArchived(final boolean allowDBAccess) {
         // si il n'y a pas de champs archive, elle n'est pas archivée
-        if (!this.getTable().isArchivable())
+        final SQLField archiveField = this.getTable().getArchiveField();
+        if (archiveField == null)
             return false;
-        // TODO sortir archive == 1
-        if (this.getTable().getArchiveField().getType().getJavaType().equals(Boolean.class))
-            return this.getBoolean(this.getTable().getArchiveField().getName()) == Boolean.TRUE;
+        final Object archiveVal = this.getRequiredObject(archiveField.getName(), allowDBAccess);
+        if (archiveField.getType().getJavaType().equals(Boolean.class))
+            return ((Boolean) archiveVal).booleanValue();
         else
-            return this.getInt(this.getTable().getArchiveField().getName()) == 1;
+            return ((Number) archiveVal).intValue() > 0;
     }
 
     /**
@@ -195,7 +237,9 @@ public abstract class SQLRowAccessor implements SQLData {
      * 
      * @return an empty SQLRowValues.
      */
-    public abstract SQLRowValues createEmptyUpdateRow();
+    public final SQLRowValues createEmptyUpdateRow() {
+        return new SQLRowValues(this.getTable()).setID(this.getIDNumber());
+    }
 
     /**
      * Return the fields defined by this instance.
@@ -207,11 +251,64 @@ public abstract class SQLRowAccessor implements SQLData {
     public abstract Object getObject(String fieldName);
 
     /**
+     * Return the value for the passed field only if already present in this instance.
+     * 
+     * @param fieldName a field name.
+     * @return the existing value for the passed field.
+     * @throws IllegalArgumentException if there's no value for the passed field.
+     */
+    public final Object getContainedObject(String fieldName) throws IllegalArgumentException {
+        return this.getObject(fieldName, true);
+    }
+
+    protected final Object getRequiredObject(String fieldName, final boolean allowDBAccess) throws IllegalArgumentException {
+        // SQLRowValues cannot add a field value, so required means mustBePresent
+        // SQLRow.getOject() can add and also checks whether the passed field is in its table, i.e.
+        // fields are always required.
+        return this.getObject(fieldName, this instanceof SQLRowValues || !allowDBAccess);
+    }
+
+    // MAYBE change paramter to enum MissingMode = THROW_EXCEPTION, ADD, RETURN_NULL
+    public final Object getObject(String fieldName, final boolean mustBePresent) throws IllegalArgumentException {
+        if (mustBePresent && !this.getFields().contains(fieldName))
+            throw new IllegalArgumentException("Field " + fieldName + " not present in this : " + this.getFields());
+        return this.getObject(fieldName);
+    }
+
+    /**
      * All objects in this row.
      * 
      * @return an immutable map.
      */
     public abstract Map<String, Object> getAbsolutelyAll();
+
+    public final Map<String, Object> getValues(final SQLTable.VirtualFields vFields) {
+        return this.getValues(this.getTable().getFieldsNames(vFields));
+    }
+
+    public final Map<String, Object> getValues(final Collection<String> fields) {
+        return this.getValues(fields, false);
+    }
+
+    /**
+     * Return the values of this row for the passed fields.
+     * 
+     * @param fields the keys.
+     * @param includeMissingKeys <code>true</code> if a field only in the parameter should be
+     *        returned with a <code>null</code> value (i.e. the result might contains fields not in
+     *        {@link #getFields()}), <code>false</code> to not include it in the result (i.e. the
+     *        fields of the result will be a subset of {@link #getFields()}).
+     * @return the values of the passed fields.
+     */
+    public final Map<String, Object> getValues(final Collection<String> fields, final boolean includeMissingKeys) {
+        final Map<String, Object> res = new LinkedHashMap<String, Object>();
+        final Set<String> thisFields = this.getFields();
+        for (final String f : fields) {
+            if (includeMissingKeys || thisFields.contains(f))
+                res.put(f, this.getObject(f));
+        }
+        return res;
+    }
 
     /**
      * Retourne le champ nommé <code>field</code> de cette ligne. Cette méthode formate la valeur en

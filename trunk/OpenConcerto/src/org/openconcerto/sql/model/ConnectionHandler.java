@@ -35,6 +35,10 @@ public abstract class ConnectionHandler<T, X extends Exception> {
         this.exn = null;
     }
 
+    public final boolean hasException() {
+        return this.exn != null;
+    }
+
     @SuppressWarnings("unchecked")
     protected final T get() throws X, SQLException {
         if (this.exn != null) {
@@ -50,13 +54,14 @@ public abstract class ConnectionHandler<T, X extends Exception> {
             return this.res;
     }
 
-    final void compute(final SQLDataSource ds) {
+    final T compute(final SQLDataSource ds) throws X, SQLException {
         try {
             this.res = this.handle(ds);
             this.exn = null;
         } catch (Exception e) {
             this.exn = e;
         }
+        return this.get();
     }
 
     /**

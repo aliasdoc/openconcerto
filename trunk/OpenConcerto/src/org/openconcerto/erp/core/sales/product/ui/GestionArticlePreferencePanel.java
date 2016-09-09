@@ -55,7 +55,7 @@ public class GestionArticlePreferencePanel extends DefaultPreferencePanel {
         this.checkModeVente = new JCheckBox("Activer le mode de vente spécifique");
         this.checkVenteComptoir = new JCheckBox("Activer le mode vente comptoir");
         this.checkShowPoids = new JCheckBox("Voir le Poids");
-        this.checkDevise = new JCheckBox("Gérer les devise");
+        this.checkDevise = new JCheckBox("Gérer les devises");
         this.checkMarge = new JCheckBox("Afficher le taux de marque au lieu du taux de marge");
 
 

@@ -21,6 +21,8 @@ import org.openconcerto.utils.checks.ValidListener;
 import org.openconcerto.utils.checks.ValidState;
 import org.openconcerto.utils.doc.Documented;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.beans.PropertyChangeListener;
 
 import javax.swing.JComboBox;
@@ -32,6 +34,13 @@ public class EtatCommandeClientComboBox extends JComboBox implements ValueWrappe
     public EtatCommandeClientComboBox() {
 
         this.supp = new ValueChangeSupport<EtatCommandeClient>(this);
+        this.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                supp.fireValueChange();
+            }
+        });
 
         for (EtatCommandeClient etat : EtatCommandeClient.values()) {
             addItem(etat);

@@ -13,18 +13,6 @@
  
  package org.openconcerto.erp.core.customerrelationship.customer.element;
 
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JSeparator;
-import javax.swing.SwingUtilities;
-
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.common.element.NumerotationAutoSQLElement;
 import org.openconcerto.erp.core.common.ui.DeviseField;
@@ -32,6 +20,7 @@ import org.openconcerto.erp.generationDoc.gestcomm.RelanceSheet;
 import org.openconcerto.erp.preferences.PrinterNXProps;
 import org.openconcerto.sql.element.BaseSQLComponent;
 import org.openconcerto.sql.element.SQLComponent;
+import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -44,6 +33,19 @@ import org.openconcerto.ui.JDate;
 import org.openconcerto.ui.component.ITextArea;
 import org.openconcerto.ui.component.InteractionMode;
 import org.openconcerto.utils.ExceptionHandler;
+
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JSeparator;
+import javax.swing.SwingUtilities;
 
 public class RelanceSQLElement extends ComptaSQLConfElement {
 
@@ -264,6 +266,36 @@ public class RelanceSQLElement extends ComptaSQLConfElement {
             }
 
         };
+    }
+
+    @Override
+    protected void archive(TreesOfSQLRows trees, boolean cutLinks) throws SQLException {
+
+        for (SQLRow row : trees.getRows()) {
+            if (row.getForeign("ID_ECHEANCE_CLIENT") != null && !row.isForeignEmpty("ID_ECHEANCE_CLIENT")) {
+                SQLRow rowEch = row.getForeign("ID_ECHEANCE_CLIENT");
+                int count = rowEch.getInt("NOMBRE_RELANCE");
+                count = Math.max(0, count - 1);
+
+                SQLRowValues rowValsUp = rowEch.createEmptyUpdateRow();
+                rowValsUp.put("NOMBRE_RELANCE", count);
+                rowValsUp.put("DATE_LAST_RELANCE", null);
+                if (count > 0) {
+                    List<SQLRow> rows = rowEch.getReferentRows(row.getTable());
+                    Calendar cal = null;
+                    for (SQLRow sqlRow : rows) {
+                        if (sqlRow.getID() != row.getID() && sqlRow.getDate("DATE") != null && (cal == null || cal.before(sqlRow.getDate("DATE")))) {
+                            cal = sqlRow.getDate("DATE");
+                        }
+                    }
+                    if (cal != null) {
+                        rowValsUp.put("DATE_LAST_RELANCE", cal.getTime());
+                    }
+                }
+                rowValsUp.commit();
+            }
+        }
+        super.archive(trees, cutLinks);
     }
 
     @Override

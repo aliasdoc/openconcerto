@@ -15,6 +15,6 @@
 
 public interface SQLDataListener {
 
-    public void dataChanged();
+    public void dataChanged(final SQLTableEvent evt);
 
 }

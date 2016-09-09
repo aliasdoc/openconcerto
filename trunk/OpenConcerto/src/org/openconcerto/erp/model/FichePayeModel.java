@@ -27,6 +27,8 @@ import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.preferences.SQLPreferences;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.HashMap;
@@ -34,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 
 import org.apache.commons.dbutils.handlers.ArrayListHandler;
@@ -63,10 +67,11 @@ public class FichePayeModel extends AbstractTableModel {
     private SQLJavaEditor javaEdit = new SQLJavaEditor(VariablePayeSQLElement.getMapTree());
 
     // liste des variable de paye à calculer
-    private float salBrut, cotPat, cotSal, netImp, netAPayer, csg, csgSansAbattement;
+    private BigDecimal salBrut, cotPat, cotSal, netImp, netAPayer, csg, csgSansAbattement;
+
     private Map<Integer, String> mapField;
 
-    private final double tauxCSG;
+    private final BigDecimal tauxCSG;
 
     public FichePayeModel(int idFiche) {
 
@@ -109,7 +114,7 @@ public class FichePayeModel extends AbstractTableModel {
         this.mapField.put(new Integer(8), "IN_PERIODE");
 
         SQLPreferences prefs = new SQLPreferences(tableFichePaye.getTable().getDBRoot());
-        this.tauxCSG = prefs.getDouble(PayeGlobalPreferencePanel.ASSIETTE_CSG, 0.9825D);
+        this.tauxCSG = new BigDecimal(prefs.getDouble(PayeGlobalPreferencePanel.ASSIETTE_CSG, 0.9825D));
 
         // loadElement();
         // methodeTmp();
@@ -121,14 +126,13 @@ public class FichePayeModel extends AbstractTableModel {
          * if (this.threadUpdate != null && this.threadUpdate.isAlive()) { this.threadUpdate.stop();
          * }
          */
-
-        this.salBrut = 0.0F;
-        this.cotPat = 0.0F;
-        this.cotSal = 0.0F;
-        this.netAPayer = 0.0F;
-        this.netImp = 0.0F;
-        this.csg = 0.0F;
-        this.csgSansAbattement = 0.0F;
+        this.salBrut = BigDecimal.ZERO;
+        this.cotPat = BigDecimal.ZERO;
+        this.cotSal = BigDecimal.ZERO;
+        this.netAPayer = BigDecimal.ZERO;
+        this.netImp = BigDecimal.ZERO;
+        this.csg = BigDecimal.ZERO;
+        this.csgSansAbattement = BigDecimal.ZERO;
     }
 
     public void loadAllElements() {
@@ -570,16 +574,16 @@ public class FichePayeModel extends AbstractTableModel {
             } else {
                 if (impression == 2) {
 
-                    Object montantSalAjOb = row.getObject("MONTANT_SAL_AJ");
-                    float montantSalAj = (montantSalAjOb == null) ? 0.0F : Float.valueOf(montantSalAjOb.toString()).floatValue();
+                    BigDecimal montantSalAjOb = row.getBigDecimal("MONTANT_SAL_AJ");
+                    BigDecimal montantSalAj = (montantSalAjOb == null) ? BigDecimal.ZERO : montantSalAjOb;
 
-                    Object montantSalDedOb = row.getObject("MONTANT_SAL_DED");
-                    float montantSalDed = (montantSalDedOb == null) ? 0.0F : Float.valueOf(montantSalDedOb.toString()).floatValue();
+                    BigDecimal montantSalDedOb = row.getBigDecimal("MONTANT_SAL_DED");
+                    BigDecimal montantSalDed = (montantSalDedOb == null) ? BigDecimal.ZERO : montantSalDedOb;
 
-                    Object montantPatOb = row.getObject("MONTANT_PAT");
-                    float montantPat = (montantPatOb == null) ? 0.0F : Float.valueOf(montantPatOb.toString()).floatValue();
+                    BigDecimal montantPatOb = row.getBigDecimal("MONTANT_PAT");
+                    BigDecimal montantPat = (montantPatOb == null) ? BigDecimal.ZERO : montantPatOb;
 
-                    if (montantSalAj == 0 && montantSalDed == 0 && montantPat == 0) {
+                    if (montantSalAj.signum() == 0 && montantSalDed.signum() == 0 && montantPat.signum() == 0) {
                         return false;
                     }
                     return true;
@@ -623,12 +627,12 @@ public class FichePayeModel extends AbstractTableModel {
     private void updateValueFiche() {
 
         SQLRowValues rowValsFiche = new SQLRowValues(tableFichePaye);
-        rowValsFiche.put("SAL_BRUT", Float.valueOf(this.salBrut));
-        rowValsFiche.put("NET_IMP", Float.valueOf(this.netImp + this.salBrut));
-        rowValsFiche.put("NET_A_PAYER", Float.valueOf(this.netAPayer + this.salBrut));
-        rowValsFiche.put("COT_SAL", Float.valueOf(this.cotSal));
-        rowValsFiche.put("COT_PAT", Float.valueOf(this.cotPat));
-        rowValsFiche.put("CSG", Float.valueOf((this.salBrut + this.csg) * (float) this.tauxCSG) + this.csgSansAbattement);
+        rowValsFiche.put("SAL_BRUT", this.salBrut);
+        rowValsFiche.put("NET_IMP", this.netImp.add(this.salBrut));
+        rowValsFiche.put("NET_A_PAYER", this.netAPayer.add(this.salBrut));
+        rowValsFiche.put("COT_SAL", this.cotSal);
+        rowValsFiche.put("COT_PAT", this.cotPat);
+        rowValsFiche.put("CSG", this.salBrut.add(this.csg).multiply(this.tauxCSG).add(this.csgSansAbattement));
 
         try {
             rowValsFiche.update(this.idFiche);
@@ -655,8 +659,8 @@ public class FichePayeModel extends AbstractTableModel {
             Object tauxSalOb = this.javaEdit.checkFormule(rowSource.getString("TAUX"), "TAUX");
             rowVals.put("NOM", rowSource.getString("NOM"));
 
-            rowVals.put("NB_BASE", (baseOb == null) ? null : Float.valueOf(Math.round(Float.valueOf(baseOb.toString()).floatValue() * 100.0F) / 100.0F));
-            rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : Float.valueOf(Float.valueOf(tauxSalOb.toString()).floatValue()));
+            rowVals.put("NB_BASE", (baseOb == null) ? null : new BigDecimal(baseOb.toString()));
+            rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : new BigDecimal(tauxSalOb.toString()));
         }
 
         calculBrut(rowSource, rowVals);
@@ -676,43 +680,36 @@ public class FichePayeModel extends AbstractTableModel {
      */
     private void calculBrut(SQLRow rowSource, SQLRowValues rowVals) {
 
-        if (((Boolean) rowVals.getObject("IN_PERIODE")).booleanValue()) {
+        if (rowVals.getBoolean("IN_PERIODE")) {
 
-            Object baseOb = rowVals.getObject("NB_BASE");
-            Object tauxSalOb = rowVals.getObject("TAUX_SAL");
+            BigDecimal baseOb = rowVals.getBigDecimal("NB_BASE");
+            BigDecimal tauxSalOb = rowVals.getBigDecimal("TAUX_SAL");
 
-            float base = 0.0F;
-            if ((baseOb != null) && (baseOb.toString().trim().length() != 0)) {
-                base = Float.valueOf(baseOb.toString()).floatValue();
-            }
-
-            float tauxSal = 0.0F;
-            if ((tauxSalOb != null) && (tauxSalOb.toString().trim().length() != 0)) {
-                tauxSal = Float.valueOf(tauxSalOb.toString()).floatValue();
-            }
+            BigDecimal base = (baseOb == null) ? BigDecimal.ZERO : baseOb;
+            BigDecimal tauxSal = (tauxSalOb == null) ? BigDecimal.ZERO : tauxSalOb;
 
             // Calcul du montant
             String formuleMontant = rowSource.getString("MONTANT");
 
-            float montant = 0.0F;
+            BigDecimal montant = BigDecimal.ZERO;
             if (formuleMontant.trim().length() == 0) {
-                montant = Math.round(base * tauxSal * 100.0F) / 100.0F;
+                montant = base.multiply(tauxSal).setScale(2, RoundingMode.HALF_UP);
             } else {
                 Object montantNet = this.javaEdit.checkFormule(rowSource.getString("MONTANT"), "MONTANT");
-                String montantNetS = (montantNet == null) ? "0.0" : montantNet.toString();
-                montant = Math.round(Float.valueOf(montantNetS).floatValue() * 100.0F) / 100.0F;
+                BigDecimal montantNetS = (montantNet == null) ? BigDecimal.ZERO : new BigDecimal(montantNet.toString());
+                montant = montantNetS;
             }
 
             // Retenue
             if (rowSource.getInt("ID_TYPE_RUBRIQUE_BRUT") == 3) {
 
-                rowVals.put("MONTANT_SAL_DED", Float.valueOf(montant));
-                this.salBrut -= montant;
-            }// Gain
+                rowVals.put("MONTANT_SAL_DED", montant);
+                this.salBrut = this.salBrut.subtract(montant);
+            } // Gain
             else {
 
-                rowVals.put("MONTANT_SAL_AJ", Float.valueOf(montant));
-                this.salBrut += montant;
+                rowVals.put("MONTANT_SAL_AJ", montant);
+                this.salBrut = this.salBrut.add(montant);
             }
 
             // Mis a jour du salaire brut
@@ -722,57 +719,45 @@ public class FichePayeModel extends AbstractTableModel {
 
     private void calculNet(SQLRow rowSource, SQLRowValues rowVals) {
 
-        if (((Boolean) rowVals.getObject("IN_PERIODE")).booleanValue()) {
+        if (rowVals.getBoolean("IN_PERIODE")) {
 
-            Object baseOb = rowVals.getObject("NB_BASE");
-            Object tauxSalOb = rowVals.getObject("TAUX_SAL");
+            BigDecimal baseOb = rowVals.getBigDecimal("NB_BASE");
+            BigDecimal tauxSalOb = rowVals.getBigDecimal("TAUX_SAL");
 
-            float base = 0.0F;
-            if ((baseOb != null) && (baseOb.toString().trim().length() != 0)) {
-                base = ((Float) baseOb).floatValue();
-            }
-
-            float tauxSal = 0.0F;
-            if ((tauxSalOb != null) && (tauxSalOb.toString().trim().length() != 0)) {
-                tauxSal = ((Float) tauxSalOb).floatValue();
-            }
+            BigDecimal base = baseOb == null ? BigDecimal.ZERO : baseOb;
+            BigDecimal tauxSal = tauxSalOb == null ? BigDecimal.ZERO : tauxSalOb;
 
             // Calcul du montant
             String formuleMontant = rowSource.getString("MONTANT");
 
-            float montant = 0.0F;
+            BigDecimal montant = BigDecimal.ZERO;
             if (formuleMontant.trim().length() == 0) {
-                montant = Math.round(base * tauxSal * 100.0F) / 100.0F;
+                montant = base.multiply(tauxSal).setScale(2, RoundingMode.HALF_UP);
             } else {
                 Object montantNet = this.javaEdit.checkFormule(rowSource.getString("MONTANT"), "MONTANT");
                 if (montantNet != null) {
-                    montant = Math.round(Float.valueOf(montantNet.toString()).floatValue() * 100.0F) / 100.0F;
+                    montant = new BigDecimal(montantNet.toString());
                 }
             }
 
             // Retenue
             if (rowSource.getInt("ID_TYPE_RUBRIQUE_NET") == 3) {
 
-                rowVals.put("MONTANT_SAL_DED", Float.valueOf(montant));
+                rowVals.put("MONTANT_SAL_DED", montant);
 
-                if (rowSource.getBoolean("IMPOSABLE")) {
-                    this.netAPayer -= montant;
-                } else {
-                    this.netAPayer -= montant;
-                    this.netImp -= montant;
+                this.netAPayer = this.netAPayer.subtract(montant);
+                if (!rowSource.getBoolean("IMPOSABLE")) {
+                    this.netImp = this.netImp.subtract(montant);
                 }
 
-            }// Gain
+            } // Gain
             else {
 
-                rowVals.put("MONTANT_SAL_AJ", Float.valueOf(montant));
+                rowVals.put("MONTANT_SAL_AJ", montant);
 
-                if (rowSource.getBoolean("IMPOSABLE")) {
-                    this.netAPayer += montant;
-
-                } else {
-                    this.netAPayer += montant;
-                    this.netImp += montant;
+                this.netAPayer = this.netAPayer.add(montant);
+                if (!rowSource.getBoolean("IMPOSABLE")) {
+                    this.netImp = this.netImp.add(montant);
                 }
             }
 
@@ -790,8 +775,8 @@ public class FichePayeModel extends AbstractTableModel {
             Object baseOb = this.javaEdit.checkFormule(rowSource.getString("BASE"), "BASE");
             Object tauxSalOb = this.javaEdit.checkFormule(rowSource.getString("TAUX"), "TAUX");
             rowVals.put("NOM", rowSource.getString("NOM"));
-            rowVals.put("NB_BASE", (baseOb == null) ? null : Float.valueOf(Math.round(Float.valueOf(baseOb.toString()).floatValue() * 100.0F) / 100.0F));
-            rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : Float.valueOf(Float.valueOf(tauxSalOb.toString()).floatValue()));
+            rowVals.put("NB_BASE", (baseOb == null) ? null : new BigDecimal(baseOb.toString()));
+            rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : new BigDecimal(tauxSalOb.toString()));
         }
 
         calculNet(rowSource, rowVals);
@@ -807,63 +792,46 @@ public class FichePayeModel extends AbstractTableModel {
 
         if (((Boolean) rowVals.getObject("IN_PERIODE")).booleanValue()) {
 
-            Object baseOb = rowVals.getObject("NB_BASE");
-            Object tauxSalOb = rowVals.getObject("TAUX_SAL");
-            Object tauxPatOb = rowVals.getObject("TAUX_PAT");
+            BigDecimal baseOb = rowVals.getBigDecimal("NB_BASE");
+            BigDecimal tauxSalOb = rowVals.getBigDecimal("TAUX_SAL");
+            BigDecimal tauxPatOb = rowVals.getBigDecimal("TAUX_PAT");
 
-            float base = 0.0F;
-            if ((baseOb != null) && (baseOb.toString().trim().length() != 0)) {
-                base = ((Number) baseOb).floatValue();
-            }
-
-            float tauxSal = 0.0F;
-            if ((tauxSalOb != null) && (tauxSalOb.toString().trim().length() != 0)) {
-                tauxSal = ((Number) tauxSalOb).floatValue() / 100.0F;
-            }
-
-            float tauxPat = 0.0F;
-            if ((tauxPatOb != null) && (tauxPatOb.toString().trim().length() != 0)) {
-                tauxPat = ((Number) tauxPatOb).floatValue() / 100.0F;
-            }
+            BigDecimal base = baseOb == null ? BigDecimal.ZERO : baseOb;
+            BigDecimal tauxSal = tauxSalOb == null ? BigDecimal.ZERO : tauxSalOb;
+            BigDecimal tauxPat = tauxPatOb == null ? BigDecimal.ZERO : tauxPatOb;
 
             // Calcul du montant
-            float montantSal = 0.0F;
-            montantSal = Math.round(base * tauxSal * 100.0F) / 100.0F;
-            float montantPat = 0.0F;
-            montantPat = Math.round(base * tauxPat * 100.0F) / 100.0F;
+            BigDecimal montantSal = base.multiply(tauxSal).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal montantPat = base.multiply(tauxPat).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
 
-            rowVals.put("MONTANT_SAL_DED", new Float(montantSal));
-            rowVals.put("MONTANT_PAT", new Float(montantPat));
+            rowVals.put("MONTANT_SAL_DED", montantSal);
+            rowVals.put("MONTANT_PAT", montantPat);
 
-            if (rowSource.getBoolean("IMPOSABLE")) {
-                this.netAPayer -= montantSal;
-
-            } else {
-                this.netAPayer -= montantSal;
-                this.netImp -= montantSal;
+            this.netAPayer = this.netAPayer.subtract(montantSal);
+            if (!rowSource.getBoolean("IMPOSABLE")) {
+                this.netImp = this.netImp.subtract(montantSal);
             }
 
             if (rowSource.getBoolean("PART_PAT_IMPOSABLE")) {
-                this.netImp += montantPat;
-            }
-
-            if (rowSource.getBoolean("PART_CSG_SANS_ABATTEMENT")) {
-                this.csgSansAbattement += montantPat;
+                this.netImp = this.netImp.add(montantPat);
             }
 
             if (rowSource.getBoolean("PART_CSG")) {
-                this.csg += montantPat;
+                this.csg = this.csg.add(montantPat);
+            }
+            if (rowSource.getBoolean("PART_CSG_SANS_ABATTEMENT")) {
+                this.csgSansAbattement = this.csgSansAbattement.add(montantPat);
             }
 
-            this.cotSal += montantSal;
-            this.cotPat += montantPat;
+            this.cotSal = this.cotSal.add(montantSal);
+            this.cotPat = this.cotPat.add(montantPat);
 
             // Mis a jour des cotisations
             updateValueFiche();
         }
     }
 
-    private void loadElementCotisation(SQLRow rowSource, SQLRow row) {
+    private void loadElementCotisation(final SQLRow rowSource, SQLRow row) {
         SQLRowValues rowVals = new SQLRowValues(tableFichePayeElt);
         // System.err.println("________________________LOAD ELT COTISATION");
 
@@ -871,12 +839,39 @@ public class FichePayeModel extends AbstractTableModel {
 
             // On calcule les valeurs
             Object baseOb = this.javaEdit.checkFormule(rowSource.getString("BASE"), "BASE");
+            if (!this.javaEdit.isCodeValid()) {
+                SwingUtilities.invokeLater(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        JOptionPane.showMessageDialog(null, "La formule BASE pour la rubrique " + rowSource.getString("CODE") + " n'est pas correcte!");
+                    }
+                });
+            }
             Object tauxSalOb = this.javaEdit.checkFormule(rowSource.getString("TX_SAL"), "TX_SAL");
+            if (!this.javaEdit.isCodeValid()) {
+                SwingUtilities.invokeLater(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        JOptionPane.showMessageDialog(null, "La formule TX_SAL pour la rubrique " + rowSource.getString("CODE") + " n'est pas correcte!");
+                    }
+                });
+            }
             Object tauxPatOb = this.javaEdit.checkFormule(rowSource.getString("TX_PAT"), "TX_PAT");
+            if (!this.javaEdit.isCodeValid()) {
+                SwingUtilities.invokeLater(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        JOptionPane.showMessageDialog(null, "La formule TX_PAT pour la rubrique " + rowSource.getString("CODE") + " n'est pas correcte!");
+                    }
+                });
+            }
             rowVals.put("NOM", rowSource.getString("NOM"));
-            rowVals.put("NB_BASE", (baseOb == null) ? null : Float.valueOf(Math.round(Float.valueOf(baseOb.toString()).floatValue() * 100.0F) / 100.0F));
-            rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : Float.valueOf(Float.valueOf(tauxSalOb.toString()).floatValue()));
-            rowVals.put("TAUX_PAT", (tauxPatOb == null) ? null : Float.valueOf(Float.valueOf(tauxPatOb.toString()).floatValue()));
+            rowVals.put("NB_BASE", (baseOb == null) ? null : new BigDecimal(baseOb.toString()));
+            rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : new BigDecimal(tauxSalOb.toString()));
+            rowVals.put("TAUX_PAT", (tauxPatOb == null) ? null : new BigDecimal(tauxPatOb.toString()));
         }
 
         calculCotisation(rowSource, rowVals);
@@ -904,12 +899,12 @@ public class FichePayeModel extends AbstractTableModel {
         Object montantAdOb = this.javaEdit.checkFormule(rowSource.getString("MONTANT_SAL_AJ"), "MONTANT");
         Object montantDedOb = this.javaEdit.checkFormule(rowSource.getString("MONTANT_SAL_DED"), "MONTANT");
         rowVals.put("NOM", rowSource.getBoolean("NOM_VISIBLE") ? rowSource.getString("NOM") : "");
-        rowVals.put("NB_BASE", baseOb);
-        rowVals.put("TAUX_SAL", tauxSalOb);
-        rowVals.put("TAUX_PAT", tauxPatOb);
-        rowVals.put("MONTANT_PAT", montantPatOb);
-        rowVals.put("MONTANT_SAL_AJ", montantAdOb);
-        rowVals.put("MONTANT_SAL_DED", montantDedOb);
+        rowVals.put("NB_BASE", (baseOb == null) ? null : new BigDecimal(baseOb.toString()));
+        rowVals.put("TAUX_SAL", (tauxSalOb == null) ? null : new BigDecimal(tauxSalOb.toString()));
+        rowVals.put("TAUX_PAT", (tauxPatOb == null) ? null : new BigDecimal(tauxPatOb.toString()));
+        rowVals.put("MONTANT_PAT", (montantPatOb == null) ? null : new BigDecimal(montantPatOb.toString()));
+        rowVals.put("MONTANT_SAL_AJ", (montantAdOb == null) ? null : new BigDecimal(montantAdOb.toString()));
+        rowVals.put("MONTANT_SAL_DED", (montantDedOb == null) ? null : new BigDecimal(montantDedOb.toString()));
 
         boolean b = isEltImprimable(rowSource, rowVals);
         // System.err.println("Impression --- > " + b);

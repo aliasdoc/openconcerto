@@ -13,7 +13,6 @@
  
  package org.openconcerto.erp.core.sales.pos.ui;
 
-import org.openconcerto.erp.core.sales.pos.Caisse;
 import org.openconcerto.erp.core.sales.pos.model.Article;
 import org.openconcerto.erp.core.sales.pos.model.Categorie;
 import org.openconcerto.sql.Configuration;
@@ -69,10 +68,9 @@ public class CaissePanel extends JPanel implements CaisseListener {
             public void mousePressed(MouseEvent e) {
                 if (e.getX() < 110) {
                     // Valider
+                    CaissePanel.this.controler.setLCD("Impression de", "votre ticket...", 0);
                     try {
                         CaissePanel.this.controler.printTicket();
-                        if (Caisse.isCopyActive())
-                            CaissePanel.this.controler.printTicket();
                     } catch (UnsatisfiedLinkError ex) {
                         JOptionPane.showMessageDialog(CaissePanel.this, "Erreur de configuration de la liaison à l'imprimante");
                     } catch (Throwable ex) {
@@ -83,7 +81,7 @@ public class CaissePanel extends JPanel implements CaisseListener {
                     } catch (Throwable ex) {
                         ExceptionHandler.handle("Erreur de sauvegardes des informations du ticket", ex);
                     }
-
+                    CaissePanel.this.controler.setLCDDefaultDisplay(2);
                 } else if (e.getX() > 165 && e.getX() < 275) {
                     // Menu
                     try {
@@ -177,8 +175,8 @@ public class CaissePanel extends JPanel implements CaisseListener {
                 }
                 a.setCode(row.getString("CODE"));
                 a.setIdTaxe(row.getInt("ID_TAXE"));
-                a.setPriceHTInCents((BigDecimal) row.getObject("PV_HT"));
-                a.setPriceInCents((BigDecimal) row.getObject("PV_TTC"));
+                a.setPriceWithoutTax((BigDecimal) row.getObject("PV_HT"));
+                a.setPriceWithTax((BigDecimal) row.getObject("PV_TTC"));
             }
         }
 
@@ -289,5 +287,9 @@ public class CaissePanel extends JPanel implements CaisseListener {
         this.validate();
         this.repaint();
 
+    }
+
+    public CaisseControler getControler() {
+        return controler;
     }
 }

@@ -48,7 +48,7 @@
 	<menu id="appointment.notvalidated.list" label="" />
 	<menu id="mission.order.list" label="" />
 	<menu id="mission.notice.list" label="" />
-	<menu id="customer.order.list" label="Liste des commmandes" />
+	<menu id="customer.order.list" label="Liste des commandes" />
 	<menu id="customer.delivery.list" label="Liste des bons de livraison" />
 	<menu id="sales.list" label="Liste des ventes" />
 	<menu id="customer.invoice.list" label="Liste des factures" />
@@ -92,7 +92,7 @@
 	<menu id="accounting.balance.report" label="Compte de résultat et bilan" />
 	<menu id="employe.social.report" label="Déclaration N4DS" />
 	<!-- Stats -->
-	<menu id="menu.stats" label="Statistique" />
+	<menu id="menu.stats" label="Statistiques" />
 	<menu id="sales.graph" label="Evolution du chiffre d'affaires" />
 	<menu id="sales.margin.graph" label="Evolution des marges" />
 	<menu id="sales.list.report" label="Journal des ventes" />
@@ -113,10 +113,10 @@
 	<menu id="customer.credit.check.list" label="Chèques d'avoir" />
 	<menu id="customer.credit.check.create" label="Chèques d'avoir à décaisser" />
 	<menu id="menu.payment.supplier" label="Fournisseurs" />
-	<menu id="supplier.invoice.unpaid.list" label="Factures fournisseurs impayées" />
+	<menu id="supplier.invoice.unpaid.list" label="Factures fournisseurs non payées" />
 	<menu id="supplier.bill.list" label="Liste des traites et virements aux fournisseurs" />
 	<menu id="supplier.payment.check.list" label="Chèques aux fournisseurs" />
-	<menu id="supplier.payment.check.pending.list" label="Chèques à décaisser" />
+	<menu id="supplier.payment.check.pending.list" label="Chèques fournisseurs à décaisser" />
 	<!-- Payroll -->
 	<menu id="menu.payroll" label="Paye" />
 	<menu id="payroll.list.report.print" label="Livre de paye" />
@@ -199,7 +199,7 @@
 
 	<!-- Document -->
 	<action id="document.quickprint" label="Impression rapide" />
-	<action id="document.print" label="Impression..." />
+	<action id="document.print" label="Imprimer..." />
 	<action id="document.print.all" label="Imprimer les documents" />
 	<action id="document.preview" label="Voir le document" />
 	<action id="document.modify" label="Modifier le document avec OpenOffice" />

@@ -37,10 +37,16 @@ import javax.swing.text.JTextComponent;
  */
 public class SystemInfoPanel extends JPanel {
 
-    public SystemInfoPanel() {
-        final Map<Info, String> infos = SystemInfo.get(true);
+    private final FormLayouter l;
 
-        final FormLayouter l = new FormLayouter(this, 1);
+    public SystemInfoPanel() {
+        this.l = new FormLayouter(this, 1);
+        this.refresh();
+    }
+
+    public final void refresh() {
+        this.l.clear();
+        final Map<Info, String> infos = SystemInfo.get(true);
 
         final JEditorPane p = new HTMLTextField(infos.get(Info.JAVA)) {
 
@@ -85,16 +91,16 @@ public class SystemInfoPanel extends JPanel {
             }
         };
 
-        l.add("Java", p);
+        this.l.add("Java", p);
 
         // * Windows XP 5.1 (x86)
-        l.add(TM.tr("os"), new JLabel("<html>" + infos.get(Info.OS) + "</html>"));
+        this.l.add(TM.tr("os"), new JLabel("<html>" + infos.get(Info.OS) + "</html>"));
 
         // * Sylvain ; C:\Documents and Settings\Sylvain ; D:\workspace\CTech
-        l.add(TM.tr("user"), new HTMLTextField(infos.get(Info.USER)));
+        this.l.add(TM.tr("user"), new HTMLTextField(infos.get(Info.USER)));
 
         // * eth0 192.168.28.52/24, état: inactif, nom complet: ""
-        l.add(TM.tr("network"), new HTMLTextField(infos.get(Info.NETWORK)));
+        this.l.add(TM.tr("network"), new HTMLTextField(infos.get(Info.NETWORK)));
 
         // TODO reverse vnc
     }

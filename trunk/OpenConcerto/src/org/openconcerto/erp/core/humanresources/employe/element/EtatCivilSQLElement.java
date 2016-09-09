@@ -56,13 +56,11 @@ public class EtatCivilSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    protected List<String> getPrivateFields() {
-
-        final List<String> l = new ArrayList<String>();
-        l.add("ID_ADRESSE");
-        return l;
+    @Override
+    public boolean isPrivate() {
+        return true;
     }
-
+    
     /*
      * (non-Javadoc)
      * 

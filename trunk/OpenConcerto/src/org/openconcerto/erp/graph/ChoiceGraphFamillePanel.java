@@ -17,10 +17,6 @@
 package org.openconcerto.erp.graph;
 
 import org.openconcerto.erp.core.common.ui.PanelFrame;
-import org.openconcerto.sql.Configuration;
-import org.openconcerto.sql.element.SQLElement;
-import org.openconcerto.sql.request.ComboSQLRequest;
-import org.openconcerto.sql.sqlobject.ElementComboBox;
 import org.openconcerto.ui.DefaultGridBagConstraints;
 import org.openconcerto.ui.FrameUtil;
 import org.openconcerto.ui.JDate;
@@ -30,7 +26,6 @@ import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.concurrent.ExecutionException;
 
 import javax.swing.AbstractAction;
 import javax.swing.JButton;

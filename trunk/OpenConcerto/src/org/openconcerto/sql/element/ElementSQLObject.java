@@ -16,6 +16,7 @@
  */
 package org.openconcerto.sql.element;
 
+import org.openconcerto.sql.element.SQLComponent.Mode;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowAccessor;
 import org.openconcerto.sql.model.SQLRowValues;
@@ -30,6 +31,7 @@ import org.openconcerto.utils.checks.ValidObject;
 import org.openconcerto.utils.checks.ValidState;
 
 import java.awt.Component;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 
@@ -80,6 +82,16 @@ public abstract class ElementSQLObject extends BaseSQLObject implements SQLForei
                 fireValidChange();
             }
         });
+        if (parent.getMode() == Mode.READ_ONLY) {
+            getSQLChild().setMode(Mode.READ_ONLY);
+        } else {
+            ((BaseSQLComponent) this.comp).addSelectionListener(new PropertyChangeListener() {
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    getSQLChild().setMode(getSQLChild().getSelectedID() < SQLRow.MIN_VALID_ID ? Mode.INSERTION : Mode.MODIFICATION);
+                }
+            });
+        }
 
         this.addValidListener(new ValidListener() {
             public void validChange(ValidObject src, ValidState newValue) {

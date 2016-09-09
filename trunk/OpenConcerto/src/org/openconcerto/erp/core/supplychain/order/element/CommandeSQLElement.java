@@ -14,29 +14,37 @@
  package org.openconcerto.erp.core.supplychain.order.element;
 
 import org.openconcerto.erp.config.Gestion;
+import org.openconcerto.erp.core.common.component.TransfertBaseSQLComponent;
 import org.openconcerto.erp.core.common.element.ComptaSQLConfElement;
 import org.openconcerto.erp.core.supplychain.order.component.CommandeSQLComponent;
 import org.openconcerto.erp.core.supplychain.order.component.SaisieAchatSQLComponent;
+import org.openconcerto.erp.core.supplychain.receipt.component.BonReceptionSQLComponent;
+import org.openconcerto.erp.generationDoc.gestcomm.CommandeXmlSheet;
+import org.openconcerto.erp.model.MouseSheetXmlListeListener;
 import org.openconcerto.sql.Configuration;
 import org.openconcerto.sql.element.SQLComponent;
 import org.openconcerto.sql.element.SQLElement;
+import org.openconcerto.sql.element.SQLElementLink.LinkType;
+import org.openconcerto.sql.element.SQLElementLinksSetup;
 import org.openconcerto.sql.element.TreesOfSQLRows;
 import org.openconcerto.sql.model.SQLRow;
 import org.openconcerto.sql.model.SQLRowValues;
+import org.openconcerto.sql.model.SQLRowValuesListFetcher;
 import org.openconcerto.sql.model.SQLSelect;
+import org.openconcerto.sql.model.SQLSelectJoin;
+import org.openconcerto.sql.model.SQLTable;
 import org.openconcerto.sql.model.Where;
 import org.openconcerto.sql.view.EditFrame;
 import org.openconcerto.sql.view.list.IListe;
 import org.openconcerto.sql.view.list.IListeAction.IListeEvent;
 import org.openconcerto.sql.view.list.RowAction.PredicateRowAction;
 import org.openconcerto.utils.ExceptionHandler;
+import org.openconcerto.utils.cc.ITransformer;
 
 import java.awt.event.ActionEvent;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
@@ -48,6 +56,20 @@ public class CommandeSQLElement extends ComptaSQLConfElement {
 
     public CommandeSQLElement() {
         super("COMMANDE", "une commande fournisseur", "commandes fournisseur");
+
+        getRowActions().addAll(new MouseSheetXmlListeListener(CommandeXmlSheet.class).getRowActions());
+
+        // Transfert vers BR
+        PredicateRowAction bonAction = new PredicateRowAction(new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                final List<SQLRowValues> selectedRows = IListe.get(e).getSelectedRows();
+                transfertBR(selectedRows);
+            }
+
+        }, false, "supplychain.order.create.receipt");
+
+        bonAction.setPredicate(IListeEvent.getSingleSelectionPredicate());
+        getRowActions().add(bonAction);
 
         // Transfert vers facture
         PredicateRowAction factureAction = new PredicateRowAction(new AbstractAction() {
@@ -96,23 +118,6 @@ public class CommandeSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
-    @Override
-    protected Set<String> getChildren() {
-        Set<String> set = new HashSet<String>();
-        set.add("COMMANDE_ELEMENT");
-        return set;
-    }
-
-    protected List<String> getPrivateFields() {
-        if (getTable().getFieldsName().contains("ID_ADRESSE")) {
-            final List<String> l = new ArrayList<String>();
-            l.add("ID_ADRESSE");
-            return l;
-        } else {
-            return super.getPrivateFields();
-        }
-    }
-
     /*
      * (non-Javadoc)
      * 
@@ -120,6 +125,35 @@ public class CommandeSQLElement extends ComptaSQLConfElement {
      */
     public SQLComponent createComponent() {
         return new CommandeSQLComponent();
+    }
+
+    public void transfertBR(final List<SQLRowValues> selectedRows) {
+
+        EditFrame f = TransfertBaseSQLComponent.openTransfertFrame(selectedRows, "BON_RECEPTION");
+        BonReceptionSQLComponent comp = (BonReceptionSQLComponent) f.getSQLComponent();
+        final SQLTable tableElt = comp.getElement().getTable().getTable("BON_RECEPTION_ELEMENT");
+        SQLRowValues rowVals = new SQLRowValues(tableElt);
+        rowVals.put("QTE_UNITAIRE", null);
+        rowVals.put("QTE", null);
+        rowVals.put("ID_ARTICLE", null);
+
+        SQLRowValuesListFetcher fetcher = SQLRowValuesListFetcher.create(rowVals);
+        fetcher.setSelTransf(new ITransformer<SQLSelect, SQLSelect>() {
+
+            @Override
+            public SQLSelect transformChecked(SQLSelect input) {
+                List<Integer> ids = new ArrayList<Integer>(selectedRows.size());
+                for (SQLRowValues sqlRowValues : selectedRows) {
+                    ids.add(sqlRowValues.getID());
+                }
+                SQLSelectJoin joinBR = input.addJoin("RIGHT", tableElt.getTable("BON_RECEPTION_ELEMENT").getField("ID_BON_RECEPTION"));
+                SQLSelectJoin joinTR = input.addBackwardJoin("RIGHT", tableElt.getTable("TR_COMMANDE").getField("ID_BON_RECEPTION"), joinBR.getJoinedTable().getAlias());
+                joinTR.setWhere(new Where(joinTR.getJoinedTable().getField("ID_COMMANDE"), ids));
+                System.err.println(input.asString());
+                return input;
+            }
+        });
+        comp.loadQuantity(fetcher.fetch());
     }
 
     /**

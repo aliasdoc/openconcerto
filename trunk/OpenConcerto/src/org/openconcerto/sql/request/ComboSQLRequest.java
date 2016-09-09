@@ -195,13 +195,7 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         this.customizeItem = null;
         this.order = null;
         this.itemsOrder = getDefaultItemsOrder();
-        this.exp = new TransfFieldExpander(new ITransformer<SQLField, List<SQLField>>() {
-            @Override
-            public List<SQLField> transformChecked(SQLField fk) {
-                final SQLTable foreignTable = fk.getDBSystemRoot().getGraph().getForeignTable(fk);
-                return Configuration.getInstance().getDirectory().getElement(foreignTable).getComboRequest().getFields();
-            }
-        });
+        this.exp = ElementComboBoxUtils.getShowAs(Configuration.getInstance());
         this.setFields(l);
     }
 
@@ -308,13 +302,11 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
         // fields and doesn't need to be synchronized
         final CacheKey cacheKey = getCacheKey(w);
         final SQLRowValuesListFetcher comboSelect = cacheKey.fetcher;
-        if (readCache) {
-            final CacheResult<List<IComboSelectionItem>> l = cache.check(cacheKey);
-            if (l.getState() == CacheResult.State.INTERRUPTED)
-                throw new RTInterruptedException("interrupted while waiting for the cache");
-            else if (l.getState() == CacheResult.State.VALID)
-                return l.getRes();
-        }
+        final CacheResult<List<IComboSelectionItem>> l = cache.check(cacheKey, readCache, writeCache, comboSelect.getGraph().getGraph().getTables());
+        if (l.getState() == CacheResult.State.INTERRUPTED)
+            throw new RTInterruptedException("interrupted while waiting for the cache");
+        else if (l.getState() == CacheResult.State.VALID)
+            return l.getRes();
 
         try {
             // group fields by ancestor, need not be part of CacheKey assuming parent-child
@@ -333,13 +325,12 @@ public final class ComboSQLRequest extends FilteredFillSQLRequest {
                 Collections.sort(result, cacheKey.itemsOrder);
 
             if (writeCache)
-                cache.put(cacheKey, result, comboSelect.getGraph().getGraph().getTables());
+                cache.put(l, result);
 
             return result;
         } catch (RuntimeException exn) {
             // don't use finally, otherwise we'll do both put() and rmRunning()
-            if (readCache)
-                cache.removeRunning(cacheKey);
+            cache.removeRunning(l);
             throw exn;
         }
     }

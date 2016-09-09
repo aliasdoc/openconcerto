@@ -176,7 +176,13 @@ public class ImpressionGrandLivrePanel extends JPanel implements SpreadSheetGene
 
         JRadioButton radioNonLettree = new JRadioButton(new AbstractAction("Non lettrées") {
             public void actionPerformed(ActionEvent e) {
-                mode = GrandLivreSheet.MODENONLETTREE;
+                mode = GrandLivreSheet.MODENONLETTREE_ALL;
+            }
+        });
+
+        JRadioButton radioNonLettreePeridod = new JRadioButton(new AbstractAction("Non lettrées sur la période") {
+            public void actionPerformed(ActionEvent e) {
+                mode = GrandLivreSheet.MODENONLETTREE_PERIODE;
             }
         });
 
@@ -190,6 +196,7 @@ public class ImpressionGrandLivrePanel extends JPanel implements SpreadSheetGene
         panelMode.add(radioAll);
         panelMode.add(radioLettree);
         panelMode.add(radioNonLettree);
+        panelMode.add(radioNonLettreePeridod);
 
         c.gridy++;
         c.gridx = 0;
@@ -201,6 +208,7 @@ public class ImpressionGrandLivrePanel extends JPanel implements SpreadSheetGene
         group.add(radioAll);
         group.add(radioLettree);
         group.add(radioNonLettree);
+        group.add(radioNonLettreePeridod);
         radioAll.setSelected(true);
 
         this.add(panelMode, c);
@@ -253,8 +261,8 @@ public class ImpressionGrandLivrePanel extends JPanel implements SpreadSheetGene
                 bar.setValue(1);
                 new Thread(new Runnable() {
                     public void run() {
-                        final GrandLivreSheetXML bSheet = new GrandLivreSheetXML(dateDeb.getDate(), dateEnd.getDate(), compteDeb.getText().trim(), compteEnd.getText().trim(), mode, boxCumulsAnts
-                                .isSelected(), !boxCompteSolde.isSelected(), boxCentralClient.isSelected(), boxCentralFourn.isSelected(), comboJrnl.getSelectedId());
+                        final GrandLivreSheetXML bSheet = new GrandLivreSheetXML(dateDeb.getDate(), dateEnd.getDate(), compteDeb.getText().trim(), compteEnd.getText().trim(), mode,
+                                boxCumulsAnts.isSelected(), !boxCompteSolde.isSelected(), boxCentralClient.isSelected(), boxCentralFourn.isSelected(), comboJrnl.getSelectedId());
                         try {
                             bSheet.createDocument();
 
@@ -274,7 +282,7 @@ public class ImpressionGrandLivrePanel extends JPanel implements SpreadSheetGene
                                 try {
                                     // bSheet.getOrCreatePDFDocumentFile(true);
                                     bSheet.getOrCreatePDFDocumentFile(true, true);
-                                    Gestion.openPDF(bSheet.getGeneratedPDFFile());
+                                        Gestion.openPDF(bSheet.getGeneratedPDFFile());
                                 } catch (Exception exn) {
                                     // TODO Bloc catch auto-généré
                                     exn.printStackTrace();

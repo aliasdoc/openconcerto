@@ -13,14 +13,17 @@
  
  package org.openconcerto.ui.light;
 
+import org.openconcerto.utils.io.JSONConverter;
+import org.openconcerto.utils.io.Transferable;
+import org.openconcerto.utils.ui.StringWithId;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-import org.openconcerto.utils.io.JSONConverter;
-import org.openconcerto.utils.io.Transferable;
-import org.openconcerto.utils.ui.StringWithId;
+import org.jdom2.Element;
+
 import net.minidev.json.JSONObject;
 
 public class ColumnSpec implements Externalizable, Transferable {
@@ -52,7 +55,7 @@ public class ColumnSpec implements Externalizable, Transferable {
         final int minWidth = width - 200;
         final int maxWidth = width + 200;
 
-        this.minWidth = (minWidth < 0) ? 0 : minWidth;
+        this.minWidth = (minWidth < 10) ? 10 : minWidth;
         this.maxWidth = maxWidth;
     }
 
@@ -111,7 +114,7 @@ public class ColumnSpec implements Externalizable, Transferable {
     public int getMaxWidth() {
         return this.maxWidth;
     }
-    
+
     public void setMaxWidth(final int maxWidth) {
         this.maxWidth = maxWidth;
     }
@@ -119,7 +122,7 @@ public class ColumnSpec implements Externalizable, Transferable {
     public int getMinWidth() {
         return this.minWidth;
     }
-    
+
     public void setMinWidth(final int minWidth) {
         this.minWidth = minWidth;
     }
@@ -153,6 +156,15 @@ public class ColumnSpec implements Externalizable, Transferable {
         this.width = 200;
         this.maxWidth = 500;
         this.minWidth = 50;
+    }
+
+    public Element createXmlColumnPref() {
+        final Element columnElement = new Element("column");
+        columnElement.setAttribute("id", this.getId());
+        columnElement.setAttribute("max-width", String.valueOf(this.getMaxWidth()));
+        columnElement.setAttribute("min-width", String.valueOf(this.getMinWidth()));
+        columnElement.setAttribute("width", String.valueOf(this.getWidth()));
+        return columnElement;
     }
 
     @Override
@@ -190,13 +202,13 @@ public class ColumnSpec implements Externalizable, Transferable {
         result.put("width", this.width);
         result.put("max-width", this.maxWidth);
         result.put("min-width", this.minWidth);
-        if(this.defaultValue != null) {
+        if (this.defaultValue != null) {
             result.put("default-value", JSONConverter.getJSON(this.defaultValue));
         }
         if (this.editable) {
             result.put("editable", true);
         }
-        if(this.editors != null) {
+        if (this.editors != null) {
             result.put("editors", JSONConverter.getJSON(this.editors));
         }
         result.put("value-class", JSONConverter.getJSON(this.valueClass));
@@ -221,7 +233,7 @@ public class ColumnSpec implements Externalizable, Transferable {
         }
         final JSONObject jsonEditors = (JSONObject) JSONConverter.getParameterFromJSON(json, "editors", JSONObject.class);
         if (jsonEditors != null) {
-            this.editors = LightUIElement.createUIElementFromJSON(jsonEditors);
+            this.editors = JSONToLightUIConvertorManager.getInstance().createUIElementFromJSON(jsonEditors);
         }
         final String sValueClass = (String) JSONConverter.getParameterFromJSON(json, "value-class", String.class);
         if (sValueClass != null) {

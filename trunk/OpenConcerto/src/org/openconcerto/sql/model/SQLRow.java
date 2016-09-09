@@ -18,6 +18,7 @@ package org.openconcerto.sql.model;
 
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.model.SQLSelect.ArchiveMode;
+import org.openconcerto.sql.model.SQLTable.VirtualFields;
 import org.openconcerto.sql.model.graph.Link;
 import org.openconcerto.sql.model.graph.Link.Direction;
 import org.openconcerto.sql.model.graph.Path;
@@ -42,9 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.logging.Level;
 
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.collections.Predicate;
 import org.apache.commons.dbutils.ResultSetHandler;
 
 /**
@@ -245,8 +245,21 @@ public class SQLRow extends SQLRowAccessor {
         }
     }
 
+    /**
+     * Whether this contains values or just the {@link #getIDNumber() id}. NOTE that
+     * {@link #getObject(String)} (and thus any other methods that call it) will access the DB if
+     * the requested field is {@link #getFields() missing} even if this returns <code>true</code>.
+     * 
+     * @return <code>true</code> if {@link #exists()} and {@link #getAbsolutelyAll()} and some other
+     *         methods won't access the DB, <code>false</code> if any call to a method about values
+     *         will access the DB.
+     */
+    public final boolean isFilled() {
+        return this.fetched;
+    }
+
     private Map<String, Object> getValues() {
-        if (!this.fetched)
+        if (!this.isFilled())
             this.fetchValues();
         return this.values;
     }
@@ -264,17 +277,8 @@ public class SQLRow extends SQLRowAccessor {
 
     @SuppressWarnings("unchecked")
     SQLRow fetchValues(final boolean readCache, final boolean writeCache) {
-        final IResultSetHandler handler = new IResultSetHandler(SQLDataSource.MAP_HANDLER) {
+        final IResultSetHandler handler = new IResultSetHandler(SQLDataSource.MAP_HANDLER, readCache, writeCache) {
             @Override
-            public boolean readCache() {
-                return readCache;
-            }
-
-            @Override
-            public boolean writeCache() {
-                return writeCache;
-            }
-
             public Set<SQLRow> getCacheModifiers() {
                 return Collections.singleton(SQLRow.this);
             }
@@ -295,8 +299,9 @@ public class SQLRow extends SQLRowAccessor {
      * 
      * @return les noms des champs qui ont été chargé depuis la base.
      */
+    @Override
     public Set<String> getFields() {
-        return Collections.unmodifiableSet(this.getValues().keySet());
+        return this.fetched ? Collections.unmodifiableSet(this.getValues().keySet()) : Collections.<String> emptySet();
     }
 
     private String getQuery() {
@@ -338,6 +343,7 @@ public class SQLRow extends SQLRowAccessor {
      * @throws IllegalStateException si cette ligne n'existe pas.
      * @throws IllegalArgumentException si cette ligne ne contient pas le champ demandé.
      */
+    @Override
     public final Object getObject(String field) {
         if (!this.exists())
             throw new IllegalStateException("The row " + this + "does not exist.");
@@ -354,6 +360,7 @@ public class SQLRow extends SQLRowAccessor {
             if (printSTForMissingField)
                 new IllegalArgumentException(msg).printStackTrace();
         }
+        assert this.getValues().containsKey(field);
         return this.getValues().get(field);
     }
 
@@ -540,8 +547,7 @@ public class SQLRow extends SQLRowAccessor {
     }
 
     public Map<SQLField, SQLRow> getForeignRowsMap(SQLRowMode mode) {
-        final Set<Link> links = this.getTable().getBase().getGraph().getForeignLinks(this.getTable());
-        return this.foreignLinksToMap(links, mode);
+        return this.foreignLinksToMap(this.getTable().getForeignLinks(), mode);
     }
 
     private Map<SQLField, SQLRow> foreignLinksToMap(Collection<Link> links, SQLRowMode mode) {
@@ -586,10 +592,16 @@ public class SQLRow extends SQLRowAccessor {
     }
 
     public Set<SQLRow> getDistantRows(final Path path) {
+        return this.getDistantRows(path, ArchiveMode.UNARCHIVED);
+    }
+
+    public Set<SQLRow> getDistantRows(final Path path, final ArchiveMode archiveMode) {
+        if (path.length() == 0)
+            return SQLRowMode.check(archiveMode, this) ? Collections.singleton(this) : Collections.<SQLRow> emptySet();
         // on veut tous les champs de la derniere table et rien d'autre
         final List<List<String>> fields = new ArrayList<List<String>>(Collections.nCopies(path.length() - 1, Collections.<String> emptyList()));
         fields.add(null);
-        final Set<List<SQLRow>> s = this.getRowsOnPath(path, fields);
+        final Set<List<SQLRow>> s = this.getRowsOnPath(path, fields, archiveMode);
         final Set<SQLRow> res = new LinkedHashSet<SQLRow>(s.size());
         for (final List<SQLRow> l : s) {
             res.add(l.get(0));
@@ -615,6 +627,10 @@ public class SQLRow extends SQLRowAccessor {
     }
 
     public Set<List<SQLRow>> getRowsOnPath(final Path p, final List<? extends Collection<String>> fields) {
+        return this.getRowsOnPath(p, fields, ArchiveMode.UNARCHIVED);
+    }
+
+    public Set<List<SQLRow>> getRowsOnPath(final Path p, final List<? extends Collection<String>> fields, final ArchiveMode archiveMode) {
         final int pathSize = p.length();
         if (pathSize == 0)
             throw new IllegalArgumentException("path is empty");
@@ -630,6 +646,7 @@ public class SQLRow extends SQLRowAccessor {
         where = where.and(this.getWhere());
 
         final SQLSelect select = new SQLSelect();
+        select.setArchivedPolicy(archiveMode);
 
         final List<Collection<String>> fieldsCols = new ArrayList<Collection<String>>(pathSize);
         for (int i = 0; i < pathSize; i++) {
@@ -894,13 +911,33 @@ public class SQLRow extends SQLRowAccessor {
         return res;
     }
 
-    // ATTN peut faire une requête si archive n'est pas chargé
+    @Override
     public String toString() {
+        return fullToString(false);
+    }
+
+    public String fullToString(final boolean allowDBAccess) {
         String res = this.simpleToString();
-        if (!this.exists()) {
+        final Boolean exists = allowDBAccess || this.isFilled() ? this.exists() : null;
+        if (exists == null) {
             res = "?" + res + "?";
-        } else if (this.isArchived()) {
-            res = "(" + res + ")";
+        } else if (!exists) {
+            res = "-" + res + "-";
+        } else {
+            // the row exists
+
+            Boolean archived = null;
+            try {
+                archived = this.isArchived(allowDBAccess);
+            } catch (Exception e) {
+                Log.get().log(Level.FINER, "Couldn't determine archive status", e);
+                assert archived == null;
+            }
+            if (archived == null) {
+                res = "?" + res + "?";
+            } else if (archived) {
+                res = "(" + res + ")";
+            }
         }
         return res;
     }
@@ -925,6 +962,8 @@ public class SQLRow extends SQLRowAccessor {
         return Collections.unmodifiableMap(this.getValues());
     }
 
+    private static final VirtualFields ALL_VALUES_FIELDS = VirtualFields.ALL.difference(VirtualFields.KEYS, VirtualFields.ARCHIVE, VirtualFields.ORDER);
+
     /**
      * Retourne toutes les valeurs de cette lignes, sans les clefs ni les champs d'ordre et
      * d'archive.
@@ -933,17 +972,7 @@ public class SQLRow extends SQLRowAccessor {
      * @see #getAbsolutelyAll()
      */
     public Map<String, Object> getAllValues() {
-        // commence par tout copier
-        final Map<String, Object> res = new HashMap<String, Object>(this.getValues());
-        final Set<SQLField> keys = this.getTable().getKeys();
-        // puis on enlève les clefs, l'ordre et l'archive
-        CollectionUtils.filter(res.keySet(), new Predicate() {
-            public boolean evaluate(Object object) {
-                final SQLField field = getTable().getField((String) object);
-                return !keys.contains(field) && field != getTable().getOrderField() && field != getTable().getArchiveField();
-            }
-        });
-        return res;
+        return this.getValues(ALL_VALUES_FIELDS);
     }
 
     /**
@@ -965,18 +994,6 @@ public class SQLRow extends SQLRowAccessor {
      */
     public SQLRowValues createUpdateRow() {
         return new SQLRowValues(this.getTable(), this.getValues());
-    }
-
-    /**
-     * Creates a SQLRowValues with just this ID, and no other values.
-     * 
-     * @return a SQLRowValues on this SQLRow.
-     */
-    @Override
-    public SQLRowValues createEmptyUpdateRow() {
-        final SQLRowValues res = new SQLRowValues(this.getTable());
-        res.put(this.getTable().getKey().getName(), this.getIDNumber());
-        return res;
     }
 
     /**

@@ -596,7 +596,7 @@ abstract public class IListPanel extends JPanel implements ActionListener {
     protected final EditFrame getCreateFrame() {
         if (this.createFrame == null) {
             this.createFrame = new EditFrame(this.element, EditPanel.CREATION);
-            this.createFrame.getPanel().setIList(this.getListe());
+            this.createFrame.getPanel().setIListe(this.getListe());
             if (!isDeaf()) {
                 // la frame d'ajout se remplit suivant la sélection de cette frame
                 this.liste.addIListener(this.createFrame);

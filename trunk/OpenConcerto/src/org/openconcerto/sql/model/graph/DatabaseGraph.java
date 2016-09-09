@@ -18,6 +18,7 @@ package org.openconcerto.sql.model.graph;
 
 import static org.openconcerto.xml.JDOMUtils.OUTPUTTER;
 import static java.util.Collections.singletonList;
+
 import org.openconcerto.sql.Log;
 import org.openconcerto.sql.model.ConnectionHandlerNoSetup;
 import org.openconcerto.sql.model.DBFileCache;
@@ -67,16 +68,15 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
 
-import net.jcip.annotations.GuardedBy;
-import net.jcip.annotations.ThreadSafe;
-
-import org.apache.commons.collections.CollectionUtils;
 import org.jdom2.Document;
 import org.jdom2.Element;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
 import org.jgrapht.Graphs;
 import org.jgrapht.graph.DirectedMultigraph;
+
+import net.jcip.annotations.GuardedBy;
+import net.jcip.annotations.ThreadSafe;
 
 /**
  * Le graphe de la base de donnée. Les noeuds étant des tables, les liens les relations de clefs
@@ -316,8 +316,8 @@ public class DatabaseGraph extends BaseGraph {
                     final Set<SQLTable> referentTables = getReferentTables(removedTable);
                     // MAYBE add option to refresh needed tables instead of failing
                     if (!oldTablesInScope.containsAll(referentTables)) {
-                        throw new IllegalStateException(removedTable + " has been removed but some of its referents won't be refreshed : "
-                                + org.openconcerto.utils.CollectionUtils.subtract(referentTables, oldTablesInScope));
+                        throw new IllegalStateException(
+                                removedTable + " has been removed but some of its referents won't be refreshed : " + org.openconcerto.utils.CollectionUtils.subtract(referentTables, oldTablesInScope));
                     }
                 }
                 this.getGraphP().removeAllVertices(removedTables);
@@ -802,7 +802,7 @@ public class DatabaseGraph extends BaseGraph {
             throw new IllegalArgumentException("empty list");
         // result can be null
         if (!this.foreignLink.containsKey(fk)) {
-            this.foreignLink.put(fk, (Link) CollectionUtils.find(this.getForeignLinks(fk.get(0).getTable()), new LabelPredicate(fk)));
+            this.foreignLink.put(fk, this.getLink(fk.get(0).getTable(), Direction.FOREIGN, new LabelPredicate(fk), true));
         }
         return this.foreignLink.get(fk);
     }
@@ -1137,4 +1137,10 @@ public class DatabaseGraph extends BaseGraph {
         return getCols(links, new HashSet<List<SQLField>>());
     }
 
+    static public Set<SQLField> getColsUnion(Collection<Link> links) {
+        final Set<SQLField> res = new HashSet<SQLField>();
+        for (final Link l : links)
+            res.addAll(l.getFields());
+        return res;
+    }
 }

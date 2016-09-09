@@ -55,7 +55,7 @@ public class N4DS {
 
     /**
      * Déclaration normale (type 51)
-     * */
+     */
     public N4DS() {
         DecimalFormatSymbols symbol = new DecimalFormatSymbols();
         symbol.setDecimalSeparator('.');
@@ -257,10 +257,10 @@ public class N4DS {
         write("S20.G01.00.002", rowSociete.getString("NOM"));
 
         // FIXME Debut periode
-        write("S20.G01.00.003.001", "01012014");
+        write("S20.G01.00.003.001", "01012015");
 
         // FIXME Fin periode
-        write("S20.G01.00.003.002", "31122014");
+        write("S20.G01.00.003.002", "31122015");
 
         // Code nature
         write("S20.G01.00.004.001", "01");
@@ -325,7 +325,7 @@ public class N4DS {
 
     /**
      * Strucuture S10, N4DS
-     * */
+     */
     private void writeS10(PrintStream stream, SQLRow rowSociete) throws IOException {
 
         // Siren
@@ -400,7 +400,7 @@ public class N4DS {
         write("S10.G01.00.010", "02");
 
         // Norme utilisée
-        write("S10.G01.00.011", "V01X09");
+        write("S10.G01.00.011", "V01X10");
 
         // Code table char
         write("S10.G01.00.012", "01");
@@ -475,7 +475,6 @@ public class N4DS {
 
     public void addMasseSalarialeBrute(double baseBrute) {
         this.masseSalarialeBrute += baseBrute;
-
     }
 
 }

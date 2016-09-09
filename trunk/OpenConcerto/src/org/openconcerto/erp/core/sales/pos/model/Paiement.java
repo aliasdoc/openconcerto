@@ -40,4 +40,15 @@ public class Paiement {
     public static final int ESPECES = 1;
     public static final int CHEQUE = 2;
     public static final int CB = 3;
+
+    public String getTypeAsString() {
+        if (this.type == CB) {
+            return "CB";
+        } else if (this.type == CHEQUE) {
+            return "chèque";
+        } else if (this.type == ESPECES) {
+            return "espèces";
+        }
+        return "";
+    }
 }

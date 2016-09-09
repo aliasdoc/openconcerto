@@ -96,6 +96,11 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
         return l;
     }
 
+    @Override
+    public boolean isPrivate() {
+        return true;
+    }
+
     /*
      * (non-Javadoc)
      * 
@@ -483,6 +488,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
                                     System.err.println("Du " + cal.getTime());
                                     dateDu.setValue(cal.getTime());
                                 }
+                                fireValidChange();
                             }
                         }
                     }
@@ -508,6 +514,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
                                     System.err.println("Au " + cal.getTime());
                                     dateAu.setValue(cal.getTime());
                                 }
+                                fireValidChange();
                             }
                         }
                     }
@@ -603,14 +610,15 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
             private void setpDateEnabled(boolean b) {
 
                 // System.err.println("Set date enable --> " + b);
+
                 this.selMois.setInteractionMode((b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
                 // this.selMois.setEnabled(b);
 
                 this.textAnnee.setEditable(b);
                 this.textAnnee.setEnabled(b);
 
-                this.dateDu.setInteractionMode(InteractionMode.DISABLED);
-                this.dateAu.setInteractionMode(InteractionMode.DISABLED);
+                this.dateDu.setInteractionMode((b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
+                this.dateAu.setInteractionMode((b) ? InteractionMode.READ_WRITE : InteractionMode.DISABLED);
             }
 
             private void validationFiche() throws SQLException {
@@ -808,6 +816,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
 
         // on effectue le cumul
         // System.err.println("Calcul des cumuls");
+        final SQLRow rowVarSal = tableVariableSal.getRow(rowSal.getInt("ID_VARIABLE_SALARIE"));
         int idCumuls = rowSal.getInt("ID_CUMULS_PAYE");
         SQLRow rowCumuls = tableCumuls.getRow(idCumuls);
 
@@ -816,10 +825,12 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
         float cotSal = rowCumuls.getFloat("COT_SAL_C") + rowFiche.getFloat("COT_SAL");
         float cotPat = rowCumuls.getFloat("COT_PAT_C") + rowFiche.getFloat("COT_PAT");
         float netImp = rowCumuls.getFloat("NET_IMP_C") + rowFiche.getFloat("NET_IMP");
+        float hTrav = rowCumuls.getFloat("HEURE_TRAV") + rowVarSal.getFloat("HEURE_TRAV");
         float netAPayer = rowCumuls.getFloat("NET_A_PAYER_C") + rowFiche.getFloat("NET_A_PAYER") + rowFiche.getFloat("ACOMPTE");
 
         SQLRowValues rowValsCumul = new SQLRowValues(tableCumuls);
         rowValsCumul.put("SAL_BRUT_C", new Float(salBrut));
+        rowValsCumul.put("HEURE_TRAV", new Float(hTrav));
         rowValsCumul.put("COT_SAL_C", new Float(cotSal));
         rowValsCumul.put("COT_PAT_C", new Float(cotPat));
         rowValsCumul.put("NET_IMP_C", new Float(netImp));
@@ -844,7 +855,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
         });
         // Calcul des congés
         final SQLRow rowCumulConge = tableCumulConge.getRow(rowSal.getInt("ID_CUMULS_CONGES"));
-        final SQLRow rowVarSal = tableVariableSal.getRow(rowSal.getInt("ID_VARIABLE_SALARIE"));
+
         float congeCumule = rowCumulConge.getFloat("ACQUIS");
         float congeRestant = rowCumulConge.getFloat("RESTANT");
 
@@ -895,6 +906,7 @@ public class FichePayeSQLElement extends ComptaSQLConfElement {
         for (final SQLField field : tableVariableSal.getContentFields()) {
             rowVals.put(field.getName(), Float.valueOf(0));
         }
+        rowVals.put("HEURE_TRAV", rowSalInfosPaye.getObject("DUREE_MOIS"));
 
         if (tableVariableSal.contains("NB_JOUR_MOIS")) {
             rowVals.put("NB_JOUR_MOIS", Float.valueOf(31));

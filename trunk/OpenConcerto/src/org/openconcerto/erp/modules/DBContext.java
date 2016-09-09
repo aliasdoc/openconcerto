@@ -21,6 +21,7 @@ import org.openconcerto.sql.utils.ChangeTable;
 import org.openconcerto.sql.utils.DropTable;
 import org.openconcerto.sql.utils.SQLCreateTable;
 import org.openconcerto.sql.utils.SQLCreateTableBase;
+import org.openconcerto.utils.CollectionUtils;
 import org.openconcerto.utils.SetMap;
 import org.openconcerto.utils.cc.IClosure;
 
@@ -106,8 +107,7 @@ public final class DBContext {
 
             // perhaps add a Map parameter to getCreateTable() for the undefined row
             // for now OK to not use an undefined row since we can't modify List/ComboSQLRequet
-            for (final String addedTable : getAddedTables())
-                SQLTable.setUndefID(getRoot().getSchema(), addedTable, null);
+            SQLTable.setUndefIDs(getRoot().getSchema(), CollectionUtils.<String, Number> createMap(getAddedTables()));
 
             // always updateVersion() after setUndefID(), see DBRoot.createTables()
             getRoot().getSchema().updateVersion();
@@ -121,11 +121,19 @@ public final class DBContext {
     // DDL
 
     public final SQLCreateTable getCreateTable(final String name) {
+        final SQLCreateTable res = new SQLCreateTable(this.root, name);
+        this.addCreateTable(res);
+        return res;
+    }
+
+    // allow createTable to not be created by the Module
+    public final void addCreateTable(final SQLCreateTable createTable) {
+        if (createTable.getRoot() != this.root)
+            throw new IllegalArgumentException("Not in our root : " + createTable.getRootName());
+        final String name = createTable.getName();
         if (this.root.contains(name))
             throw new IllegalArgumentException("Table already exists : " + name);
-        final SQLCreateTable res = new SQLCreateTable(this.root, name);
-        this.changeTables.add(res);
-        return res;
+        this.changeTables.add(createTable);
     }
 
     public final AlterTableRestricted getAlterTable(final String name) {

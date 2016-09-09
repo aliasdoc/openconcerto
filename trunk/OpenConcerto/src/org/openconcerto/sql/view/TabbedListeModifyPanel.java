@@ -136,6 +136,10 @@ public class TabbedListeModifyPanel extends JPanel {
         };
         tabbedPane.addMouseListener(listener);
     }
+    
+    public final SQLElement getElement() {
+        return this.element;
+    }
 
     public final IListe getListe() {
         return this.liste;
